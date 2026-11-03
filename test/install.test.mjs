@@ -159,7 +159,7 @@ test('standard install excludes development payload and engine documentation lin
       return entry.isDirectory() ? markdownFiles(location) : entry.name.endsWith('.md') ? [location] : [];
     });
   }
-  const documents = [join(engine, 'README.md'), ...markdownFiles(join(engine, 'docs'))];
+  const documents = [join(engine, 'README.md'), join(engine, 'INSTALL.md'), ...markdownFiles(join(engine, 'docs'))];
   for (const document of documents) {
     for (const [, target] of readFileSync(document, 'utf8').matchAll(/\]\(([^)]+)\)/g)) {
       if (/^(?:[a-z]+:|#)/i.test(target)) continue;
@@ -202,6 +202,7 @@ test('installed engine retains its release selection and can install into anothe
   const result = spawnSync(process.execPath, [join(root, '.cyc/engine/bin/cyc.mjs'), 'init', '--project', target, '--hosts', 'codex'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(doctorProject(target).ok, true);
+  assert.equal(readFileSync(join(target, '.cyc/engine/INSTALL.md'), 'utf8'), readFileSync(join(root, '.cyc/engine/INSTALL.md'), 'utf8'), 'the installation guide must survive installation from an installed engine');
   assert.equal(existsSync(join(target, '.cyc/engine/evals')), false);
   assert.deepEqual(get(target, '.cyc/engine/package.json').files, metadata.files);
 });

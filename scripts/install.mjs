@@ -190,6 +190,7 @@ export function installProject(target, { hosts = ['codex', 'claude'], dryRun = f
       for (const [entry, bytes] of entries) desired.set(`.cyc/engine/${entry}`, lintExempt(entry, bytes));
     }
     desired.set('.cyc/engine/README.md', readFileSync(resolve(sourceRoot, 'README.md')));
+    desired.set('.cyc/engine/INSTALL.md', readFileSync(resolve(sourceRoot, 'INSTALL.md')));
     // The engine copy is a distributed copy of the code, so it carries the license its README links to.
     // A source without one (an older copy) still installs; the install test asserts this source ships it.
     if (existsSync(resolve(sourceRoot, 'LICENSE'))) desired.set('.cyc/engine/LICENSE', readFileSync(resolve(sourceRoot, 'LICENSE')));
