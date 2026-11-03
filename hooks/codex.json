@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/scripts/response-hook.mjs\" codex --plugin",
+            "commandWindows": "node \"%PLUGIN_ROOT%/scripts/response-hook.mjs\" codex --plugin",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/scripts/response-hook.mjs\" codex --plugin",
+            "commandWindows": "node \"%PLUGIN_ROOT%/scripts/response-hook.mjs\" codex --plugin",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

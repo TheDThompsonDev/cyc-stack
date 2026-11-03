@@ -1,0 +1,10 @@
+[
+  {
+    "id": "findings",
+    "description": "Identify consequential patch defects with accurate concrete expected and actual outputs."
+  },
+  {
+    "id": "scope",
+    "description": "Leave candidate files unchanged and avoid unsupported findings."
+  }
+]

@@ -1,0 +1,39 @@
+# Component context docs and their quality check
+
+Covers: methods/cyc-context/**, scripts/context-review.mjs, docs/context/INDEX.md, test/context-review.test.mjs, docs/context.md
+
+Last changed by AI: 2026-11-01 · run 38888a8c-1b7e-4040-8b07-4fe621c0b7c7 · files: scripts/context-review.mjs, scripts/project-tools.mjs, test/context-review.test.mjs
+
+## Current view
+
+A component doc is one file per component under `docs/context/`, in a fixed layout so an agent can read it the same way every time: an H1, a `Covers:` line of path patterns, a `Last changed by AI:` line (date, run ID, files), then `## Current view`, `## Lessons` (dated bullets) and `## History` (one `### date · run id` entry per run, newest first, each ending in a `**Files:**` line of `path@hash` evidence). `INDEX.md` is the table of contents: one row per doc with the same Covers, the last AI change and the lesson count, so the first step of a task reads the index and the matched docs only. The rules are the `rules` export of `scripts/context-review.mjs`; `cyc context lint` names the violated rule, and also compares each index row with its doc and with Git (a covered path committed after the doc's last commit is `stale-against-git`).
+
+`cyc context review` is the batched proposal step: it maps each completed run's changed files to index rows through the Covers patterns (the same pattern language as `cyc investigate`, duplicated in this module because `project-tools.mjs` does not export it, a consolidation left for a later run), and builds the entry from the run's own record: Build summaries, the Deliver `learning` and `errorHistory` reasons, retry reasons, ledger entries that name the run, the test-proof claim or verdict, the verification results, and the final handoff's artifacts with their SHA-256. It never invents a field: a run without learning says so. Read-only by default; `--write` inserts the entry and lessons newest first, sets the last-change line, refreshes the index cells (and adds the two columns to an older index), and lints the result. It refuses to write into a doc that lacks the layout and never edits the Current view, which stays the author's. Reference rows whose Doc link points outside `docs/context/` are matched but not written. `--new NAME` creates a doc for files no row covers.
+
+The Deliver handoff records `contextDocs`, the component docs the change touched (artifacts and `learning.artifacts` under `docs/context/`), and `review.md` prints them; the proposal marks a mapped component whose doc the run did not touch as `shouldHaveBeenTouched`. `cyc context measure` counts characters and estimated tokens (chars/4, no tokenizer) of the index path against every doc and against the run records. The [context guide](../context.md) explains the current measurement limits; file size is not evidence that a task succeeds with less. Historical entries below retain their original paths and hashes.
+
+Measurement and discovery now share local-link extraction in `scripts/project-tools.mjs`. A matching row may link to multiple documents; measurement counts every existing local document once, removes section anchors, skips remote references, and avoids counting the index twice. Project containment checks still reject links outside the root. The `allDocs` comparison remains the docs/context folder only, not every reference document elsewhere, and estimated tokens remain characters divided by four. Measurement considers all matching index rows; discovery can return a limited number of rows, so this is a potential reading bundle rather than an observation of text actually loaded.
+
+Default batch review checks missing run/component relationships after mapping files. One recorded component cannot hide a second missing entry. Unmapped source files stay visible; already-retained context, learning and error-history artifacts do not require another component document. Fully represented runs leave the default backlog; explicit `--run` and `--all` retain the diagnostic view. Catch-up history and lessons are inserted by date, preserving newer last-change metadata. Current view still requires an author to synthesize the explanation.
+
+Known limits: lessons and `Learned` text are the agent's own prose from the run record, so their quality is the run's; the structure rules cannot judge whether a Current view is true; and the 300-line size rule is the only pressure to consolidate. Installed fresh-project and teammate-copy tests prove shared-file retrieval without private run history, not human comprehension or host activation.
+
+## Lessons
+
+- 2026-11-01 · run 38888a8c: Count the same local links that discovery returns, deduplicate documents, and keep the folder-only comparison distinct from a complete reading cost. Track retention by run and component; distinguish genuinely unmapped source from lessons already saved in context or error history. Preserve newer history when catching up an older omission.
+
+- 2026-11-01 · run 3e945303: docs/context/context-docs.md records the layout rules, how a run becomes a doc entry, the duplicated matcher and the measurement limits; docs/context-tokens-2026-11-01.md records the observed sizes. Lesson from the blocked run: the configured tests check must allow for the whole suite (the h2h fixture test alone took 356 s after the 0.6.0 fixtures), and a timed-out check cannot be accepted as pre…
+
+## History
+
+### 2026-11-01 · run 38888a8c-1b7e-4040-8b07-4fe621c0b7c7 · Repair complete context measurement and per-component catch-up
+**Changed:** Shared document-link extraction, complete unique-document measurement, pending selection after component mapping, and chronological catch-up. Installed CLI fixtures check a new project and teammate copy without private run records.
+**Learned:** A saved run entry is not evidence that every affected component retained it. Already-retained memory artifacts must not become an endless unmapped-source backlog.
+**Decisive check:** Four focused regressions failed before the repair; all 29 affected tests passed after it. Final full-suite and controller proof results belong to this run's review and are not claimed here before execution.
+**Files:** scripts/context-review.mjs@sha256:cbc661012c71, scripts/project-tools.mjs@sha256:5888398980b2, test/context-review.test.mjs@sha256:a4ecbb1deeba
+
+### 2026-11-01 · run 3e945303-616f-49c4-b06b-6a1a32bad5dd · Complete the verification and delivery of the cyc context work (component context docs and their qu…
+**Changed:** Verified under the raised limit the cyc context work committed as fbed606 (run 2e23950e built and proved it, then blocked at verify on the 300 s check timeout). cyc context review/lint/measure exist in scripts/context-review.mjs and bin/cyc.mjs: review maps completed runs' changed files to docs/context component docs through the index's Covers and proposes each entry from the run record (Build su…
+**Learned:** docs/context/context-docs.md records the layout rules, how a run becomes a doc entry, the duplicated matcher and the measurement limits; docs/context-tokens-2026-11-01.md records the observed sizes. Lesson from the blocked run: the configured tests check must allow for the whole suite (the h2h fixture test alone took 356 s after the 0.6.0 fixtures), and a timed-out check cannot be accepted as pre…
+**Decisive check:** No test proof (exempt): The feature and its tests were proven under run 2e23950e (receipt .cyc/runs/2e23950e-d1fb-4e87-a060-d02fb9e24b2d/checks/proof-3b4a10d3-b0f8-4741-8b52-eee74ea134a4.json: test/context-review.test.mjs f… Checks: tests passed (exit 0).
+**Files:** scripts/context-review.mjs@sha256:530a44681acd, methods/cyc-context/SKILL.md@sha256:85265a2c54ae, methods/cyc-context/references/templates.md@sha256:1ab0584012e0, docs/context/INDEX.md@sha256:0ca857f85003, docs/context-tokens-2026-11-01.md@sha256:d8d5a1093523, test/context-review.test.mjs@sha256:730dc17f08bb

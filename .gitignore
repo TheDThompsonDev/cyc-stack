@@ -1,0 +1,12 @@
+.cyc/runtime/
+.cyc/runs/
+.cyc/engine/
+*.tgz
+node_modules/
+
+# Machine-specific hooks for developing CYC itself (absolute paths to this checkout)
+.claude/settings.json
+.codex/hooks.json
+
+# Host attachment caches (not project source)
+.codex-remote-attachments/

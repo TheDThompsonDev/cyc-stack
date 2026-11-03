@@ -1,0 +1,17 @@
+{
+  "name": "cycstack",
+  "version": "0.6.0",
+  "license": "MIT",
+  "description": "Portable AI engineering workflows with shared project context and verifiable changes.",
+  "author": {
+    "name": "CYC Stack contributors"
+  },
+  "keywords": [
+    "engineering",
+    "skills",
+    "verification",
+    "loop-engineering",
+    "context-engineering"
+  ],
+  "hooks": "./hooks/claude.json"
+}

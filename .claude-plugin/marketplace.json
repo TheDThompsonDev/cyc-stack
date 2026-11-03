@@ -1,0 +1,14 @@
+{
+  "name": "cycstack",
+  "owner": {
+    "name": "CYC Stack contributors"
+  },
+  "description": "CYC Stack: verified, loop-engineered AI workflows for software teams.",
+  "plugins": [
+    {
+      "name": "cycstack",
+      "source": "./",
+      "description": "Portable AI engineering workflows with shared project context and verifiable changes."
+    }
+  ]
+}

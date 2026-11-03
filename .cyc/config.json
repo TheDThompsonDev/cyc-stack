@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "verification": {
+    "commands": [
+      {
+        "id": "tests",
+        "command": "node",
+        "args": [
+          "--test"
+        ],
+        "timeoutMs": 900000
+      }
+    ]
+  },
+  "limits": {
+    "maxAttempts": 3,
+    "maxNoProgress": 2
+  }
+}

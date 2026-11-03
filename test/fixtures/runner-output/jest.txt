@@ -1,0 +1,51 @@
+FAIL test/b.test.js
+  ● other › returns null
+
+    assert.fail(received, expected)
+
+    Message:
+      b
+
+    [0m [90m 1 |[39m [36mconst[39m assert [33m=[39m require([32m'assert'[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 2 |[39m describe([32m'other'[39m[33m,[39m () [33m=>[39m { it([32m'returns null'[39m[33m,[39m () [33m=>[39m assert[33m.[39mfail([32m'b'[39m))[33m;[39m })[33m;[39m
+     [90m   |[39m                                                           [31m[1m^[22m[39m
+     [90m 3 |[39m[0m
+
+      at Object.fail (test/b.test.js:2:59)
+
+FAIL test/a.test.js
+  ● slug › keeps accented letters
+
+    TypeError: boom in calc
+
+    [0m[31m[1m>[22m[39m[90m 1 |[39m exports[33m.[39mboom [33m=[39m () [33m=>[39m { [36mthrow[39m [36mnew[39m [33mTypeError[39m([32m'boom in calc'[39m)[33m;[39m }[33m;[39m
+     [90m   |[39m                              [31m[1m^[22m[39m
+     [90m 2 |[39m[0m
+
+      at Object.<anonymous>.exports.boom (src/calc.js:1:30)
+      at Object.boom (test/a.test.js:3:38)
+
+  ● slug › nested › returns null
+
+    assert.strictEqual(received, expected)
+
+    Expected value to strictly be equal to:
+      2
+    Received:
+      1
+
+    [0m [90m 2 |[39m describe([32m'slug'[39m[33m,[39m () [33m=>[39m {
+     [90m 3 |[39m   it([32m'keeps accented letters'[39m[33m,[39m () [33m=>[39m boom())[33m;[39m
+    [31m[1m>[22m[39m[90m 4 |[39m   describe([32m'nested'[39m[33m,[39m () [33m=>[39m { it([32m'returns null'[39m[33m,[39m () [33m=>[39m assert[33m.[39mstrictEqual([35m1[39m[33m,[39m [35m2[39m))[33m;[39m })[33m;[39m
+     [90m   |[39m                                                              [31m[1m^[22m[39m
+     [90m 5 |[39m   it([32m'passes'[39m[33m,[39m () [33m=>[39m {})[33m;[39m
+     [90m 6 |[39m   test[33m.[39mskip([32m'later'[39m[33m,[39m () [33m=>[39m {})[33m;[39m
+     [90m 7 |[39m })[33m;[39m[0m
+
+      at Object.strictEqual (test/a.test.js:4:62)
+
+Test Suites: 2 failed, 2 total
+Tests:       3 failed, 1 skipped, 1 passed, 5 total
+Snapshots:   0 total
+Time:        0.88 s
+Ran all test suites.

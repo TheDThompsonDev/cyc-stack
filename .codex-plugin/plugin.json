@@ -1,0 +1,33 @@
+{
+  "name": "cycstack",
+  "version": "0.6.0",
+  "license": "MIT",
+  "description": "Portable AI engineering workflows with shared project context and verifiable changes.",
+  "author": {
+    "name": "CYC Stack contributors"
+  },
+  "skills": "./skills/",
+  "keywords": [
+    "engineering",
+    "skills",
+    "verification",
+    "loop-engineering",
+    "context-engineering"
+  ],
+  "interface": {
+    "displayName": "CYC Stack",
+    "shortDescription": "Portable workflows with visible evidence",
+    "longDescription": "Coordinate reusable skills, investigate affected behavior, loop until verified, and keep a project history of context and errors. Ask CYC to set up each project to activate the delivery gate.",
+    "developerName": "CYC Stack contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Set up CYC in this project.",
+      "Use CYC to fix this bug and verify affected behavior."
+    ]
+  },
+  "hooks": "./hooks/codex.json"
+}

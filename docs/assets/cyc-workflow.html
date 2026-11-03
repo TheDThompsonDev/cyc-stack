@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CYC Stack — Connected workflow diagram</title>
+  <style>
+    :root { color-scheme: light; --ink:#16225a; --text:#334362; --line:#ced9e5; --blue:#2b69b0; --teal:#197f70; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#eef1f6; color:var(--text); font:16px/1.55 "Segoe UI",sans-serif; }
+    .viewer { margin:0 auto; max-width:2048px; padding:12px; }
+    .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:10px; }
+    .toolbar strong { margin-right:auto; color:var(--ink); }
+    button, .download { font:inherit; min-height:44px; padding:8px 14px; border:1px solid #b6c4d6; border-radius:4px; color:var(--ink); background:white; cursor:pointer; }
+    button[aria-pressed="true"] { background:var(--ink); border-color:var(--ink); color:white; }
+    a { color:var(--blue); text-underline-offset:3px; }
+    button:focus-visible, a:focus-visible, summary:focus-visible, .canvas:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+    .download { display:inline-flex; align-items:center; text-decoration:none; }
+    .canvas { overflow:auto; max-height:calc(100vh - 118px); min-height:320px; border:1px solid var(--line); background:white; }
+    .canvas svg { display:block; width:100%; height:auto; }
+    .canvas[data-size="actual"] svg { width:2020px; max-width:none; }
+    .canvas svg a:hover rect { stroke-width:4px; }
+    .hint { margin:8px 0 14px; font-size:14px; }
+    .support { background:white; border:1px solid var(--line); border-radius:4px; }
+    .support > summary { color:var(--ink); padding:14px 18px; cursor:pointer; font-weight:600; }
+    .support-body { padding:0 20px 24px; max-width:1200px; margin:auto; }
+    h1, h2, h3, strong { color:var(--ink); }
+    h2 { font-size:1.6rem; margin-bottom:12px; }
+    h3 { font-size:1.1rem; }
+    .section { padding:24px 0; border-top:1px solid var(--line); }
+    .eyebrow, .cell-label { color:var(--teal); font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; font-weight:700; }
+    .section-intro { max-width:80ch; }
+    .evidence-list { margin:0; }
+    .evidence-row { display:grid; grid-template-columns:1fr 2fr 2fr; gap:20px; border-top:1px solid var(--line); padding:16px 0; }
+    dt { font-weight:700; color:var(--ink); }
+    dd { margin:0; }
+    .cell-label { display:block; margin-bottom:6px; }
+    .example-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .example-grid article { border-top:3px solid var(--teal); }
+    blockquote { border-left:3px solid var(--blue); padding-left:18px; margin-left:0; }
+    .detail-tools { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+    [hidden] { display:none !important; }
+    .step-detail { border-top:1px solid var(--line); scroll-margin-top:16px; }
+    .step-detail > summary { cursor:pointer; padding:16px 8px; color:var(--ink); font-weight:700; }
+    .step-number { display:inline-block; color:var(--teal); margin-right:12px; font-family:monospace; }
+    .detail-stage { display:block; font-weight:400; font-size:.9rem; padding-left:40px; }
+    .detail-body { padding:0 12px 24px; }
+    .skill-example { border-left:4px solid var(--blue); background:#f2f7ff; padding:12px 18px; margin:8px 0 20px; }
+    .skill-example p { margin:8px 0; }
+    .skill-heading { font-weight:700; color:var(--ink); }
+    .detail-body dl > div { display:grid; grid-template-columns:170px 1fr; gap:20px; padding:14px 0; border-top:1px solid var(--line); }
+    .teaching-note { background:#eaf3ff; padding:16px; }
+    .teaching-note strong { display:block; }
+    code { overflow-wrap:anywhere; }
+    footer { display:flex; flex-wrap:wrap; gap:16px; margin:14px 0 6px; font-size:14px; }
+    @media(max-width:650px) { .evidence-row,.example-grid,.detail-body dl > div { grid-template-columns:1fr; gap:10px; } .toolbar strong { width:100%; } .canvas { max-height:calc(100vh - 190px); } .support-body { padding:0 14px 16px; } }
+    @media print { @page { size:A3 portrait; margin:8mm; } body { background:white; } .viewer { padding:0; } .toolbar,.hint,footer,.detail-tools,.back-link { display:none; } .canvas { max-height:none; min-height:0; overflow:visible; border:0; } .canvas svg,.canvas[data-size="actual"] svg { width:auto; height:398mm; max-width:100%; margin:0 auto; } .support:not([open]) { display:none; } .support { border:0; } .support[open] { break-before:page; } .step-detail { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+  <main class="viewer">
+    <div class="toolbar" aria-label="Diagram viewing controls">
+      <strong>CYC workflow diagram</strong>
+      <a class="download" href="cyc-method-library.svg">All 17 methods</a>
+      <button type="button" id="fit-width" aria-pressed="true">Fit width</button>
+      <button type="button" id="actual-size" aria-pressed="false">Read at 100%</button>
+      <button type="button" id="print-diagram">Print diagram</button>
+      <a class="download" href="cyc-workflow-diagram.svg" download>Save SVG</a>
+      <a class="download" href="cyc-workflow-diagram.png" download>Save PNG</a>
+    </div>
+    <div class="canvas" id="overview" data-size="fit" role="region" aria-label="Scrollable connected workflow diagram" tabindex="0">
+<!-- DIAGRAM:START -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2020 3440" width="2020" height="3440" role="img" aria-labelledby="diagram-title diagram-desc" font-family="Segoe UI, Arial, sans-serif">
+<title id="diagram-title">CYC connected engineering workflow</title>
+<desc id="diagram-desc">Twelve responsibilities inside Scout, Build, Verify and Deliver. Arrows connect the work, developer decisions, knowledge inputs, diagnostic returns, separate ready and blocked outcomes, and independent publication and accepted-learning branches. Complete text explanations accompany the diagram.</desc>
+<defs>
+<marker id="arrow-work" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#197f70"/></marker>
+<marker id="arrow-recovery" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#b86b0a"/></marker>
+<marker id="arrow-decision" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#2b69b0"/></marker>
+<marker id="arrow-knowledge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#7044b4"/></marker>
+<marker id="arrow-blocked" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#b72d4f"/></marker>
+</defs>
+<rect x="0" y="0" width="2020" height="3440" rx="0" fill="white" stroke="none" stroke-width="2"/>
+<rect x="450" y="190" width="640" height="910" rx="12" fill="#f7fbfa" stroke="#bfded6" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="468" y="220" font-size="18" fill="#197f70" font-weight="700" text-anchor="start"><tspan x="468" dy="0">SCOUT</tspan></text>
+<text x="1072" y="220" font-size="16" fill="#197f70" font-weight="400" text-anchor="end"><tspan x="1072" dy="0">recorded stage</tspan></text>
+<rect x="450" y="1120" width="640" height="440" rx="12" fill="#f7fbfa" stroke="#bfded6" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="468" y="1150" font-size="18" fill="#197f70" font-weight="700" text-anchor="start"><tspan x="468" dy="0">BUILD</tspan></text>
+<text x="1072" y="1150" font-size="16" fill="#197f70" font-weight="400" text-anchor="end"><tspan x="1072" dy="0">recorded stage</tspan></text>
+<rect x="450" y="1590" width="640" height="520" rx="12" fill="#f7fbfa" stroke="#bfded6" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="468" y="1620" font-size="18" fill="#197f70" font-weight="700" text-anchor="start"><tspan x="468" dy="0">VERIFY</tspan></text>
+<text x="1072" y="1620" font-size="16" fill="#197f70" font-weight="400" text-anchor="end"><tspan x="1072" dy="0">recorded stage</tspan></text>
+<rect x="450" y="2140" width="640" height="320" rx="12" fill="#f7fbfa" stroke="#bfded6" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="468" y="2170" font-size="18" fill="#197f70" font-weight="700" text-anchor="start"><tspan x="468" dy="0">DELIVER</tspan></text>
+<text x="1072" y="2170" font-size="16" fill="#197f70" font-weight="400" text-anchor="end"><tspan x="1072" dy="0">recorded stage</tspan></text>
+<g id="flow-diagnosis" data-node="diagnosis">
+<rect x="1480" y="1490" width="450" height="770" rx="12" fill="#fff0d6" stroke="#b86b0a" stroke-width="2.5"/>
+</g>
+<polyline data-from="step-1" data-to="step-2" data-kind="work" points="770,320 770,340" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-1" data-to="step-2" data-kind="work" points="770,320 770,340" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-2" data-to="step-3" data-kind="work" points="770,430 770,450" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-2" data-to="step-3" data-kind="work" points="770,430 770,450" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-3" data-to="step-4" data-kind="work" points="770,550 770,570" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-3" data-to="step-4" data-kind="work" points="770,550 770,570" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-4" data-to="step-5" data-kind="work" points="770,670 770,690" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-4" data-to="step-5" data-kind="work" points="770,670 770,690" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-5" data-to="step-6" data-kind="work" points="770,790 770,810" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-5" data-to="step-6" data-kind="work" points="770,790 770,810" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-6" data-to="decision" data-kind="work" points="1070,860 1440,860" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-6" data-to="decision" data-kind="work" points="1070,860 1440,860" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="decision" data-to="ask" data-kind="decision" points="1640,860 1730,860" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="decision" data-to="ask" data-kind="decision" points="1640,860 1730,860" fill="none" stroke="#2b69b0" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-decision)"/>
+<polyline data-from="decision" data-to="step-7" data-kind="work" points="1540,913 1540,1015 1070,1015" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="decision" data-to="step-7" data-kind="work" points="1540,913 1540,1015 1070,1015" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="ask" data-to="step-5" data-kind="decision" points="1830,810 1830,740 1070,740" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="ask" data-to="step-5" data-kind="decision" points="1830,810 1830,740 1070,740" fill="none" stroke="#2b69b0" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-decision)"/>
+<polyline data-from="ask" data-to="record-blocked" data-kind="blocked" points="1930,860 1955,860 1955,2420 1930,2420" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="ask" data-to="record-blocked" data-kind="blocked" points="1930,860 1955,860 1955,2420 1930,2420" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline points="770,1110 1468,1110" fill="none" stroke="#8caaa3" stroke-width="1.5" stroke-dasharray="3 5"/>
+<polyline data-from="step-7" data-to="step-8" data-kind="work" points="770,1065 770,1170" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-7" data-to="step-8" data-kind="work" points="770,1065 770,1170" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-8" data-to="focused-check" data-kind="work" points="770,1270 770,1289" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-8" data-to="focused-check" data-kind="work" points="770,1270 770,1289" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="focused-check" data-to="step-9" data-kind="work" points="770,1375 770,1420" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="focused-check" data-to="step-9" data-kind="work" points="770,1375 770,1420" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-9" data-to="step-10" data-kind="work" points="770,1550 770,1640" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-9" data-to="step-10" data-kind="work" points="770,1550 770,1640" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-10" data-to="checks" data-kind="work" points="770,1740 770,1757" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-10" data-to="checks" data-kind="work" points="770,1740 770,1757" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="checks" data-to="step-11" data-kind="work" points="770,1843 770,1880" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="checks" data-to="step-11" data-kind="work" points="770,1843 770,1880" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-11" data-to="review" data-kind="work" points="770,1980 770,1997" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-11" data-to="review" data-kind="work" points="770,1980 770,1997" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="review" data-to="step-12" data-kind="work" points="770,2083 770,2190" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="review" data-to="step-12" data-kind="work" points="770,2083 770,2190" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="step-12" data-to="complete" data-kind="work" points="770,2290 770,2330" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-12" data-to="complete" data-kind="work" points="770,2290 770,2330" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="focused-check" data-to="diagnosis" data-kind="recovery" points="910,1332 1440,1332 1440,1540 1480,1540" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="focused-check" data-to="diagnosis" data-kind="recovery" points="910,1332 1440,1332 1440,1540 1480,1540" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="checks" data-to="diagnosis" data-kind="recovery" points="910,1800 1440,1800 1440,1540 1480,1540" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="checks" data-to="diagnosis" data-kind="recovery" points="910,1800 1440,1800 1440,1540 1480,1540" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="review" data-to="diagnosis" data-kind="recovery" points="910,2040 1440,2040 1440,1540 1480,1540" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="review" data-to="diagnosis" data-kind="recovery" points="910,2040 1440,2040 1440,1540 1480,1540" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="complete" data-to="diagnosis" data-kind="recovery" points="1070,2375 1440,2375 1440,1540 1480,1540" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="complete" data-to="diagnosis" data-kind="recovery" points="1070,2375 1440,2375 1440,1540 1480,1540" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="diagnosis" data-to="step-8" data-kind="recovery" points="1494,1655 1300,1655 1300,1220 1070,1220" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="diagnosis" data-to="step-8" data-kind="recovery" points="1494,1655 1300,1655 1300,1220 1070,1220" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="diagnosis" data-to="step-4" data-kind="recovery" points="1494,1755 1380,1755 1380,620 1070,620" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="diagnosis" data-to="step-4" data-kind="recovery" points="1494,1755 1380,1755 1380,620 1070,620" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="diagnosis" data-to="step-10" data-kind="recovery" points="1494,1915 1220,1915 1220,1690 1070,1690" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="diagnosis" data-to="step-10" data-kind="recovery" points="1494,1915 1220,1915 1220,1690 1070,1690" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="diagnosis" data-to="step-10" data-kind="recovery" points="1494,2065 1140,2065 1140,1780 995,1780 995,1740" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="diagnosis" data-to="step-10" data-kind="recovery" points="1494,2065 1140,2065 1140,1780 995,1780 995,1740" fill="none" stroke="#b86b0a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-recovery)"/>
+<polyline data-from="diagnosis" data-to="record-blocked" data-kind="blocked" points="1705,2230 1705,2380" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="diagnosis" data-to="record-blocked" data-kind="blocked" points="1705,2230 1705,2380" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline data-from="guard" data-to="halted" data-kind="blocked" points="1705,375 1705,425" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="guard" data-to="halted" data-kind="blocked" points="1705,375 1705,425" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline data-from="halted" data-to="record-blocked" data-kind="blocked" points="1930,490 1990,490 1990,2445 1930,2445" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="halted" data-to="record-blocked" data-kind="blocked" points="1930,490 1990,490 1990,2445 1930,2445" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline data-from="complete" data-to="host-gate" data-kind="work" points="770,2420 770,2510" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="complete" data-to="host-gate" data-kind="work" points="770,2420 770,2510" fill="none" stroke="#197f70" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-work)"/>
+<polyline data-from="record-blocked" data-to="host-gate" data-kind="blocked" points="1705,2470 1705,2510" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="record-blocked" data-to="host-gate" data-kind="blocked" points="1705,2470 1705,2510" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline data-from="host-gate" data-to="ready" data-kind="decision" points="770,2650 770,2730" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="host-gate" data-to="ready" data-kind="decision" points="770,2650 770,2730" fill="none" stroke="#2b69b0" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-decision)"/>
+<polyline data-from="host-gate" data-to="blocked" data-kind="blocked" points="1705,2650 1705,2730" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="host-gate" data-to="blocked" data-kind="blocked" points="1705,2650 1705,2730" fill="none" stroke="#b72d4f" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-blocked)"/>
+<polyline data-from="ready" data-to="team" data-kind="decision" points="770,2830 770,2900" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="ready" data-to="team" data-kind="decision" points="770,2830 770,2900" fill="none" stroke="#2b69b0" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-decision)"/>
+<polyline data-from="team" data-to="publication" data-kind="decision" points="770,3010 770,3070" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="team" data-to="publication" data-kind="decision" points="770,3010 770,3070" fill="none" stroke="#2b69b0" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-decision)"/>
+<polyline data-from="team" data-to="promote" data-kind="knowledge" points="1705,3010 1705,3070" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="team" data-to="promote" data-kind="knowledge" points="1705,3010 1705,3070" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="context" data-to="step-3" data-kind="knowledge" points="380,390 410,390 410,480 470,480" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="context" data-to="step-3" data-kind="knowledge" points="380,390 410,390 410,480 470,480" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="ledger" data-to="step-3" data-kind="knowledge" points="380,705 425,705 425,520 470,520" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="ledger" data-to="step-3" data-kind="knowledge" points="380,705 425,705 425,520 470,520" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="recipes" data-to="step-2" data-kind="knowledge" points="380,1115 440,1115 440,385 470,385" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="recipes" data-to="step-2" data-kind="knowledge" points="380,1115 440,1115 440,385 470,385" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="step-8" data-to="ledger" data-kind="knowledge" points="470,1235 405,1235 405,830 380,830" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-8" data-to="ledger" data-kind="knowledge" points="470,1235 405,1235 405,830 380,830" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="step-9" data-to="context" data-kind="knowledge" points="470,1490 390,1490 390,535 380,535" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="step-9" data-to="context" data-kind="knowledge" points="470,1490 390,1490 390,535 380,535" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="recipes" data-to="step-10" data-kind="knowledge" points="210,1260 210,1690 470,1690" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="recipes" data-to="step-10" data-kind="knowledge" points="210,1260 210,1690 470,1690" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<polyline data-from="promote" data-to="context" data-kind="knowledge" points="1930,3135 1970,3135 1970,3240 20,3240 20,410 40,410" fill="none" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+<polyline data-edge="true" data-from="promote" data-to="context" data-kind="knowledge" points="1930,3135 1970,3135 1970,3240 20,3240 20,410 40,410" fill="none" stroke="#7044b4" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 6" marker-end="url(#arrow-knowledge)"/>
+<text x="1010" y="75" font-size="64" fill="#16225a" font-weight="800" text-anchor="middle"><tspan x="1010" dy="0">CYC Stack</tspan></text>
+<text x="1010" y="120" font-size="31" fill="#16225a" font-weight="700" text-anchor="middle"><tspan x="1010" dy="0">Engineering, knowledge &amp; evidence flow</tspan></text>
+<text x="1010" y="157" font-size="20" fill="#334362" font-weight="400" text-anchor="middle"><tspan x="1010" dy="0">Common implementation route · 12 responsibilities inside 4 recorded stages</tspan></text>
+<g id="flow-step-1" data-node="step-1">
+<a href="#step-1" aria-label="1. Define observable success — read the step explanation">
+<rect x="470" y="230" width="600" height="90" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="256" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">1. Define observable success</tspan></text>
+<text x="492" y="280" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Record the outcome, constraints and acceptance criteria.</tspan></text>
+<text x="492" y="313" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Scout · Frame when the goal is unclear</tspan></text>
+</a>
+</g>
+<g id="flow-step-2" data-node="step-2">
+<a href="#step-2" aria-label="2. Select route &amp; risk — read the step explanation">
+<rect x="470" y="340" width="600" height="90" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="366" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">2. Select route &amp; risk</tspan></text>
+<text x="492" y="390" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Choose the playbook, checks and review depth.</tspan></text>
+<text x="492" y="423" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Scout · Challenge for high-risk work</tspan></text>
+</a>
+</g>
+<g id="flow-step-3" data-node="step-3">
+<a href="#step-3" aria-label="3. Retrieve matched history — read the step explanation">
+<rect x="470" y="450" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="476" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">3. Retrieve matched history</tspan></text>
+<text x="492" y="500" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Find component decisions and prior failed approaches.</tspan><tspan x="492" dy="22">Carry the relevant constraints into the plan.</tspan></text>
+<text x="492" y="543" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Context · Error Ledger</tspan></text>
+</a>
+</g>
+<g id="flow-step-4" data-node="step-4">
+<a href="#step-4" aria-label="4. Revalidate that history — read the step explanation">
+<rect x="470" y="570" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="596" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">4. Revalidate that history</tspan></text>
+<text x="492" y="620" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Compare recorded claims with current code and changes.</tspan><tspan x="492" dy="22">Replace stale assumptions before relying on them.</tspan></text>
+<text x="492" y="663" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Context · Understand when evidence conflicts</tspan></text>
+</a>
+</g>
+<g id="flow-step-5" data-node="step-5">
+<a href="#step-5" aria-label="5. Trace impact &amp; choose design — read the step explanation">
+<rect x="470" y="690" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="716" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">5. Trace impact &amp; choose design</tspan></text>
+<text x="492" y="740" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Follow writers, readers, state and interface contracts.</tspan><tspan x="492" dy="22">Name affected consumers and a check for each.</tspan></text>
+<text x="492" y="783" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Impact · Design · Understand as needed</tspan></text>
+</a>
+</g>
+<g id="flow-step-6" data-node="step-6">
+<a href="#step-6" aria-label="6. Explain &amp; settle decisions — read the step explanation">
+<rect x="470" y="810" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="836" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">6. Explain &amp; settle decisions</tspan></text>
+<text x="492" y="860" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Connect present behavior to the proposed mechanism.</tspan><tspan x="492" dy="22">Resolve decisions that could change the solution.</tspan></text>
+<text x="492" y="903" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Scout · Teach only for a requested lesson</tspan></text>
+</a>
+</g>
+<g id="flow-step-7" data-node="step-7">
+<a href="#step-7" aria-label="7. Plan evaluable slices — read the step explanation">
+<rect x="470" y="965" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="991" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">7. Plan evaluable slices</tspan></text>
+<text x="492" y="1015" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Give each slice an observable outcome and check.</tspan><tspan x="492" dy="22">High risk: challenge the plan; otherwise proceed.</tspan></text>
+<text x="492" y="1058" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Scout · Challenge for high-risk plans</tspan></text>
+</a>
+</g>
+<g id="flow-step-8" data-node="step-8">
+<a href="#step-8" aria-label="8. Build in tested slices — read the step explanation">
+<rect x="470" y="1170" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="1196" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">8. Build in tested slices</tspan></text>
+<text x="492" y="1220" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Reproduce or pin behavior, implement, inspect the diff.</tspan><tspan x="492" dy="22">Explain the effect on dependent components.</tspan></text>
+<text x="492" y="1263" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Build · Error Ledger when attempts fail</tspan></text>
+</a>
+</g>
+<g id="flow-step-9" data-node="step-9">
+<a href="#step-9" aria-label="9. Retain useful project knowledge — read the step explanation">
+<rect x="470" y="1420" width="600" height="130" rx="12" fill="#f5effc" stroke="#7044b4" stroke-width="2"/>
+<text x="492" y="1446" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">9. Retain useful project knowledge</tspan></text>
+<text x="492" y="1470" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Update component docs and index when learning is useful.</tspan><tspan x="492" dy="22">Keep verified facts; label undecided proposals as pending.</tspan><tspan x="492" dy="22">Finalize authorized context and ledger edits before checks.</tspan></text>
+<text x="492" y="1543" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Context · Error Ledger for failure history</tspan></text>
+</a>
+</g>
+<g id="flow-step-10" data-node="step-10">
+<a href="#step-10" aria-label="10. Prove tests &amp; verify behavior — read the step explanation">
+<rect x="470" y="1640" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="1666" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">10. Prove tests &amp; verify behavior</tspan></text>
+<text x="492" y="1690" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Original-code proof where required; run configured checks.</tspan><tspan x="492" dy="22">Exercise affected consumers against stable covered files.</tspan></text>
+<text x="492" y="1733" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Verify</tspan></text>
+</a>
+</g>
+<g id="flow-step-11" data-node="step-11">
+<a href="#step-11" aria-label="11. Review intent &amp; code quality — read the step explanation">
+<rect x="470" y="1880" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="1906" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">11. Review intent &amp; code quality</tspan></text>
+<text x="492" y="1930" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Inspect intent, consumers and project conventions.</tspan><tspan x="492" dy="22">Resolve or dismiss findings with recorded evidence.</tspan></text>
+<text x="492" y="1973" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Verify · Challenge for consequential review</tspan></text>
+</a>
+</g>
+<g id="flow-step-12" data-node="step-12">
+<a href="#step-12" aria-label="12. Account for outcome &amp; learning — read the step explanation">
+<rect x="470" y="2190" width="600" height="100" rx="12" fill="#e6f5ef" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="2216" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">12. Account for outcome &amp; learning</tspan></text>
+<text x="492" y="2240" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Record criteria, limits, learning and ledger disposition.</tspan><tspan x="492" dy="22">Reuse the shared review and explain maintenance.</tspan></text>
+<text x="492" y="2283" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="492" dy="0">Skills: Deliver · Context for retained learning</tspan></text>
+</a>
+</g>
+<g id="flow-decision" data-node="decision"><polygon points="1540,807 1640,860 1540,913 1440,860" fill="#fff0d6" stroke="#b86b0a" stroke-width="2.5"/></g>
+<text x="1540" y="855" font-size="18" fill="#16225a" font-weight="700" text-anchor="middle"><tspan x="1540" dy="0">Decision</tspan><tspan x="1540" dy="23">unresolved?</tspan></text>
+<g id="flow-ask" data-node="ask">
+<rect x="1730" y="810" width="200" height="100" rx="12" fill="#eaf3ff" stroke="#2b69b0" stroke-width="2"/>
+<text x="1752" y="844" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1752" dy="0">Get input</tspan></text>
+<text x="1752" y="874" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1752" dy="0">Ask the engineer</tspan><tspan x="1752" dy="25">or investigate.</tspan></text>
+</g>
+<text x="1480" y="1098" font-size="19" fill="#197f70" font-weight="700" text-anchor="start"><tspan x="1480" dy="0">NOTE · SCOUT HANDOFF</tspan></text>
+<text x="1480" y="1128" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1480" dy="0">Settled alignment and named consumers</tspan><tspan x="1480" dy="25">with checks are required to pass.</tspan></text>
+<g id="flow-focused-check" data-node="focused-check"><polygon points="770,1289 910,1332 770,1375 630,1332" fill="#fff0d6" stroke="#b86b0a" stroke-width="2.5"/></g>
+<text x="770" y="1327" font-size="18" fill="#16225a" font-weight="700" text-anchor="middle"><tspan x="770" dy="0">Slice check</tspan><tspan x="770" dy="23">passes?</tspan></text>
+<g id="flow-checks" data-node="checks"><polygon points="770,1757 910,1800 770,1843 630,1800" fill="#fff0d6" stroke="#b86b0a" stroke-width="2.5"/></g>
+<text x="770" y="1795" font-size="18" fill="#16225a" font-weight="700" text-anchor="middle"><tspan x="770" dy="0">Checks pass on</tspan><tspan x="770" dy="23">stable source?</tspan></text>
+<g id="flow-review" data-node="review"><polygon points="770,1997 910,2040 770,2083 630,2040" fill="#fff0d6" stroke="#b86b0a" stroke-width="2.5"/></g>
+<text x="770" y="2035" font-size="18" fill="#16225a" font-weight="700" text-anchor="middle"><tspan x="770" dy="0">No open findings;</tspan><tspan x="770" dy="23">consumers checked?</tspan></text>
+<g id="flow-complete" data-node="complete">
+<rect x="470" y="2330" width="600" height="90" rx="12" fill="white" stroke="#197f70" stroke-width="2"/>
+<text x="492" y="2364" font-size="23" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">Record Deliver → run complete</tspan></text>
+<text x="492" y="2394" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Require current evidence, criteria and artifact checks.</tspan></text>
+</g>
+<text x="1705" y="1525" font-size="25" fill="#16225a" font-weight="800" text-anchor="middle"><tspan x="1705" dy="0">DIAGNOSE &amp; ROUTE</tspan></text>
+<text x="1705" y="1555" font-size="19" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1705" dy="0">What does the evidence invalidate?</tspan></text>
+<g id="flow-route-1600" data-node="route-1600">
+<rect x="1494" y="1600" width="422" height="110" rx="12" fill="white" stroke="#d6a45f" stroke-width="2"/>
+<text x="1516" y="1626" font-size="19" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1516" dy="0">R1 · Implementation defect</tspan></text>
+<text x="1516" y="1650" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1516" dy="0">Design still valid → repair the code.</tspan><tspan x="1516" dy="22">Repeat affected checks and current review.</tspan></text>
+<text x="1516" y="1703" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="1516" dy="0">Skills: Build · Error Ledger</tspan></text>
+</g>
+<g id="flow-route-1730" data-node="route-1730">
+<rect x="1494" y="1730" width="422" height="110" rx="12" fill="white" stroke="#d6a45f" stroke-width="2"/>
+<text x="1516" y="1756" font-size="19" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1516" dy="0">R2 · False premise / missed consumer</tspan></text>
+<text x="1516" y="1780" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1516" dy="0">Revisit context, impact and design.</tspan><tspan x="1516" dy="22">Update the plan and consumer checks.</tspan></text>
+<text x="1516" y="1833" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="1516" dy="0">Skills: Understand · Impact · Design</tspan></text>
+</g>
+<g id="flow-route-1860" data-node="route-1860">
+<rect x="1494" y="1860" width="422" height="110" rx="12" fill="white" stroke="#d6a45f" stroke-width="2"/>
+<text x="1516" y="1886" font-size="19" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1516" dy="0">R3 · Candidate changed after review</tspan></text>
+<text x="1516" y="1910" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1516" dy="0">Old evidence describes different files.</tspan><tspan x="1516" dy="22">Repeat verification AND semantic review.</tspan></text>
+<text x="1516" y="1963" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="1516" dy="0">Skills: Verify</tspan></text>
+</g>
+<g id="flow-route-1990" data-node="route-1990">
+<rect x="1494" y="1990" width="422" height="110" rx="12" fill="white" stroke="#d6a45f" stroke-width="2"/>
+<text x="1516" y="2016" font-size="19" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1516" dy="0">R4 · Check observes the wrong thing</tspan></text>
+<text x="1516" y="2040" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1516" dy="0">Correct an unprotected target or assertion.</tspan><tspan x="1516" dy="22">Protected check / config → new authorized run.</tspan></text>
+<text x="1516" y="2093" font-size="15" fill="#2b69b0" font-weight="600" text-anchor="start"><tspan x="1516" dy="0">Skills: Frame · Verify</tspan></text>
+</g>
+<g id="flow-route-2120" data-node="route-2120">
+<rect x="1494" y="2120" width="422" height="110" rx="12" fill="white" stroke="#d6a45f" stroke-width="2"/>
+<text x="1516" y="2154" font-size="19" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1516" dy="0">Missing prerequisite / exhausted</tspan></text>
+<text x="1516" y="2184" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1516" dy="0">More patches cannot supply missing input.</tspan><tspan x="1516" dy="25">Preserve findings; do not claim completion.</tspan></text>
+</g>
+<g id="flow-record-blocked" data-node="record-blocked">
+<rect x="1480" y="2380" width="450" height="90" rx="12" fill="#ffedf2" stroke="#b72d4f" stroke-width="2"/>
+<text x="1502" y="2414" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1502" dy="0">Disclose the unfinished outcome</tspan></text>
+<text x="1502" y="2444" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1502" dy="0">Blocked, exhausted or halted · retain evidence</tspan></text>
+</g>
+<g id="flow-guard" data-node="guard">
+<rect x="1480" y="240" width="450" height="135" rx="12" fill="#ffedf2" stroke="#b72d4f" stroke-width="2"/>
+<text x="1502" y="274" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1502" dy="0">CONTROLLER GUARD CHECK</tspan></text>
+<text x="1502" y="304" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1502" dy="0">At record, verify, retry, resume and complete:</tspan><tspan x="1502" dy="25">did protected or out-of-scope files change?</tspan><tspan x="1502" dy="25">No: continue the requested operation.</tspan></text>
+</g>
+<g id="flow-halted" data-node="halted">
+<rect x="1480" y="425" width="450" height="135" rx="12" fill="#ffedf2" stroke="#b72d4f" stroke-width="2"/>
+<text x="1502" y="459" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1502" dy="0">HALTED · terminal run</tspan></text>
+<text x="1502" y="489" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1502" dy="0">Preserve the changed files for review; no rollback.</tspan><tspan x="1502" dy="25">Resolve scope / authorization before a new run.</tspan><tspan x="1502" dy="25">The halted run cannot resume.</tspan></text>
+</g>
+<g id="flow-host-gate" data-node="host-gate">
+<rect x="470" y="2510" width="1460" height="140" rx="12" fill="#edf1fa" stroke="#16225a" stroke-width="2"/>
+<text x="492" y="2544" font-size="25" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">HOST DELIVERY GATE · enforced when the hook is active</tspan></text>
+<text x="492" y="2574" font-size="19" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Ready: this session’s relevant touched runs are complete and applicable response checks pass.</tspan><tspan x="492" dy="25">Blocked: disclose the unfinished outcome with current review evidence and applicable native reply checks.</tspan><tspan x="492" dy="25">An actively running unfinished run must continue or be recorded with an appropriate non-running outcome.</tspan></text>
+</g>
+<g id="flow-ready" data-node="ready">
+<rect x="470" y="2730" width="600" height="100" rx="12" fill="#eaf3ff" stroke="#2b69b0" stroke-width="2"/>
+<text x="492" y="2764" font-size="23" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">READY · reviewable result</tspan></text>
+<text x="492" y="2794" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Show the candidate, evidence, reasoning and limits.</tspan></text>
+</g>
+<g id="flow-blocked" data-node="blocked">
+<rect x="1480" y="2730" width="450" height="130" rx="12" fill="#ffedf2" stroke="#b72d4f" stroke-width="2"/>
+<text x="1502" y="2764" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1502" dy="0">BLOCKED · explain what remains</tspan></text>
+<text x="1502" y="2794" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1502" dy="0">No completion claim or publication path.</tspan><tspan x="1502" dy="25">Blocked run: may resume after resolving input.</tspan><tspan x="1502" dy="25">Exhausted / halted: new run; fresh evidence.</tspan></text>
+</g>
+<g id="flow-team" data-node="team">
+<rect x="470" y="2900" width="1460" height="110" rx="12" fill="#eaf3ff" stroke="#2b69b0" stroke-width="2"/>
+<text x="492" y="2934" font-size="25" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">Developer / team review · project-controlled follow-through</tspan></text>
+<text x="492" y="2964" font-size="19" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Review the actual change and its evidence. Completion is not human acceptance or permission to publish.</tspan><tspan x="492" dy="25">Publication and acceptance of a pending finding are separate decisions.</tspan></text>
+</g>
+<g id="flow-publication" data-node="publication">
+<rect x="470" y="3070" width="600" height="110" rx="12" fill="#eaf3ff" stroke="#2b69b0" stroke-width="2"/>
+<text x="492" y="3104" font-size="23" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="492" dy="0">Authorized PR → review → merge</tspan></text>
+<text x="492" y="3134" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="492" dy="0">Reuse the generated review; satisfy project rules.</tspan><tspan x="492" dy="25">Requested revisions after completion use a new run.</tspan></text>
+</g>
+<g id="flow-promote" data-node="promote">
+<rect x="1480" y="3070" width="450" height="130" rx="12" fill="#f5effc" stroke="#7044b4" stroke-width="2"/>
+<text x="1502" y="3104" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="1502" dy="0">Promote accepted pending learning</tspan></text>
+<text x="1502" y="3134" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="1502" dy="0">Only if a pending finding exists and is accepted.</tspan><tspan x="1502" dy="25">Separately reviewed documentation update.</tspan><tspan x="1502" dy="25">Merge is not a prerequisite.</tspan></text>
+</g>
+<g id="flow-context" data-node="context">
+<rect x="40" y="230" width="340" height="330" rx="12" fill="#f5effc" stroke="#7044b4" stroke-width="2"/>
+<text x="62" y="264" font-size="20" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="62" dy="0">COMPONENT CONTEXT DOCS</tspan></text>
+<text x="62" y="294" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="62" dy="0">docs/context/&lt;area&gt;.md</tspan><tspan x="62" dy="25">docs/context/INDEX.md</tspan><tspan x="62" dy="25">One document per component or area.</tspan><tspan x="62" dy="25">Decisions, dead ends and gotchas</tspan><tspan x="62" dy="25">Paths, revision and check evidence</tspan><tspan x="62" dy="25">Update at 9 when useful; index by path.</tspan><tspan x="62" dy="25">Read at 3; revalidate at 4.</tspan><tspan x="62" dy="25">Retain verified technical facts.</tspan><tspan x="62" dy="25">Adopt decisions with acceptance.</tspan></text>
+</g>
+<g id="flow-ledger" data-node="ledger">
+<rect x="40" y="620" width="340" height="280" rx="12" fill="#f5effc" stroke="#7044b4" stroke-width="2"/>
+<text x="62" y="654" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="62" dy="0">ERROR TRIAGE LEDGER</tspan></text>
+<text x="62" y="684" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="62" dy="0">Error signatures, attempts and results</tspan><tspan x="62" dy="25">Confirmed causes; regression guards</tspan><tspan x="62" dy="25"></tspan><tspan x="62" dy="25">Read at 3. Record attempts during</tspan><tspan x="62" dy="25">implementation AND recovery.</tspan><tspan x="62" dy="25">Required at delivery for bug-fix runs</tspan><tspan x="62" dy="25">or any run with recorded failures.</tspan></text>
+</g>
+<g id="flow-recipes" data-node="recipes">
+<rect x="40" y="1030" width="340" height="230" rx="12" fill="#f5effc" stroke="#7044b4" stroke-width="2"/>
+<text x="62" y="1064" font-size="22" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="62" dy="0">PLAYBOOKS &amp; RECIPES</tspan></text>
+<text x="62" y="1094" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="62" dy="0">Choose how to investigate and build.</tspan><tspan x="62" dy="25">Exercise the actual user behavior.</tspan><tspan x="62" dy="25"></tspan><tspan x="62" dy="25">Select the route at 2.</tspan><tspan x="62" dy="25">Use the relevant checks at 10.</tspan></text>
+</g>
+<g id="flow-budget-note" data-node="budget-note">
+<rect x="40" y="1810" width="340" height="320" rx="12" fill="#fff0d6" stroke="#b86b0a" stroke-width="2"/>
+<text x="62" y="1844" font-size="20" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="62" dy="0">WHY THE LOOP IS BOUNDED</tspan></text>
+<text x="62" y="1874" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="62" dy="0">Configurable defaults:</tspan><tspan x="62" dy="25">3 recorded failures; stop earlier at</tspan><tspan x="62" dy="25">2 consecutive identical signatures.</tspan><tspan x="62" dy="25"></tspan><tspan x="62" dy="25">A recorded rewind invalidates</tspan><tspan x="62" dy="25">dependent later handoffs and</tspan><tspan x="62" dy="25">executable verification.</tspan><tspan x="62" dy="25">Returning never resets the budget.</tspan><tspan x="62" dy="25">Unreported attempts are not visible.</tspan></text>
+</g>
+<g id="flow-trust-note" data-node="trust-note">
+<rect x="40" y="2210" width="340" height="340" rx="12" fill="#f3f6fa" stroke="#ced9e5" stroke-width="2"/>
+<text x="62" y="2244" font-size="20" fill="#16225a" font-weight="700" text-anchor="start"><tspan x="62" dy="0">WHAT THE TEAM CAN INSPECT</tspan></text>
+<text x="62" y="2274" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="62" dy="0">Criterion and consumer results</tspan><tspan x="62" dy="25">Command receipts and file fingerprints</tspan><tspan x="62" dy="25">Review findings and resolution evidence</tspan><tspan x="62" dy="25">Retry history and retained reasoning</tspan><tspan x="62" dy="25">Local by default; share through review.</tspan><tspan x="62" dy="25"></tspan><tspan x="62" dy="25">The controller validates records and</tspan><tspan x="62" dy="25">current covered files. It cannot prove</tspan><tspan x="62" dy="25">that tests are meaningful or an</tspan><tspan x="62" dy="25">agent’s judgment is correct.</tspan></text>
+</g>
+<text x="470" y="3290" font-size="19" fill="#16225a" font-weight="600" text-anchor="start"><tspan x="470" dy="0">A completed run is terminal. Later requested revisions start a new scoped run with fresh evidence.</tspan></text>
+<text x="40" y="3320" font-size="17" fill="#334362" font-weight="400" text-anchor="start"><tspan x="40" dy="0">Ordinary path: run start records Scout; run finish batches Build recording, proof, checks, Verify, Deliver and completion.</tspan></text>
+<text x="1110" y="2450" font-size="16" fill="#b86b0a" font-weight="400" text-anchor="start"><tspan x="1110" dy="0">R1–R4: match source cards to return arrows.</tspan><tspan x="1110" dy="25">Dots join paths; other crossings stay separate.</tspan></text>
+<text x="40" y="3350" font-size="19" fill="#334362" font-weight="400" text-anchor="start"><tspan x="40" dy="0">Arrows: teal = forward work · amber = recovery · blue = developer decisions · red = unfinished outcome</tspan></text>
+<text x="40" y="3383" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="40" dy="0">Dashed purple = knowledge read / write. The 12 responsibilities are not separate runtime states. Other playbooks have their own sequences.</tspan></text>
+<text x="40" y="3416" font-size="18" fill="#334362" font-weight="400" text-anchor="start"><tspan x="40" dy="0">Skills = CYC methods selected as needed, not automatic dispatch. Click a numbered step for its trigger, worked example and expected evidence.</tspan></text>
+<rect x="1662.975" y="823" width="44.05" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1685" y="843" font-size="17" fill="#2b69b0" font-weight="600" text-anchor="middle"><tspan x="1685" dy="0">Yes</tspan></text>
+<rect x="1542.65" y="937" width="34.7" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1560" y="957" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="1560" dy="0">No</tspan></text>
+<rect x="1471.75" y="701" width="296.5" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1620" y="721" font-size="17" fill="#2b69b0" font-weight="600" text-anchor="middle"><tspan x="1620" dy="0">Resolved: revisit the approach</tspan></text>
+<g transform="rotate(-90 1948 1260)">
+<rect x="1825.6" y="1241" width="244.8" height="26" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1948" y="1260" font-size="16" fill="#b72d4f" font-weight="600" text-anchor="middle"><tspan x="1948" dy="0">Required input unavailable</tspan></text>
+</g>
+<rect x="800.9" y="1127" width="128.2" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="865" y="1147" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="865" dy="0">Record Scout</tspan></text>
+<rect x="635.775" y="1382" width="268.45000000000005" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="770" y="1402" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="770" dy="0">Yes · finish planned slices</tspan></text>
+<rect x="795.9" y="1561" width="128.2" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="860" y="1581" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="860" dy="0">Record Build</tspan></text>
+<rect x="797.975" y="1845" width="44.05" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="820" y="1865" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="820" dy="0">Yes</tspan></text>
+<rect x="778.175" y="2109" width="193.65" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="875" y="2129" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="875" dy="0">Yes · record Verify</tspan></text>
+<rect x="940.65" y="1298" width="34.7" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="958" y="1318" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="958" dy="0">No</tspan></text>
+<rect x="940.65" y="1766" width="34.7" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="958" y="1786" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="958" dy="0">No</tspan></text>
+<rect x="940.65" y="2006" width="34.7" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="958" y="2026" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="958" dy="0">No</tspan></text>
+<circle cx="1440" cy="1332" r="5" fill="#b86b0a"/>
+<circle cx="1440" cy="1540" r="5" fill="#b86b0a"/>
+<circle cx="1440" cy="1800" r="5" fill="#b86b0a"/>
+<circle cx="1440" cy="2040" r="5" fill="#b86b0a"/>
+<circle cx="1440" cy="2375" r="5" fill="#b86b0a"/>
+<rect x="1187.2" y="2338" width="165.60000000000002" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1270" y="2358" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1270" dy="0">Rejected / stale</tspan></text>
+<rect x="1107.2" y="1181" width="165.60000000000002" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1190" y="1201" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1190" dy="0">R1 · Repair code</tspan></text>
+<rect x="1123.5" y="581" width="203.00000000000003" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1225" y="601" font-size="17" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1225" dy="0">R2 · Revisit premise</tspan></text>
+<rect x="1075.4" y="1653" width="139.20000000000002" height="26" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1145" y="1672" font-size="16" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1145" dy="0">R3 · Re-verify</tspan></text>
+<rect x="998.4" y="1747" width="139.20000000000002" height="26" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1068" y="1766" font-size="16" fill="#b86b0a" font-weight="600" text-anchor="middle"><tspan x="1068" dy="0">R4 · Fix check</tspan></text>
+<rect x="1594.15" y="2307" width="221.70000000000002" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1705" y="2327" font-size="17" fill="#b72d4f" font-weight="600" text-anchor="middle"><tspan x="1705" dy="0">Record status + reason</tspan></text>
+<rect x="1584.8" y="383" width="240.4" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1705" y="403" font-size="17" fill="#b72d4f" font-weight="600" text-anchor="middle"><tspan x="1705" dy="0">Yes · guard records halt</tspan></text>
+<g transform="rotate(-90 1983 1800)">
+<rect x="1829.8" y="1781" width="306.40000000000003" height="26" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1983" y="1800" font-size="16" fill="#b72d4f" font-weight="600" text-anchor="middle"><tspan x="1983" dy="0">Halt → disclose preserved changes</tspan></text>
+</g>
+<rect x="673.175" y="2460" width="193.65" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="770" y="2480" font-size="17" fill="#197f70" font-weight="600" text-anchor="middle"><tspan x="770" dy="0">Completion succeeds</tspan></text>
+<rect x="781.625" y="2672" width="62.75000000000001" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="813" y="2692" font-size="17" fill="#2b69b0" font-weight="600" text-anchor="middle"><tspan x="813" dy="0">Ready</tspan></text>
+<rect x="1719.275" y="2672" width="81.45" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1760" y="2692" font-size="17" fill="#b72d4f" font-weight="600" text-anchor="middle"><tspan x="1760" dy="0">Blocked</tspan></text>
+<rect x="691.875" y="3029" width="156.25" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="770" y="3049" font-size="17" fill="#2b69b0" font-weight="600" text-anchor="middle"><tspan x="770" dy="0">When authorized</tspan></text>
+<rect x="1584.8" y="3029" width="240.4" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="1705" y="3049" font-size="17" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="1705" dy="0">Pending finding accepted</tspan></text>
+<rect x="415.7" y="453" width="44.6" height="23" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="438" y="469" font-size="13" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="438" dy="0">Read</tspan></text>
+<rect x="419.7" y="495" width="44.6" height="23" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="442" y="511" font-size="13" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="442" dy="0">Read</tspan></text>
+<rect x="401.55" y="356" width="58.900000000000006" height="23" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="431" y="372" font-size="13" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="431" dy="0">Select</tspan></text>
+<rect x="381.4" y="1206" width="87.2" height="22" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="425" y="1221" font-size="12" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="425" dy="0">Log attempts</tspan></text>
+<rect x="360.525" y="1460" width="108.95" height="23" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="415" y="1476" font-size="13" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="415" dy="0">Write + index</tspan></text>
+<rect x="251.225" y="1654" width="137.55" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="320" y="1674" font-size="17" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="320" dy="0">Check recipes</tspan></text>
+<rect x="655.8499999999999" y="3202" width="558.3000000000001" height="27" rx="4" fill="white" stroke="none" stroke-width="2"/>
+<text x="935" y="3222" font-size="17" fill="#7044b4" font-weight="600" text-anchor="middle"><tspan x="935" dy="0">Next task retrieves and revalidates the retained knowledge</tspan></text>
+</svg>
+<!-- DIAGRAM:END -->
+    </div>
+    <p class="hint">Fit width shows the whole flow. For readable text on a phone, choose <strong>Read at 100%</strong> and scroll within the diagram. Select any numbered step for its explanation.</p>
+    <details class="support" id="explanations">
+      <summary>Supporting step explanations and evidence references</summary>
+      <div class="support-body">
+<section class="section" id="evidence" aria-labelledby="evidence-title">
+    <p class="eyebrow">The basis for a trust claim</p>
+    <h2 id="evidence-title">What can the team actually inspect?</h2>
+    <p class="section-intro">Machine checks validate specific records and conditions. Agents supply investigation and review judgments. A record makes a claim inspectable; it does not make the claim independently true.</p>
+    <dl class="evidence-list">
+      <div class="evidence-row">
+        <dt>Acceptance criteria</dt>
+        <dd><span class="cell-label">Recorded / checked</span>Criterion IDs remain represented through handoffs. Passing Verify and Deliver require passing results with evidence.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Do the criteria express the actual requirement, and does the evidence support each result?</dd>
+      </div>
+      <div class="evidence-row">
+        <dt>Commands &amp; candidate files</dt>
+        <dd><span class="cell-label">Recorded / checked</span>Receipts retain command arguments, exit status, output and a covered source fingerprint. Passing receipts require stable covered files.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Did the checks exercise the intended behavior? A file fingerprint does not freeze external services or prove coverage of omitted dependencies.</dd>
+      </div>
+      <div class="evidence-row">
+        <dt>Consumers &amp; review</dt>
+        <dd><span class="cell-label">Recorded / checked</span>All Scout consumer IDs need passing check evidence. No open recorded findings; resolutions and dismissals need evidence.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Were the right consumers found, and is the review sound? Self-review and peer review are not human approval.</dd>
+      </div>
+      <div class="evidence-row">
+        <dt>Current delivery evidence</dt>
+        <dd><span class="cell-label">Recorded / checked</span>Delivery requires current verification where applicable, current semantic review, criteria evidence and valid referenced artifact hashes. Completion rechecks final conditions.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Do the documented limits give the team enough information to accept and maintain this particular change?</dd>
+      </div>
+      <div class="evidence-row">
+        <dt>Recovery &amp; retained knowledge</dt>
+        <dd><span class="cell-label">Recorded / checked</span>Retry history, a shared failure budget, invalidated later handoffs, and learning/ledger dispositions remain inspectable. The shared review refreshes during recorded mutations.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Are attempts reported honestly and findings accurate? Local records are editable and unreported activity is invisible to the controller.</dd>
+      </div>
+      <div class="evidence-row">
+        <dt>Host delivery &amp; understanding</dt>
+        <dd><span class="cell-label">Recorded / checked</span>When active, host hooks check applicable response rules and relevant session-run outcomes. Explanation responsibilities apply throughout.</dd>
+        <dd><span class="cell-label">Judgment still needed</span>Hook files do not prove live activation. Supplying explanations does not establish that the engineer understands them.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="section" id="worked-example" aria-labelledby="example-title">
+    <p class="eyebrow">One requirement, two different return paths</p>
+    <h2 id="example-title">“Export every matching order.”</h2>
+    <p class="example-label">Illustrative example, not a diagnosis of the CYC repository.</p>
+    <p class="section-intro">The export must include every matching order while preserving access restrictions. A multiple-page check shows that the export contains only the first page. The symptom alone does not tell us where the repair belongs.</p>
+    <div class="example-grid">
+      <article>
+        <h3>Case A · The iteration stops early</h3>
+        <p>The server query supplies the correct records, but the export loop terminates before the last page. The design is still usable.</p>
+        <p><strong>Return to implementation.</strong> Repair termination, repeat the pagination and affected-consumer checks, and review the final candidate.</p>
+      </article>
+      <article>
+        <h3>Case B · The browser never had all the records</h3>
+        <p>The design exports browser rows, but the browser only receives one page. Formatting those rows differently cannot meet the requirement.</p>
+        <p><strong>Return to Scout.</strong> Inspect the authoritative query and access boundary, revise the design, then rebuild and verify multiple pages and denied access.</p>
+      </article>
+    </div>
+    <blockquote>“The browser only has one page, so formatting its rows cannot produce the requested export. We need the server's filtered query with the same access restriction, plus checks for multiple pages and denied access.”</blockquote>
+    <p>Retain the failed browser-only attempt and its evidence in the ledger so later work can recognize and revalidate that constraint.</p>
+  </section>
+
+  <section class="section" id="step-explanations" aria-labelledby="steps-title">
+    <p class="eyebrow">The explanation behind the diagram</p>
+    <h2 id="steps-title">Twelve responsibilities, in detail</h2>
+    <p class="section-intro">Each step identifies the mechanism, why it matters, evidence to inspect, the condition that forces reconsideration, and what to explain to the engineer. These disclosures work with a keyboard and remain available without scripts.</p>
+    <p class="section-intro">The skill labels name existing CYC methods selected by the agent as needed, not automatic invocations or extra runtime stages. The linked examples follow one illustrative task: exporting every authorized filtered record across pages. They show when a method helps and what it passes forward; they are not results from a real export implementation. Engineering explanation belongs throughout the workflow; Teach is for a requested lesson.</p>
+    <div class="detail-tools" id="detail-tools" hidden>
+      <button type="button" id="expand-steps">Expand all steps</button>
+      <button type="button" id="collapse-steps">Collapse all steps</button>
+      <button type="button" id="print-page">Print with step details</button>
+    </div>
+      <details id="step-1" class="step-detail">
+        <summary><span class="step-number">01</span><span>Define observable success<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-scout/SKILL.md">Scout</a> · <a href="../../methods/cyc-frame/SKILL.md">Frame</a></p><p><strong>When they help.</strong> Scout establishes the target. Frame helps when the request leaves success, scope or constraints unclear.</p><p><strong>Export example.</strong> “Export filtered results” could mean the visible page or every matching record. Define success as all matching, authorized records across pages, with excluded records absent.</p><p><strong>What carries forward.</strong> Observable criteria and explicit scope that Build and Verify can use.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Turn the request into observable outcomes, constraints, and behavior that must remain intact. For an export, a downloaded file is not enough: the records and access rules must be correct.</dd></div>
+            <div><dt>Why it matters</dt><dd>The implementation and checks need a stable target. Otherwise a plausible result can pass while missing the actual requirement.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Acceptance criteria with stable IDs, scope, and explicit exclusions. The controller preserves the configured criterion IDs through handoffs; the engineer and agent judge whether they describe the right outcome.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A consequential requirement is unclear or the criteria describe the wrong behavior. Resolve it explicitly; do not silently weaken the target to fit the implementation.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain what will count as success and the existing behavior the change must protect.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-2" class="step-detail">
+        <summary><span class="step-number">02</span><span>Select route &amp; risk<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-scout/SKILL.md">Scout</a> · <a href="../../methods/cyc-challenge/SKILL.md">Challenge</a></p><p><strong>When they help.</strong> Scout chooses the playbook and review depth. Select a focused Challenge pass when the plan crosses a consequential boundary.</p><p><strong>Export example.</strong> An export that changes permission filtering needs deeper review than changing its button label. Flag authorization as a risk and plan checks for records the user cannot access.</p><p><strong>What carries forward.</strong> The selected route, risk rationale and required review/checks; the plan is challenged at step 7.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Choose a route appropriate to implementation, investigation, teaching, or another task. For this common implementation route, identify consequential permissions, stored-data changes, and interface contracts.</dd></div>
+            <div><dt>Why it matters</dt><dd>Different work needs different evidence. A local copy edit and a shared authorization change should not receive identical investigation or checks.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>The selected playbook and project verification commands. Configuration is captured and protected during the run. Higher-risk work gets a focused Challenge pass on the plan; ordinary work continues without that extra pass.</dd></div>
+            <div><dt>Reconsider when</dt><dd>The chosen route cannot establish the requested outcome, or verification configuration needs a legitimate correction. Preserve the old outcome and explain any new run.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Connect the review depth and chosen checks to the actual behavior at risk.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-3" class="step-detail">
+        <summary><span class="step-number">03</span><span>Retrieve matched history<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-context/SKILL.md">Context</a> · <a href="../../methods/cyc-error-ledger/SKILL.md">Error Ledger</a></p><p><strong>When they help.</strong> Context retrieves history matched to touched paths. Error Ledger searches prior symptoms, attempted fixes and confirmed causes.</p><p><strong>Export example.</strong> Read the export component notes and an earlier “CSV contains only the first page” incident. Carry forward why exporting the UI’s loaded rows failed.</p><p><strong>What carries forward.</strong> Relevant decisions and failure evidence, or an explicit statement that no matching history exists.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Read the relevant component context, capability index if present, and selected error ledger. Read the matched documents, not only their titles or index entries.</dd></div>
+            <div><dt>Why it matters</dt><dd>A previous constraint can explain an unusual interface. A recorded failed approach can eliminate an otherwise attractive but already disproven option.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>References to matched history, the constraint or failed attempt that matters, or an honest explanation that no relevant history was found. Referenced assessment files are fingerprinted.</dd></div>
+            <div><dt>Reconsider when</dt><dd>History conflicts with the code, lacks supporting evidence, or describes a different version. Treat it as a lead to investigate rather than an established fact.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Name the historical decision that affects the current design and why it still matters.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-4" class="step-detail">
+        <summary><span class="step-number">04</span><span>Revalidate that history<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-context/SKILL.md">Context</a> · <a href="../../methods/cyc-understand/SKILL.md">Understand</a></p><p><strong>When they help.</strong> Context checks whether retained claims still describe the current files. Understand traces current behavior when the history conflicts with the implementation.</p><p><strong>Export example.</strong> The notes describe client-side pagination, but the endpoint now paginates on the server. Trace the current request and query before reusing the old fix.</p><p><strong>What carries forward.</strong> A freshness assessment and evidence-backed current behavior; stale history is a lead, not a premise.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Check the relevant code, revision history, and uncommitted changes against the claims in the context documents. Distinguish an unchanged constraint from an obsolete explanation.</dd></div>
+            <div><dt>Why it matters</dt><dd>A readable document can still describe an old system. Building on it without checking can reproduce a failure that current code no longer behaves like.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Freshness reasoning tied to the inspected components and working state. The controller requires the record; the agent performs and interprets the comparison.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A false premise or changed dependency invalidates the design. Update the relevant reasoning and trace its effect through the impact map.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain which old assumption was confirmed or replaced, and what that changes about the approach.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-5" class="step-detail">
+        <summary><span class="step-number">05</span><span>Trace impact &amp; choose design<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-impact/SKILL.md">Impact</a> · <a href="../../methods/cyc-design/SKILL.md">Design</a> · <a href="../../methods/cyc-understand/SKILL.md">Understand</a></p><p><strong>When they help.</strong> Impact traces the affected data and consumers. Design shapes the change and its trade-offs; Understand supplies missing evidence about existing behavior.</p><p><strong>Export example.</strong> Trace filter state → export endpoint → authorized query → CSV. Compare reusing the server query with exporting loaded UI rows, and identify any counts or other consumers sharing that query.</p><p><strong>What carries forward.</strong> An impact map, the chosen design and a check for each affected behavior.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Trace the changed behavior through input, state, services, interfaces, persistence, and actual consumers. Choose reuse, extension, repair, or new construction with a reason.</dd></div>
+            <div><dt>Why it matters</dt><dd>A local fix can leave a count, export, or background reader inconsistent. Find those dependencies in the project rather than inventing a checklist of hypothetical components.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Named consumers with stable IDs and behavior checks, affected paths, and a design rationale. An affected area is a verification concern, not automatic permission to expand the feature.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A consumer is missed or the design relies on the wrong source of truth. Revisit the impact and design before adding patches around the symptom.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain why the change belongs at this boundary and how dependent behavior stays consistent.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-6" class="step-detail">
+        <summary><span class="step-number">06</span><span>Explain &amp; settle decisions<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-scout/SKILL.md">Scout</a> · <a href="../../methods/cyc-teach/SKILL.md">Teach</a></p><p><strong>When they help.</strong> Scout explains the engineering choice and resolves consequential uncertainty. Teach adds a lesson or practice only when the engineer requests it.</p><p><strong>Export example.</strong> Explain why UI rows represent one page while the server query represents all authorized matches. If the engineer asks how pagination works, Teach can walk through that mechanism.</p><p><strong>What carries forward.</strong> The explanation and any resolved decision. Silence does not establish understanding or approval.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Explain the causal path and consequential trade-offs. Ask for input only when an unresolved answer changes the solution; investigate factual gaps where possible.</dd></div>
+            <div><dt>Why it matters</dt><dd>The engineer must be able to correct a mistaken assumption while it still affects the design. An unanswered consequential decision cannot be treated as agreement.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Alignment recorded as clear or actually confirmed, with supporting context. A needs-input assessment cannot pass Scout. An explanation is not proof of comprehension or approval.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A required decision or prerequisite is unavailable. Record a blocker rather than proceeding on invented confirmation.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the engineering choice in the project's terms and identify the specific decision the engineer owns.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-7" class="step-detail">
+        <summary><span class="step-number">07</span><span>Plan evaluable slices<span class="detail-stage">Scout</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-scout/SKILL.md">Scout</a> · <a href="../../methods/cyc-challenge/SKILL.md">Challenge</a></p><p><strong>When they help.</strong> Scout plans evaluable slices. Challenge tests the consequential assumptions of a high-risk plan before implementation.</p><p><strong>Export example.</strong> Separate query reuse, permission preservation and CSV output into checkable slices. Challenge whether the proposed export could bypass a filter or expose another user’s records.</p><p><strong>What carries forward.</strong> A slice plan with checks and resolved risks, or a clearly recorded blocker.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Sequence implementation around behavior and dependencies. Identify the first useful slice, how it can fail, and how later slices build on it. Challenge consequential assumptions for high-risk work.</dd></div>
+            <div><dt>Why it matters</dt><dd>A list of files does not establish an implementation strategy. Small observable slices make it easier to associate a failure with the change that caused it.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>A proportional plan, preserved behavior, consumer checks, and risk-specific review. Plan quality and the fast route's Challenge pass are method responsibilities, not separately enforced runtime stages.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A slice cannot be evaluated or a challenge defeats a design assumption. Revise the plan before using it as the basis for implementation.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the dependency that determines the sequence and why each check is useful.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-8" class="step-detail">
+        <summary><span class="step-number">08</span><span>Build in tested slices<span class="detail-stage">Build</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-build/SKILL.md">Build</a> · <a href="../../methods/cyc-error-ledger/SKILL.md">Error Ledger</a></p><p><strong>When they help.</strong> Build implements and checks one meaningful slice. Error Ledger records failed attempts immediately so recovery can use the actual evidence.</p><p><strong>Export example.</strong> Reproduce a multi-page export that loses rows, then change the retrieval path. If a paging fix duplicates records, log its hypothesis, change and failing result before the next attempt.</p><p><strong>What carries forward.</strong> A scoped change and slice evidence; failed attempts retain their signatures and outcomes.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Reproduce a bug, pin behavior before a refactor, or exercise a feature's intended outcome. Confirm that a new regression check can detect the defect, implement the slice, and inspect the diff and affected consumers.</dd></div>
+            <div><dt>Why it matters</dt><dd>A check that never exercised the defect can pass with the defect still present. Focused checks distinguish a working slice from a plausible-looking edit.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Focused check results, changed artifacts, diff review, and attempted fixes recorded in the selected ledger. Existing checks or a justified skip can cover work with no new testable behavior.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A focused check fails: diagnose before retrying. Repair locally when the design remains valid; revisit Scout when a dependency or premise has changed.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the changed state or interface, why the repair belongs there, and what the focused result establishes.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-9" class="step-detail">
+        <summary><span class="step-number">09</span><span>Retain useful project knowledge<span class="detail-stage">Build / Verify preparation</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-context/SKILL.md">Context</a> · <a href="../../methods/cyc-error-ledger/SKILL.md">Error Ledger</a></p><p><strong>When they help.</strong> Context retains useful verified facts with evidence and limits. Mark a decision adopted only with actual acceptance; keep undecided proposals pending. Error Ledger retains failure history.</p><p><strong>Export example.</strong> Record the observed permission and pagination constraints, the failed UI-row approach, covered paths and evidence. Identify an adopted query decision only when acceptance is established. Update the index when useful knowledge was retained.</p><p><strong>What carries forward.</strong> Useful component knowledge and its index entry, pending proposals, or no reusable learning with a reason. Finalize authorized context and ledger edits before final verification.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Create or update <code>docs/context/&lt;area&gt;.md</code> for each affected component or area with reusable knowledge. Append a dated entry explaining decisions and rejected alternatives, failed approaches, non-obvious dependencies or gotchas, checks, and open issues. Record covered file paths and the reviewed revision; for uncommitted work, include the base commit plus covered-file evidence. Update <code>docs/context/INDEX.md</code> so a future task can find the entry by affected path. Supersede outdated entries explicitly rather than silently rewriting their history. Finalize authorized context/index and ledger edits before final verification. Retain verified technical facts with evidence and limits; keep undecided proposals pending and mark decisions adopted only with actual acceptance.</dd></div>
+            <div><dt>Why it matters</dt><dd>The next engineer or agent can recover why this component works this way and which approaches already failed, instead of repeating the investigation. The document belongs to the component, not the chat session. Durable documentation is also part of the verified candidate: writing it afterward changes the covered files and invalidates earlier evidence.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>The component-document path, its index row, dated reasoning, covered paths, reviewed revision, and supporting check or error-ledger references. Record the learning disposition as recorded, pending acceptance, or no reusable learning with a reason; do not create filler documentation. Bug-fix runs and runs with recorded failures also require selected-ledger evidence for delivery.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A covered file still needs changing after checks, or a pending claim lacks acceptance. Re-verify changed files; distinguish verified facts, undecided proposals and actually adopted decisions.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Show the component document and its index entry. Explain which decision, failed approach, or dependency it preserves and how a future change will retrieve and revalidate that knowledge.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-10" class="step-detail">
+        <summary><span class="step-number">10</span><span>Prove tests &amp; verify behavior<span class="detail-stage">Verify</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-verify/SKILL.md">Verify</a></p><p><strong>When they help.</strong> Verify proves applicable changed tests against the original code, runs configured checks and inspects the relevant user journey. A recorded exemption states its actual limit.</p><p><strong>Export example.</strong> Show that the new multi-page export regression fails on the original bug, then passes on the repaired code. Check membership, duplicates, unauthorized records and the CSV consumer.</p><p><strong>What carries forward.</strong> Original-code proof where required, configured check receipts and consumer evidence on current covered files, with exemptions and limits disclosed.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Prove applicable changed tests against the original code, then run journey or recipe checks and every configured command. Feature and bug-fix tests must fail on the original code; refactor tests must pass there. Record exemptions with their actual reason and limits. Map results to acceptance criteria and consumers; include rejected cases where they protect a requirement.</dd></div>
+            <div><dt>Why it matters</dt><dd>A passing unit test may not establish the real journey. Tests also lose relevance when the candidate changes after they run.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Command arguments, exit status, bounded output, source fingerprints, criterion evidence, and named consumer results. Passing receipts require all configured commands to pass and covered source to remain stable.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A check fails, targets the wrong build or data, or covered files change. Diagnose the observation; repair or correct an unprotected check with a stated reason and obtain fresh evidence. A legitimate protected-check, configuration, or criterion change needs a new authorized run while retaining the old outcome. A guard-detected protected or out-of-scope edit halts the run and preserves the files for review; a halted run cannot resume.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the path each consequential check exercises, the defect it could detect, and what remains unverified.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-11" class="step-detail">
+        <summary><span class="step-number">11</span><span>Review intent &amp; code quality<span class="detail-stage">Verify</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-verify/SKILL.md">Verify</a> · <a href="../../methods/cyc-challenge/SKILL.md">Challenge</a></p><p><strong>When they help.</strong> Verify assesses intent, consumers and conventions. A focused Challenge pass can test a consequential claim or requested review beyond a green check.</p><p><strong>Export example.</strong> A download test passes, but it only checks that a file exists. Challenge the claim that this proves complete, authorized results; inspect the query and ask for membership evidence.</p><p><strong>What carries forward.</strong> Review findings and their resolution evidence, or a diagnosis that routes work back to the affected responsibility.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Review the current diff for intent, affected consumers, and conventions. Resolve findings or dismiss them with evidence. Label self-review and peer review accurately.</dd></div>
+            <div><dt>Why it matters</dt><dd>A CSV can download successfully while including only the visible page. Green commands cannot compensate for tests that encode an incomplete requirement.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>No open recorded findings; resolution or dismissal evidence is required. Every Scout consumer needs a passing recorded check. The controller validates these records, not the truth of the judgment.</dd></div>
+            <div><dt>Reconsider when</dt><dd>A finding exposes wrong behavior, a missed consumer, or an invalid premise. Route to the work that can repair the cause. Changes after this handoff require fresh verification and semantic review.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the consequence of each material finding and why the evidence supports resolving or dismissing it.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+      <details id="step-12" class="step-detail">
+        <summary><span class="step-number">12</span><span>Account for outcome &amp; learning<span class="detail-stage">Deliver</span></span></summary>
+        <div class="detail-body">
+          <!-- SKILL-EXAMPLE:START --><div class="skill-example"><p class="skill-heading">Skills at this step: <a href="../../methods/cyc-deliver/SKILL.md">Deliver</a> · <a href="../../methods/cyc-context/SKILL.md">Context</a></p><p><strong>When they help.</strong> Deliver accounts for criteria, evidence and limitations. Context supplies the durable or pending learning disposition.</p><p><strong>Export example.</strong> Explain the change from visible-page rows to the authorized filtered query, show which checks ran, and point the engineer to the component notes and any pending finding.</p><p><strong>What carries forward.</strong> A shared review artifact and honest handoff; completion alone does not establish human acceptance or permission to publish.</p></div><!-- SKILL-EXAMPLE:END -->
+          <dl>
+            <div><dt>Mechanism</dt><dd>Record criterion outcomes, learning and ledger disposition, and material limits. Reuse the generated review, which refreshes during recorded mutations; request run completion only after the passing handoffs.</dd></div>
+            <div><dt>Why it matters</dt><dd>A persuasive summary cannot substitute for a verified candidate. The team needs to locate the checks and rationale behind each claim.</dd></div>
+            <div><dt>Evidence to inspect</dt><dd>Current executable evidence where required, a current semantic assessment, criterion results, and referenced artifact hashes. Completion checks final conditions; active host hooks separately check response readiness.</dd></div>
+            <div><dt>Reconsider when</dt><dd>Evidence is missing or stale: return to the affected work before completion. A completed run is terminal; later requested revisions require a new scoped run.</dd></div>
+          </dl>
+          <p class="teaching-note"><strong>Explain to the engineer</strong>Explain the before/after mechanism, consequential trade-off, evidence locations, and maintenance implications.</p>
+          <a class="back-link" href="#overview">↑ Back to the flow</a>
+        </div>
+      </details>
+  </section>
+      </div>
+    </details>
+    <footer>
+      <a href="../cyc-method-map.md">All method roles and routing limitations</a>
+      <a href="../cyc-workflow.md">Written workflow</a>
+      <a href="../runtime.md">Runtime contract</a>
+      <a href="../work-assessments.md">Assessment evidence</a>
+      <a href="build-workflow-diagram.mjs">Editable diagram source</a>
+    </footer>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById('overview');
+      const support = document.getElementById('explanations');
+      const steps = [...document.querySelectorAll('.step-detail')];
+      const fit = document.getElementById('fit-width');
+      const actual = document.getElementById('actual-size');
+      function setSize(mode) {
+        canvas.dataset.size = mode;
+        fit.setAttribute('aria-pressed', String(mode === 'fit'));
+        actual.setAttribute('aria-pressed', String(mode === 'actual'));
+      }
+      fit.addEventListener('click', () => setSize('fit'));
+      actual.addEventListener('click', () => setSize('actual'));
+      document.getElementById('detail-tools').hidden = false;
+      document.getElementById('expand-steps').addEventListener('click', () => steps.forEach(step => { step.open = true; }));
+      document.getElementById('collapse-steps').addEventListener('click', () => steps.forEach(step => { step.open = false; }));
+      function revealStep() {
+        const id = window.location.hash.slice(1);
+        if (!/^step-\d+$/.test(id)) return;
+        const step = document.getElementById(id);
+        if (!step || step.tagName !== 'DETAILS') return;
+        support.open = true;
+        step.open = true;
+        step.scrollIntoView({ block:'start' });
+        step.querySelector('summary').focus({ preventScroll:true });
+      }
+      window.addEventListener('hashchange', revealStep);
+      document.addEventListener('click', event => {
+        const link = event.target.closest?.('a[href^="#step-"]');
+        if (link && link.getAttribute('href') === window.location.hash) revealStep();
+      });
+      revealStep();
+      let printDetails = false;
+      let printState = null;
+      window.addEventListener('beforeprint', () => {
+        if (printState !== null) return;
+        printState = { support:support.open, steps:steps.map(step => step.open) };
+        support.open = printDetails;
+        if (printDetails) steps.forEach(step => { step.open = true; });
+      });
+      window.addEventListener('afterprint', () => {
+        if (printState === null) return;
+        support.open = printState.support;
+        steps.forEach((step,index) => { step.open = printState.steps[index]; });
+        printState = null;
+        printDetails = false;
+      });
+      document.getElementById('print-diagram').addEventListener('click', () => { printDetails = false; window.print(); });
+      document.getElementById('print-page').addEventListener('click', () => { printDetails = true; window.print(); });
+    })();
+  </script>
+</body>
+</html>

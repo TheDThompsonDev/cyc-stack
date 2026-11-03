@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "playbooks": [
+    {"id":"investigation","description":"Explain behavior or causes from evidence without changing the product.","stages":["scout","deliver"],"requiresChecks":false},
+    {"id":"explore","description":"Compare distinct candidate approaches before committing to one.","stages":["frame","understand","explore","challenge","deliver"],"requiresChecks":false},
+    {"id":"plan","description":"Sequence a substantial change into verifiable units.","stages":["frame","understand","impact","design","challenge","deliver"],"requiresChecks":false},
+    {"id":"feature","description":"Build changed behavior and verify its affected consumers.","stages":["scout","build","verify","deliver"],"requiresChecks":true},
+    {"id":"bug-fix","description":"Reproduce a failure, locate its cause, repair and regression-check it.","stages":["scout","build","verify","deliver"],"requiresChecks":true},
+    {"id":"refactor","description":"Improve structure while proving preserved behavior.","stages":["scout","build","verify","deliver"],"requiresChecks":true},
+    {"id":"performance","description":"Measure a baseline and establish a targeted performance improvement.","stages":["scout","build","verify","deliver"],"requiresChecks":true},
+    {"id":"review","description":"Identify consequential, supported findings in existing work.","stages":["scout","challenge","verify","deliver"],"requiresChecks":false},
+    {"id":"verify","description":"Evaluate an executable result against explicit acceptance criteria.","stages":["scout","verify","deliver"],"requiresChecks":true},
+    {"id":"experience","description":"Improve the complete user journey and verify connected behavior.","stages":["scout","explore","build","verify","deliver"],"requiresChecks":true},
+    {"id":"teach","description":"Explain a concept through the learner's project and optional practice.","stages":["frame","understand","teach","deliver"],"requiresChecks":false},
+    {"id":"handoff","description":"Prepare reviewable evidence, decisions and remaining limitations.","stages":["understand","verify","deliver"],"requiresChecks":false},
+    {"id":"resume","description":"Reconstruct and revalidate context before continuing work.","stages":["remember","understand","deliver"],"requiresChecks":false},
+    {"id":"reflect","description":"Propose evidence-backed improvements without silently changing doctrine.","stages":["remember","reflect","deliver"],"requiresChecks":false},
+    {"id":"evaluate","description":"Compare a workflow against a baseline using recorded outcomes.","stages":["frame","understand","explore","verify","reflect","deliver"],"requiresChecks":true}
+  ]
+}

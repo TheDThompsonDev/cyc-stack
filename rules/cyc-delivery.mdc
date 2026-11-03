@@ -1,0 +1,33 @@
+---
+description: CYC delivery gate protocol for Cursor
+alwaysApply: true
+---
+
+# CYC delivery gate (Cursor)
+
+This project uses CYC. A stop hook checks your final response before the turn ends. Cursor hooks cannot pass you per-request instructions, so follow this protocol on every turn.
+
+**Existing project formatting:** Read `.cyc/config.json` first. With `delivery.presentation: "project"`, follow the existing project formatting rules instead of the length, visual and review rules below. Still choose a session tag and write `.cyc/runtime/cursor-<tag>.review.json` with `{ "token": "cursor", "response": "<exact final text>", "status": "ready" }` (or `"blocked"` with a reply starting `Blocked:`). This identity packet associates your controller runs with this conversation; it is not a CYC presentation review.
+
+**Session tag:** at the start of this conversation, pick a random tag of 6 to 12 lowercase letters and digits (for example `k3v9qd`) and reuse it for the whole conversation. It keeps parallel chats in this folder independent. Pass it as `--session <tag>` whenever you run `cyc run start`.
+
+
+1. Draft your final response first. It must include one visual that adds information (a table, a labeled arrow flow like `A → B → C`, a Mermaid diagram, or an image with alt text).
+2. Length: at most 1,000 characters by default, counting Markdown. If `.cyc/config.json` sets `delivery.defaultCharacterLimitEnabled: false`, new conversations start without the cap; explicit user toggles override that default. If the user sent `limit off` as a standalone message in this conversation, there is no cap until they send `limit on`. A standalone `expand` lifts the cap for one reply.
+3. Before sending, write `.cyc/runtime/cursor-<tag>.review.json`:
+
+```json
+{
+  "token": "cursor",
+  "response": "<your exact final response>",
+  "status": "ready",
+  "checks": [{ "criterion": "<what the user asked>", "result": "passed", "evidence": "<command run, file read, or observation>" }],
+  "humanReview": { "answersRequest": true, "understandable": true, "visualAddsInformation": true, "limitationsDisclosed": true },
+  "artifacts": [{ "path": "<changed file>", "sha256": "<current sha256>" }]
+}
+```
+
+4. Send exactly the text you recorded. Any edit after writing the file fails the check.
+5. If you can't finish, use `"status": "blocked"`, a `"blocker"` string that appears verbatim in the response, and start the response with `Blocked:` or `Not ready:`.
+
+If the hook replies with `CYC_GATE_CONTINUE`, fix the listed issues in the work (not only the wording), rewrite the review file, and respond again. Never edit files under `.cyc/runtime/` other than the review file, and never edit the hook to pass. Full standard: `docs/response-standard.md` in the CYC engine.

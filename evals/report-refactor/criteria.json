@@ -1,0 +1,14 @@
+[
+  {
+    "id": "behavior",
+    "description": "Preserve all public behavior and both consumer contracts in the request."
+  },
+  {
+    "id": "structure",
+    "description": "Share row preparation and aggregation, with format rendering dispatched through a handler collection."
+  },
+  {
+    "id": "scope",
+    "description": "Keep the public API and dependencies unchanged and verify the result."
+  }
+]

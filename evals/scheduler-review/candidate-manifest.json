@@ -1,0 +1,7 @@
+{
+  "change.patch": "98fde2381594ae658ffa986dfaa7c805a21194eac813236c4d9e2f3105233a5c",
+  "package.json": "5d9c7aa01429b9eda30d7589574298ef055bab2db6a1f13ad633111db81606e2",
+  "src/scheduler.mjs": "6d2ddddee67b700b2a9624a8ae9470271bad3c3fef96ab1677f092f1057e5dba",
+  "src/worker.mjs": "56699de9755fa1333455e79f1293280972414aebc5c3a4be425ebc6e2434258b",
+  "test/scheduler.test.mjs": "e898cb24c06bf0a6ec2ddc656e4f5c3bab8be73e697a0ec6b5cecb236466d381"
+}

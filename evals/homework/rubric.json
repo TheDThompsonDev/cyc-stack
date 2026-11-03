@@ -1,0 +1,11 @@
+{
+  "purpose": "Observe whether a skill chain carries requirements through impact discovery, implementation, and verification.",
+  "processEvidence": [
+    "The impact map explains the assignment action, stored representation, reload behavior, and both derived consumers with real source evidence.",
+    "The design and implementation preserve the named public API and existing-data behavior.",
+    "Failures route back to the responsible stage and retain the original task criteria.",
+    "Final claims distinguish model verification from browser or host integration verification."
+  ],
+  "outcomes": ["completion", "views", "persistence", "compatibility"],
+  "limits": "These observations do not independently prove skill causality, exhaustive dependency coverage, or production reliability. A single run is a demonstration, not a comparative evaluation."
+}

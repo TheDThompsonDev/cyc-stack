@@ -1,0 +1,24 @@
+diff --git a/src/scheduler.mjs b/src/scheduler.mjs
+--- a/src/scheduler.mjs
++++ b/src/scheduler.mjs
+@@ -1,8 +1,15 @@
+-export function selectDueJobs(jobs, { now, limit = 10, runningQueues = [] }) {
++const DEFAULT_LIMIT = 10;
++
++function compareJobs(a, b) {
++  return b.priority - a.priority || a.runAt - b.runAt;
++}
++
++export function selectDueJobs(jobs, { now, limit = DEFAULT_LIMIT, runningQueues = [] }) {
+   if (!Number.isFinite(now)) throw new TypeError('now must be finite');
+   if (!Number.isInteger(limit) || limit < 0) throw new RangeError('limit must be a nonnegative integer');
+-  const running = new Set(runningQueues);
+-  return jobs.filter(job => job.status === 'pending' && job.enabled !== false && job.runAt <= now && !running.has(job.queue))
+-    .sort((a, b) => b.priority - a.priority || a.runAt - b.runAt)
+-    .slice(0, limit).map(job => job.id);
++  const occupied = new Set(runningQueues);
++  const due = jobs.filter(job => job.status === 'pending' && job.enabled !== false && job.runAt <= now);
++  // Bound the candidate list before checking queues to reduce selection work.
++  const shortlist = due.sort(compareJobs).slice(0, limit);
++  return shortlist.filter(job => !occupied.has(job.queue)).map(job => job.id);
+ }

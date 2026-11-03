@@ -1,0 +1,58 @@
+name: Publish npm package
+
+# Configure npm trusted publishing for this exact workflow and the npm-publish environment.
+# First-time package ownership/bootstrap and host qualification are maintainer prerequisites.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Reviewed release tag, such as v0.6.0
+        required: true
+        type: string
+      channel:
+        description: Use next for pilot releases; latest after stable qualification
+        required: true
+        type: choice
+        options: [next, latest]
+        default: next
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Verify publishing toolchain
+        run: |
+          node --input-type=module -e 'import {execFileSync} from "node:child_process"; const [major,minor,patch]=execFileSync("npm",["--version"],{encoding:"utf8"}).trim().split(".").map(Number); if (major<11 || (major===11 && (minor<5 || (minor===5 && patch<1)))) throw Error("npm trusted publishing requires npm >=11.5.1.")'
+      - name: Validate tag, provenance context and payload
+        run: node scripts/check-distribution.mjs "$RELEASE_TAG" --publish-context
+      - run: npm ci --ignore-scripts
+      - run: node --test
+      - name: Pack reviewed candidate
+        run: |
+          mkdir release-assets
+          npm pack --ignore-scripts --pack-destination release-assets
+          sha256sum release-assets/*.tgz
+      - name: Publish through npm OIDC
+        run: npm publish release-assets/*.tgz --access public --tag "$RELEASE_CHANNEL" --ignore-scripts

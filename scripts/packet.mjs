@@ -1,0 +1,107 @@
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { checkPacket, checkResponse, digest, normalize } from './response-gate.mjs';
+import { advisoryReason, blockingRuns, checkRuns, validateRequestWindow } from './run-gate.mjs';
+
+// Write the delivery review packet for this session and run the same check the Stop hook runs,
+// so a review that would be bounced is caught before the turn ends. The token comes from the
+// session's own hook state; the agent never copies it. Claude and Codex Stop events carry the
+// final reply, so the reply file is optional there: without it the gate checks the reply itself.
+export function writePacket(root, { session, responseFile, status, blocker, advisory, passed = [], unmet = [], artifacts = [], reviewed = false }) {
+  if (!session) throw new Error('--session is required: use the CYC session ID from the gate context (Cursor: your session tag).');
+  if (status !== undefined && !['ready', 'blocked'].includes(status)) throw new Error('--status must be ready or blocked.');
+  const runtime = resolve(root, '.cyc/runtime');
+  const cursor = !/^[a-f0-9]{32}$/.test(session);
+  if (cursor && !/^[a-z0-9-]{4,40}$/.test(session)) throw new Error('Session must be the 32-character CYC session ID or a Cursor tag of 4-40 lowercase letters, digits, or hyphens.');
+  // Under project presentation the Stop hook skips CYC's reply checks, so this does too.
+  // Cursor still needs the exact reply to find its session's packet.
+  const configPath = resolve(root, '.cyc/config.json');
+  const projectPresentation = existsSync(configPath) && JSON.parse(readFileSync(configPath, 'utf8').replace(/^\uFEFF/, '')).delivery?.presentation === 'project';
+  const replyChecks = !projectPresentation;
+  if (!responseFile && cursor) throw new Error('Cursor needs --response FILE, the exact final reply, to find this chat\'s packet.');
+  if (!reviewed && replyChecks) throw new Error('Pass --reviewed only after rereading the reply you will send: it answers the request, is understandable, its visual adds information, and it discloses limits.');
+  if (advisory !== undefined && !advisoryReason({ advisory })) throw new Error('--advisory needs the actual reason no controller run applies to this request\'s changes.');
+  let token = 'cursor';
+  let expanded = false;
+  let since;
+  let fingerprint;
+  if (!cursor) {
+    const statePath = resolve(runtime, `${session}.state.json`);
+    if (!existsSync(statePath)) throw new Error(`No hook state for session ${session}. Check the session ID in the gate context.`);
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    since = validateRequestWindow(state.updatedAt);
+    token = state.token;
+    expanded = state.characterLimitEnabled === false || state.expanded === true;
+    fingerprint = state.sourceFingerprint;
+  }
+  const parse = (entries, result) => entries.map(entry => {
+    const [criterion, ...rest] = entry.split('::');
+    if (!criterion?.trim() || !rest.join('::').trim()) throw new Error(`Check "${entry}" must be "criterion :: evidence".`);
+    return { criterion: criterion.trim(), result, evidence: rest.join('::').trim() };
+  });
+  const response = responseFile ? normalize(readFileSync(resolve(root, responseFile), 'utf8')) : undefined;
+  // Without an explicit status the controller's record decides: a run of this request that ended
+  // short of complete makes this a blocked handoff, as does a blocker the agent names.
+  const blocking = cursor ? [] : blockingRuns({ root, since, session });
+  status ??= blocker !== undefined || blocking.length ? 'blocked' : 'ready';
+  const packet = {
+    token, ...(response !== undefined ? { response } : {}), status,
+    ...(status === 'blocked' && blocker !== undefined ? { blocker } : {}),
+    ...(status === 'blocked' && blocking.length ? { blockedBy: blocking } : {}),
+    ...(advisory !== undefined ? { advisory: advisory.trim() } : {}),
+    checks: [...parse(passed, 'passed'), ...parse(unmet, 'unmet')],
+    ...(reviewed ? { humanReview: { answersRequest: true, understandable: true, visualAddsInformation: true, limitationsDisclosed: true }, reviewedAt: new Date().toISOString() } : {}),
+    artifacts: artifacts.map(path => ({ path, sha256: digest(readFileSync(resolve(root, path))) }))
+  };
+  const path = resolve(runtime, cursor ? `cursor-${session}.review.json` : `${session}.review.json`);
+  publish(path, packet);
+  const review =!replyChecks ? [] : response === undefined ? checkPacket({ packet, token, root }) : checkResponse({ response, packet, token, expanded, root, exactResponse: cursor });
+  const issues = [...review, ...(!cursor ? checkRuns({ root, since, packet, session, fingerprint }) : [])];
+  return { ok: issues.length === 0, packetPath: path, status, characters: response === undefined ? null : [...response].length,
+    ...(status === 'blocked' ? { blockedBy: blocking, reply: `Start the reply with "Blocked:" or "Not ready:"${blocker !== undefined ? ` and include this blocker exactly: ${blocker}` : ' and say what stops completion'}.` } : {}),
+    ...(replyChecks && response === undefined ? { replyChecks: 'at Stop: length, visual, and blocked-handoff prefix are checked on the reply you send; add --response FILE to check length and visual now' } : {}),
+    controllerPreflight: cursor ? 'unverified: run readiness with the actual request window' : 'checked for this hook request', issues };
+}
+
+function publish(path, packet) {
+  mkdirSync(dirname(path), { recursive: true });
+  try { if (lstatSync(path).isSymbolicLink()) throw new Error('CYC review files cannot be symlinks.'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(temporary, JSON.stringify(packet, null, 2), { mode: 0o600 });
+  renameSync(temporary, path);
+}
+
+// After a completed run finish, Claude Code and Codex need no separate review step: the controller
+// writes the packet from the run's record. It states only what the run recorded, each criterion's
+// evidence and the hashes of the files it changed, and does not claim the agent reread its reply;
+// the Stop gate checks the reply's length, visual and blocked prefix itself, and confirms the run
+// completed in this request. Cursor finds its packet by the exact reply, so it still uses cyc packet.
+// recorded(packet): whether the run the packet names recorded exactly this packet. An earlier packet
+// is merged only then, so a hand-written one cannot ride along with a genuine finish.
+export function writeRunPacket(root, { session, runId, checks, artifacts, recorded = () => false }) {
+  if (!/^[a-f0-9]{32}$/.test(session ?? '')) return { written: false, reason: 'This run has no Claude Code or Codex session; write the review with cyc packet.' };
+  const statePath = resolve(root, '.cyc/runtime', `${session}.state.json`);
+  if (!existsSync(statePath)) return { written: false, reason: `No hook state for session ${session}; write the review with cyc packet.` };
+  const { token } = JSON.parse(readFileSync(statePath, 'utf8').replace(/^﻿/, ''));
+  const path = resolve(root, '.cyc/runtime', `${session}.review.json`);
+  // A second run finished in the same request keeps the first run's checks and files.
+  let earlier = null;
+  try { earlier = JSON.parse(readFileSync(path, 'utf8')); } catch { /* none yet */ }
+  const kept = earlier?.token === token && earlier.writtenBy === 'run finish' && recorded(earlier) ? earlier : null;
+  const files = artifacts.filter(file => { try { return statSync(resolve(root, file)).isFile(); } catch { return false; } });
+  const packet = {
+    token, status: 'ready', writtenBy: 'run finish', runId, runIds: [...new Set([...(kept?.runIds ?? []), runId])],
+    checks: [...(kept?.checks ?? []).filter(check => !checks.some(item => item.criterion === check.criterion)), ...checks],
+    artifacts: [...(kept?.artifacts ?? []).filter(item => !files.includes(item.path)), ...files.map(file => ({ path: file, sha256: digest(readFileSync(resolve(root, file))) }))],
+    writtenAt: new Date().toISOString()
+  };
+  publish(path, packet);
+  // The run records this digest, and the gate accepts a finish packet only if it matches: a packet
+  // that merely claims run finish wrote it does not.
+  return { written: true, path: `.cyc/runtime/${session}.review.json`, digest: runPacketDigest(packet), reply: 'The review is written. Do not run cyc packet unless you change files after this finish; the Stop gate checks your reply\'s length and visual.' };
+}
+
+// Over the parsed packet, so the gate can check the object it read without the file's bytes.
+export const runPacketDigest = packet => digest(JSON.stringify(packet));

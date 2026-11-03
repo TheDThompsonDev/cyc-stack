@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/response-hook.mjs\" cursor --plugin", "timeout": 60 }],
+    "afterAgentResponse": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/response-hook.mjs\" cursor --plugin", "timeout": 60 }],
+    "stop": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/response-hook.mjs\" cursor --plugin", "timeout": 60, "loop_limit": 4 }]
+  }
+}

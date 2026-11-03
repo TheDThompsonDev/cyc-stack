@@ -1,0 +1,91 @@
+{
+  "name": "cyc-stack",
+  "version": "0.6.0",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "description": "Portable AI engineering workflows with shared project context and verifiable changes.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheDThompsonDev/cyc-stack.git"
+  },
+  "homepage": "https://github.com/TheDThompsonDev/cyc-stack#readme",
+  "bugs": {
+    "url": "https://github.com/TheDThompsonDev/cyc-stack/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "bin": {
+    "cyc-stack": "bin/cyc.mjs",
+    "cyc": "bin/cyc.mjs"
+  },
+  "files": [
+    "bin",
+    "scripts/baseline-worker.mjs",
+    "scripts/catalog.mjs",
+    "scripts/check-response.mjs",
+    "scripts/claude-project-hook.mjs",
+    "scripts/context-review.mjs",
+    "scripts/host-activation.mjs",
+    "scripts/install.mjs",
+    "scripts/onboarding.mjs",
+    "scripts/packet.mjs",
+    "scripts/project-tools.mjs",
+    "scripts/recovery.mjs",
+    "scripts/response-gate.mjs",
+    "scripts/response-hook.mjs",
+    "scripts/response-mode.mjs",
+    "scripts/run-gate.mjs",
+    "scripts/runtime.mjs",
+    "scripts/source-hash-worker.mjs",
+    "scripts/source-snapshot.mjs",
+    "scripts/test-output.mjs",
+    "scripts/work-review.mjs",
+    "skills",
+    "methods",
+    "catalog",
+    "docs/code-quality.md",
+    "docs/README.md",
+    "docs/context.md",
+    "docs/cyc-method-map.md",
+    "docs/cyc-workflow.md",
+    "docs/engineering",
+    "docs/impact-analysis.md",
+    "docs/installation.md",
+    "docs/onboarding-recovery.md",
+    "docs/principles.md",
+    "docs/project-tools.md",
+    "docs/response-standard.md",
+    "docs/runtime.md",
+    "docs/skill-contract.md",
+    "docs/skill-craft.md",
+    "docs/validation.md",
+    "docs/work-assessments.md",
+    "docs/assets/cyc-method-library.svg",
+    "docs/assets/cyc-overview.svg",
+    "docs/assets/cyc-workflow-diagram.svg",
+    "hooks",
+    "rules",
+    ".codex-plugin",
+    ".claude-plugin",
+    ".cursor-plugin",
+    ".agents",
+    "README.md",
+    "INSTALL.md"
+  ],
+  "scripts": {
+    "check:distribution": "node scripts/check-distribution.mjs",
+    "build:workflow": "node docs/assets/build-workflow-diagram.mjs",
+    "test": "node --test",
+    "cyc": "node bin/cyc.mjs",
+    "check-response": "node scripts/check-response.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "sharp": "0.35.4"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "recipes": [
+    {
+      "id": "context-evidence",
+      "kind": "investigation",
+      "description": "Inspect selected CYC development context files for byte drift",
+      "covers": ["methods/cyc-context/**", "methods/cyc-scout/**", "methods/cyc-build/**", "methods/cyc-verify/**", "methods/cyc-deliver/**", "methods/cyc-remember/**", "skills/cyc/SKILL.md", "docs/work-assessments.md"],
+      "command": "node",
+      "args": ["methods/cyc-context/scripts/evidence.mjs", "check", "--project", ".", "--manifest", "docs/context/orchestration.evidence.json"],
+      "timeoutMs": 10000,
+      "expected": "Selected file hashes match; revalidate drifted claims and unlisted dependencies separately",
+      "effects": "Reads selected local files; no project writes",
+      "prerequisites": ["Use the CYC development checkout; this is not an installed application's component map"],
+      "references": ["methods/cyc-context/scripts/evidence.mjs", "docs/context/orchestration.evidence.json"]
+    },
+    {
+      "id": "project-tools-contract",
+      "kind": "verification",
+      "description": "Check CYC context discovery, evidence drift, recipe execution and installed CLI contracts",
+      "covers": ["scripts/project-tools.mjs", "bin/cyc.mjs", "scripts/runtime.mjs", "scripts/onboarding.mjs", "methods/cyc-context/**", "test/project-tools.test.mjs", "test/context-evidence.test.mjs"],
+      "command": "node",
+      "args": ["--test", "test/context-evidence.test.mjs", "test/project-tools.test.mjs"],
+      "timeoutMs": 60000,
+      "expected": "All discovery/recipe/evidence assertions pass, including rejection cases and installed execution",
+      "effects": "Creates disposable local test projects and runs local Node checks; no network or publication",
+      "prerequisites": ["Use the CYC development checkout; development tests are not shipped inside the installed engine"],
+      "references": ["test/context-evidence.test.mjs", "test/project-tools.test.mjs"]
+    },
+    {
+      "id": "host-activation-contract",
+      "kind": "verification",
+      "description": "Check missing, stale, rejected and accepted request-bound setup hook observations",
+      "covers": ["scripts/host-activation.mjs", "scripts/response-hook.mjs", "scripts/onboarding.mjs", "bin/cyc.mjs", "methods/cyc-setup/**", "test/host-activation.test.mjs", "test/onboarding.test.mjs"],
+      "command": "node",
+      "args": ["--test", "test/host-activation.test.mjs", "test/onboarding.test.mjs", "test/response-gate.test.mjs"],
+      "timeoutMs": 60000,
+      "expected": "All host/setup/gate contract assertions pass; simulated callbacks do not establish desktop activation",
+      "effects": "Runs local Node subprocesses in disposable test projects, including installed CLI checks; no publication or network",
+      "prerequisites": ["Use the CYC development checkout; tests are not shipped in the engine"],
+      "references": ["test/host-activation.test.mjs", "test/onboarding.test.mjs", "test/response-gate.test.mjs"]
+    }
+  ]
+}

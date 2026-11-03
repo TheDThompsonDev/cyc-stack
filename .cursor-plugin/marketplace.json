@@ -1,0 +1,13 @@
+{
+  "name": "cycstack",
+  "owner": {
+    "name": "CYC Stack contributors"
+  },
+  "plugins": [
+    {
+      "name": "cycstack",
+      "source": ".",
+      "description": "Portable AI engineering workflows with shared project context and verifiable changes."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  { "id": "completion", "description": "Marking a known assignment finished retains it in the full list with finished true; repeated completion is harmless and unknown IDs cannot alter state." },
+  { "id": "views", "description": "Active list and remaining count exclude finished assignments while preserving the order and content of unfinished assignments." },
+  { "id": "persistence", "description": "Explicit save and load into a fresh tracker preserve finished status and unfinished status." },
+  { "id": "compatibility", "description": "Existing saved assignments without a finished field load as unfinished; title validation, record isolation, ordering, and unique IDs still work." }
+]
