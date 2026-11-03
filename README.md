@@ -2,24 +2,36 @@
 
 **AI coding work your team can pick up and verify.**
 
-CYC gives your coding assistant a repeatable workflow for planning, building, checking and handing off changes. Decisions and useful lessons stay with the project, so the next teammate can build on the work without recovering the original chat.
+CYC Stack helps enterprise teams turn individual AI coding sessions into **shared engineering knowledge**. Architectural decisions, integration constraints, failed approaches and verification checks stay connected to the code they describe, ready for the next developer, chat or change.
+
+**Context engineering drives the workflow:** retrieve the knowledge relevant to a task, recheck it against current code, apply the team's standards, and retain what the work teaches. Your team gets a consistent way to plan, build, verify and hand off work across supported AI tools.
 
 **Claude Code · Codex · Cursor** — one entry point: `/cyc`
 
-[Get started](#get-started) · [Example tasks](#example-tasks) · [How it works](#how-it-works) · [Documentation](#documentation)
+[Team context](#context-engineering-for-enterprise-teams) · [Get started](#get-started) · [Example tasks](#example-tasks) · [Documentation](#documentation)
 
 > **Pilot · v0.6.0**
 >
 > Project installation and host adapters are implemented. Live host qualification and registry/marketplace publication remain pending. [Validation status](#validation-status)
 
-## What CYC helps you do
+## Context engineering for enterprise teams
 
-- **Reuse project knowledge.** Find relevant decisions, constraints and failed approaches before repeating work.
-- **Understand the impact.** Trace the code, callers and contracts a change could affect.
-- **Check the promised behavior.** Use your project's own tests and review the result against the task.
-- **Leave a useful handoff.** Keep the changes, evidence, findings and remaining limits easy to inspect.
+As developers, services and AI tools change, teams need a shared way to retain engineering knowledge and apply it to the next task.
 
-You describe the outcome. The assistant selects the supporting methods; you do not need to memorize a skill catalog.
+| What your team needs | How CYC supports it |
+| --- | --- |
+| **Continuity across people and chats** | Versioned component notes retain decisions, constraints and failed approaches. An index points the assistant to the context relevant to the affected code. |
+| **Context that stays useful as code changes** | The workflow rechecks saved knowledge against current code and dependencies, then retains new findings for later work. |
+| **Consistent engineering practices across tools** | Shared methods guide supported assistants through impact analysis, implementation, verification and handoff using your project's conventions and checks. |
+| **Evidence a teammate can review** | Change records connect the request to affected behavior, test results, source state and unresolved limits. |
+
+Your team owns the context, verification commands and review process. Context changes can be reviewed alongside code, using your existing Git, CI and merge controls.
+
+[Explore project context](docs/context.md) · [Engineering standards](docs/code-quality.md)
+
+![CYC engineering workflow: shared project knowledge informs Scout, Build, Verify and Deliver. Each stage produces evidence; failed checks return to the responsible work, and useful findings feed future tasks.](docs/assets/cyc-workflow-diagram.svg)
+
+[Open the diagram at full size](docs/assets/cyc-workflow-diagram.svg) · [Follow the workflow step by step](docs/cyc-workflow.md)
 
 ## Get started
 
@@ -93,14 +105,7 @@ The common implementation route follows four stages:
 
 Failed checks return to the responsible work within a shared retry budget. Other tasks, such as investigation or planning, use a different route.
 
-<details>
-<summary><strong>See the workflow diagram</strong></summary>
-
-![CYC workflow: project knowledge informs Scout, Build, Verify and Deliver. Failed checks return to repair; the handoff retains evidence and context for the next teammate.](docs/assets/cyc-overview.svg)
-
-[Detailed engineering flow](docs/assets/cyc-workflow-diagram.svg) · [Step-by-step explanation](docs/cyc-workflow.md) · [All methods](docs/cyc-method-map.md)
-
-</details>
+[Step-by-step explanation](docs/cyc-workflow.md) · [All methods](docs/cyc-method-map.md)
 
 ## Example tasks
 
