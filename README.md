@@ -3,7 +3,11 @@
 <div align="center">
   <h1>CYC Stack</h1>
   <p><strong>AI coding work your team can pick up and verify.</strong></p>
-  <p>Context engineering and a shared delivery workflow for enterprise teams.</p>
+  <p>CYC Stack helps enterprise teams turn individual AI coding sessions into shared engineering knowledge. Architectural decisions, integration constraints, failed approaches and verification checks stay connected to the code they describe, ready for the next developer, chat or change.
+
+Context engineering drives the workflow: retrieve the knowledge relevant to a task, recheck it against current code, apply the team's standards, and retain what the work teaches. Your team gets a consistent way to plan, build, verify and hand off work across supported AI tools.</p>
+
+
   <p>
     <a href="https://github.com/TheDThompsonDev/cyc-stack/actions/workflows/ci.yml"><img src="https://github.com/TheDThompsonDev/cyc-stack/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
     <a href="#validation-status"><img src="https://img.shields.io/badge/release-0.6.0%20pilot-5268a8" alt="Release: 0.6.0 pilot"></a>
@@ -18,7 +22,40 @@
     <a href="https://github.com/TheDThompsonDev/cyc-stack/issues">Issues</a>
   </p>
 </div>
+## How it works
 
+```text
+Scout → Build → Verify → Deliver
+```
+
+| Stage | Work and evidence |
+| --- | --- |
+| **Scout** | Define success, inspect code and relevant history, trace impact, choose an approach. |
+| **Build** | Implement tested slices, review changes, retain useful decisions. |
+| **Verify** | Run configured checks, review affected behavior, establish applicable original-code test proof. |
+| **Deliver** | Leave the result, evidence, limits and context pointers for review. |
+
+Failed checks return to the responsible work within a shared retry budget. Investigation, planning and other tasks use their own routes.
+
+![Full CYC engineering workflow: project knowledge, Scout, Build, Verify, Deliver and the recovery paths between them.](docs/assets/cyc-workflow-diagram.svg)
+
+[Open the full-size diagram](docs/assets/cyc-workflow-diagram.svg) · [Step-by-step walkthrough](docs/cyc-workflow.md) · [All methods](docs/cyc-method-map.md)
+
+## Validation status
+
+CYC combines **instructions the assistant follows** with **code that checks recorded work**.
+
+| Area | What is established |
+| --- | --- |
+| **Automated checks** | Exercise controller behavior, original-code test proof, recovery, context and installation. The CI badge links to current results. |
+| **Host adapters** | Hook tests use simulated events. Actual prompt/Stop behavior needs confirmation in a fresh host session. |
+| **Distribution** | Source checkout and archive routes are available. Registry and marketplace publication remain release work. |
+
+Inspect the methods, `.cyc/config.json` and local `.cyc/runs/` records. Evidence freshness and passing commands do not establish that the assistant found every dependency or chose sufficient checks. These are workflow guardrails, not a security sandbox, tamper-proof attestation or permission to merge or deploy.
+
+For a team pilot, use a fixed revision and a representative task, then inspect the work and a fresh-chat or teammate handoff. Speed, token savings and universal reliability are not established.
+
+[Validation details →](docs/validation.md)
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/cyc-readme-banner-mobile.svg">
   <img src="docs/assets/cyc-readme-banner.svg" alt="CYC context loop: project knowledge informs the next change, the work produces reviewable evidence, and verified lessons return to the project.">
@@ -134,41 +171,6 @@ One entry point, different kinds of engineering work:
 Progress updates explain consequential decisions. Final summaries stay brief and link to detailed evidence. Use `expand` for more detail once, or `limit off` for longer replies throughout the conversation. [Response controls](docs/response-standard.md#character-limit-toggle)
 
 <p align="right"><a href="#readme-top">Back to top ↑</a></p>
-
-## How it works
-
-```text
-Scout → Build → Verify → Deliver
-```
-
-| Stage | Work and evidence |
-| --- | --- |
-| **Scout** | Define success, inspect code and relevant history, trace impact, choose an approach. |
-| **Build** | Implement tested slices, review changes, retain useful decisions. |
-| **Verify** | Run configured checks, review affected behavior, establish applicable original-code test proof. |
-| **Deliver** | Leave the result, evidence, limits and context pointers for review. |
-
-Failed checks return to the responsible work within a shared retry budget. Investigation, planning and other tasks use their own routes.
-
-![Full CYC engineering workflow: project knowledge, Scout, Build, Verify, Deliver and the recovery paths between them.](docs/assets/cyc-workflow-diagram.svg)
-
-[Open the full-size diagram](docs/assets/cyc-workflow-diagram.svg) · [Step-by-step walkthrough](docs/cyc-workflow.md) · [All methods](docs/cyc-method-map.md)
-
-## Validation status
-
-CYC combines **instructions the assistant follows** with **code that checks recorded work**.
-
-| Area | What is established |
-| --- | --- |
-| **Automated checks** | Exercise controller behavior, original-code test proof, recovery, context and installation. The CI badge links to current results. |
-| **Host adapters** | Hook tests use simulated events. Actual prompt/Stop behavior needs confirmation in a fresh host session. |
-| **Distribution** | Source checkout and archive routes are available. Registry and marketplace publication remain release work. |
-
-Inspect the methods, `.cyc/config.json` and local `.cyc/runs/` records. Evidence freshness and passing commands do not establish that the assistant found every dependency or chose sufficient checks. These are workflow guardrails, not a security sandbox, tamper-proof attestation or permission to merge or deploy.
-
-For a team pilot, use a fixed revision and a representative task, then inspect the work and a fresh-chat or teammate handoff. Speed, token savings and universal reliability are not established.
-
-[Validation details →](docs/validation.md)
 
 ## Documentation
 
