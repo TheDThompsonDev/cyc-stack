@@ -1,27 +1,58 @@
 # Install CYC Stack
 
-Choose one route. All routes use the same CYC methods and project context. Full local workflows need Node.js 20+ and a supported AI host; Claude project hooks also need Bash, including Git Bash on Windows.
+**Install from your project's terminal, then use CYC in your AI chat.** CYC Stack is [published on npm](https://www.npmjs.com/package/cyc-stack). The npm route needs Node.js 20+ and Claude Code, Codex or Cursor. Claude project hooks also need Bash, including Git Bash on Windows.
 
-**Release status:** this checkout prepares the npm and plugin distributions. Registry publication and native-host qualification remain pending. The npm registry examples below require a published version; while the repository is private, use an authenticated checkout or an approved archive.
+The steps below use the latest published release. For team rollouts, [pin a version](docs/installation.md#optional-npm-controls) and verify hook behavior in your host. A published package alone does not establish host activation.
 
 ## Install with npm
 
-After publication, run from the application project root:
+### 1. Install in your project
+
+Open a terminal in your existing project's root and run:
 
 ```sh
-npx cyc-stack init
+npx cyc-stack@latest init
 ```
 
-No flags are required. npm may ask before downloading the package. Installation adds CYC's engine, one public `cyc` skill and host hooks. CYC detects hosts from existing project files; if none are detected, it sets up all three supported hosts. It preserves existing project instructions and unrelated hooks, and refuses conflicts with unowned or customized files.
+Accept npm's download prompt if it appears. Add `--dry-run` to preview changes before installing. No source checkout or global installation is needed, and the command does not add a dependency to your application's `package.json`.
+
+Installation adds CYC's engine, one public `cyc` skill and host hooks. CYC detects hosts from existing project files; if none are detected, it sets up all three supported hosts. It preserves existing project instructions and unrelated hooks, and refuses conflicts with unowned or customized files.
+
+### 2. Set up CYC in your AI chat
+
+Reload your AI host in this project and review any hook-trust prompts. Then paste this into the chat:
+
+```text
+/cyc Set up CYC for this project. Find the checks we already use in CI,
+help me configure verification, and preserve our hooks and conventions.
+```
+
+CYC helps configure the project's actual checks and reports what was verified. [Setup diagnostics](#finish-project-setup) distinguish installed files, configured checks and real hook activation.
+
+### 3. Give it a task
+
+In the same AI chat, describe the result you want. For example:
+
+```text
+/cyc Fix the checkout form so a failed payment preserves the customer's
+inputs, shows a useful error, and lets them retry. Verify the recovery flow.
+```
+
+Replace the example with your own task. `/cyc` belongs in the AI host, not the terminal. If the command is unavailable, select the discovered `cyc` skill or ask **“Use the cyc skill to…”**
+
+<details>
+<summary><strong>Optional: save CYC as a development dependency</strong></summary>
 
 To keep CYC as a dependency in `package.json`, use:
 
 ```sh
-npm install cyc-stack
+npm install --save-dev cyc-stack
 npx cyc-stack init
 ```
 
-`npm install` downloads the package; `init` sets up the project's AI integration. The one-command route above does both without adding a dependency to `package.json`. Applications can use any language; verification uses their own checks. After installation, [finish project setup](#finish-project-setup).
+`npm install` downloads the package; `init` sets up the project's AI integration. Applications can use any language; verification uses their own checks.
+
+</details>
 
 Previewing changes, choosing a host, saving a development dependency and selecting an approved version are [optional install controls](docs/installation.md#optional-npm-controls).
 
@@ -37,7 +68,7 @@ preserve our instructions and unrelated hooks, then configure our real
 project checks and tell me whether this host actually loaded the hooks.
 ```
 
-The public URL becomes generally accessible when the repository is public. Teams can replace `main` with their approved tag or commit. The agent needs its normal command and filesystem capabilities; CYC does not connect to it through a separate service.
+Teams can replace `main` with their approved tag or commit. The agent needs its normal command and filesystem capabilities; CYC does not connect to it through a separate service.
 
 Agent procedure: follow [agent-guided installation](docs/installation.md#agent-guided-installation).
 
@@ -77,7 +108,19 @@ Local run/check records support verification and recovery in the target project.
 
 Plugins use their host's update controls. Enable automatic marketplace updates where the host and team allow them. A team can keep an approved version; a publisher cannot force updates onto arbitrary public installations.
 
-For npm, select the desired published version and rerun its installer. Updating the dependency alone does not refresh `.cyc/engine` or the copied skills. Preview changes, finish or stop active work under the existing recovery rules, update, then reload the host. CYC does not yet provide an automatic update checker or scheduler.
+For npm, finish or stop active work under the existing recovery rules. From the target project root, preview the latest release:
+
+```sh
+npx cyc-stack@latest init --dry-run
+```
+
+Then apply it and reload your AI host:
+
+```sh
+npx cyc-stack@latest init
+```
+
+Teams can substitute an approved exact version. Updating an npm dependency alone does not refresh `.cyc/engine` or the copied skills. Valid project configuration and local run records are preserved. Customized managed files cause a conflict; back up and merge those customizations before retrying. CYC does not yet provide an automatic update checker or scheduler.
 
 To remove a project installation, preview first:
 
@@ -88,7 +131,9 @@ node .cyc/engine/bin/cyc.mjs uninstall
 
 Then remove the npm development dependency if you added it. Customized files and run records can be retained; inspect the command report. Plugin removal uses the host's own controls and does not imply deletion of project context or local evidence.
 
-## Before registry publication
+<a id="before-registry-publication"></a>
+
+## Install without npm
 
 Use a reviewed checkout with repository access:
 
@@ -97,4 +142,4 @@ node /path/to/cycstack/bin/cyc.mjs init --project /path/to/application --dry-run
 node /path/to/cycstack/bin/cyc.mjs init --project /path/to/application
 ```
 
-Quote paths containing spaces. An approved packed archive is another option; see [offline installation](docs/installation.md#private-repositories-and-npm-git-fetch-failures). These paths use the real installer while publication is pending.
+Quote paths containing spaces. An approved packed archive is another option; see [offline installation](docs/installation.md#private-repositories-and-npm-git-fetch-failures). These are alternatives to the published npm package.

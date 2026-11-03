@@ -2,11 +2,11 @@
 
 CYC's project installer adds skill copies and response-hook configuration to an existing project. It does not change global settings, install a marketplace, rewrite project instructions, edit the application's package.json, or execute the application's scripts. Node.js 20 or later is required on the machine running the AI tool; the target project can use any language.
 
-CYC offers npm, agent-guided and native plugin routes. The source checkout and npm archive also carry a top-level INSTALL.md entry guide. This checkout prepares npm publication; until a registry version is published, use a reviewed checkout or archive. Downloading the npm package does not activate a project: `init` performs that explicit step, while a complete native plugin uses project activation through its Setup method.
+CYC is [published on npm](https://www.npmjs.com/package/cyc-stack). The package and source checkout carry a top-level [INSTALL.md](../INSTALL.md) guide covering installation, AI-chat setup and a first task. A reviewed checkout or archive also works. Downloading the npm package does not activate a project: `init` performs that explicit step, while a complete native plugin uses project activation through its Setup method.
 
-After registry publication, run `npx cyc-stack init` from the target project root. No flags are required. npm may ask before downloading the package. To save a dependency in `package.json`, run `npm install cyc-stack`, then `npx cyc-stack init`. Downloading the package alone does not set up project integration.
+Run `npx cyc-stack@latest init` from the target project root to install the latest published release. No flags are required. npm may ask before downloading the package. To save a development dependency in `package.json`, run `npm install --save-dev cyc-stack`, then `npx cyc-stack init`. Downloading the package alone does not set up project integration. After installation, reload your AI host and ask `/cyc` to set up the project's checks.
 
-While publication is pending, use `node bin/cyc.mjs init --project PATH` from a reviewed CYC checkout. Hosts are auto-detected from `CLAUDE.md`/`.claude/`, `AGENTS.md`/`.agents/`/`.codex/`, and `.cursor/`/`.cursorrules`; with no signal, all three are set up. Use `--hosts` to choose explicitly and `--dry-run` to inspect the plan:
+For a source checkout, use `node bin/cyc.mjs init --project PATH` from the reviewed CYC checkout. Hosts are auto-detected from `CLAUDE.md`/`.claude/`, `AGENTS.md`/`.agents/`/`.codex/`, and `.cursor/`/`.cursorrules`; with no signal, all three are set up. Use `--hosts` to choose explicitly and `--dry-run` to inspect the plan:
 
 ```text
 node bin/cyc.mjs init --project "/absolute/path/to/project" --hosts claude,codex,cursor --dry-run
@@ -37,14 +37,14 @@ These options are for specific needs; the normal install requires none of them.
 
 | Need | Command |
 | --- | --- |
-| Preview local file changes | `npx cyc-stack init --dry-run` |
-| Install only one host | `npx cyc-stack init --hosts codex` |
-| Select a nested project instead of its CYC-enabled parent | `npx cyc-stack init --project .` |
+| Preview local file changes | `npx cyc-stack@latest init --dry-run` |
+| Install only one host | `npx cyc-stack@latest init --hosts codex` |
+| Select a nested project instead of its CYC-enabled parent | `npx cyc-stack@latest init --project .` |
 | Select an approved published version | `npx cyc-stack@0.6.0 init` |
-| Use a published pilot channel | `npx cyc-stack@next init` |
+| Follow the optional `next` channel | `npx cyc-stack@next init` |
 | Save as a development dependency | `npm install --save-dev cyc-stack`, then `npx cyc-stack init` |
 
-`@latest` explicitly selects the current stable channel; an unversioned command can use a package already installed in the project. For exact dependency pinning, add `--save-exact` to `npm install`. In automation, npm's `--yes` option goes before the package name to suppress its download prompt. These controls do not replace host reload, trust or project check configuration.
+`@latest` explicitly selects npm's `latest` tag; it is not a guarantee of production qualification. An unversioned command can use a package already installed in the project. For exact dependency pinning, add `--save-exact` to `npm install`. In automation, npm's `--yes` option goes before the package name to suppress its download prompt. These controls do not replace host reload, trust or project check configuration.
 
 ## Agent-guided installation
 
@@ -52,7 +52,7 @@ Ask your agent to install CYC in the target project from a reviewed checkout, ar
 
 For an agent performing this request:
 
-1. Read the target project's instructions. Use the requested project and release; prefer a supplied reviewed checkout or archive while registry publication is pending. Do not treat a registry error as permission to alter credentials, visibility or global settings.
+1. Read the target project's instructions. Use the requested project and release, whether a published npm version or a supplied reviewed checkout/archive. Do not treat a registry error as permission to alter credentials, visibility or global settings.
 2. Preview with the selected CLI's `init --dry-run`, using `--project` for a different existing target directory. Explain the proposed changes and continue within the user's installation authorization. Resolve reported conflicts without deleting or taking ownership of existing files.
 3. Complete `init`, then follow [project setup](../methods/cyc-setup/SKILL.md). Find checks in the project's CI and configuration, explain which behavior they exercise, and use the project's authorization rules before running them. Do not invent always-passing checks.
 4. Keep installed files, configured checks, executed checks and real host activation distinct. Missing trust or prompt/Stop observations remain unverified. Use supported host controls; never simulate callbacks or edit trust/state to claim activation.
@@ -180,11 +180,13 @@ Use `/cyc` with an ordinary task, including setup. Plugin hosts may namespace it
 An update removes unchanged CYC-owned legacy supporting entries from `.claude/skills` and `.agents/skills`. Customized legacy entries cause an atomic conflict so their changes can be preserved and deliberately migrated; unrelated user skills are untouched. Reload the host after updating to remove previously loaded menu entries. Live menu rendering still requires host verification.
 
 
-## npm publication preparation
+<a id="npm-publication-preparation"></a>
 
-The source candidate includes public package metadata, an INSTALL.md entry guide, and an offline release preflight. In the CYC source checkout, run `npm run check:distribution`; add the desired tag to `node scripts/check-distribution.mjs` to check version agreement. This tooling is development-only and does not ship inside the local engine.
+## npm publication maintenance
 
-The source workflow `.github/workflows/publish-npm.yml` is manually invoked for an existing release tag and defaults to the `next` channel. It uses Node 24, validates publishing-tool versions, runs tests, packs the candidate and uses npm OIDC. Package ownership, the exact npm trusted-publisher repository/workflow/environment binding and any required `npm-publish` environment reviewers must be configured by the maintainer. The repository remains private until its owner changes visibility; this preparation does not publish anything. Registry install examples require an actual published release.
+CYC is published on npm. For future releases, the source includes public package metadata, an INSTALL.md entry guide, and an offline release preflight. In the CYC source checkout, run `npm run check:distribution`; add the desired tag to `node scripts/check-distribution.mjs` to check version agreement. This tooling is development-only and does not ship inside the local engine.
+
+The source workflow `.github/workflows/publish-npm.yml` is manually invoked for an existing release tag and defaults to the `next` channel. It uses Node 24, validates publishing-tool versions, runs tests, packs the candidate and uses npm OIDC. Package ownership, the exact npm trusted-publisher repository/workflow/environment binding and any required `npm-publish` environment reviewers must be configured by the maintainer. The repository is public; registry publication still requires an authorized npm account. This preparation does not publish anything. Registry install examples require an actual published release.
 
 
 For npm provenance to identify the packaged commit, dispatch the workflow from the same tag supplied in its input. The workflow checks out the immutable event SHA and rejects a different dispatch ref or checkout HEAD. After account configuration and release approval, a maintainer can use:
