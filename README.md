@@ -13,9 +13,9 @@
   <p><strong>Claude Code &middot; Codex &middot; Cursor</strong> &nbsp; / &nbsp; one entry point: <code>/cyc</code></p>
   <p>
     <a href="#get-started"><strong>Get started</strong></a> &nbsp; &middot; &nbsp;
-    <a href="docs/README.md">Explore the docs</a> &nbsp; &middot; &nbsp;
+    <a href="docs/README.md">Docs</a> &nbsp; &middot; &nbsp;
     <a href="#context-engineering-for-enterprise-teams">Why CYC</a> &nbsp; &middot; &nbsp;
-    <a href="https://github.com/TheDThompsonDev/cyc-stack/issues">Report an issue</a>
+    <a href="https://github.com/TheDThompsonDev/cyc-stack/issues">Issues</a>
   </p>
 </div>
 
