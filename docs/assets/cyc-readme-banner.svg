@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="390" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
+  <title id="title">CYC Stack: carry the reasoning forward</title>
+  <desc id="desc">Project knowledge informs the next change. The work produces reviewable evidence, and verified lessons return to the project for future developers and AI sessions.</desc>
+  <defs>
+    <linearGradient id="surface" x2="1" y2="1"><stop stop-color="#111d3a"/><stop offset="1" stop-color="#182f49"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#bdcfed" stroke-opacity=".06"/></pattern>
+    <marker id="forward" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="m0 0 7 3.5L0 7" fill="#73e0cc"/></marker>
+  </defs>
+  <rect width="1200" height="390" rx="20" fill="url(#surface)"/>
+  <rect width="1200" height="390" rx="20" fill="url(#grid)"/>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="56" y="49" fill="#73e0cc" font-size="13" font-weight="700" letter-spacing="2.4">CONTEXT ENGINEERING / SHARED DELIVERY</text>
+    <text x="54" y="104" fill="#f5f8ff" font-size="39" font-weight="700" letter-spacing="-.8">Carry the reasoning forward.</text>
+    <text x="56" y="135" fill="#bfcee5" font-size="18">The team's knowledge becomes the next task's starting point.</text>
+    <path d="M358 216H439" stroke="#73e0cc" stroke-width="2" marker-end="url(#forward)"/>
+    <path d="M743 216H824" stroke="#73e0cc" stroke-width="2" marker-end="url(#forward)"/>
+    <g transform="translate(56 177)">
+      <path d="M0 0H296" stroke="#73e0cc" stroke-width="3"/>
+      <text y="34" fill="#73e0cc" font-size="12" font-weight="700" letter-spacing="2">01 / RETRIEVE + RECHECK</text>
+      <text y="69" fill="#f5f8ff" font-size="25" font-weight="650">Project knowledge</text>
+      <text y="100" fill="#bfcee5" font-size="17">Decisions, constraints, failure history</text>
+    </g>
+    <g transform="translate(449 177)">
+      <path d="M0 0H284" stroke="#85b8ff" stroke-width="3"/>
+      <text y="34" fill="#85b8ff" font-size="12" font-weight="700" letter-spacing="2">02 / APPLY + BUILD</text>
+      <text y="69" fill="#f5f8ff" font-size="25" font-weight="650">The next change</text>
+      <text y="100" fill="#bfcee5" font-size="17">Team standards, scoped work</text>
+    </g>
+    <g transform="translate(834 177)">
+      <path d="M0 0H310" stroke="#f2ce82" stroke-width="3"/>
+      <text y="34" fill="#f2ce82" font-size="12" font-weight="700" letter-spacing="2">03 / VERIFY + HAND OFF</text>
+      <text y="69" fill="#f5f8ff" font-size="25" font-weight="650">Reviewable evidence</text>
+      <text y="100" fill="#bfcee5" font-size="17">Checks, findings, remaining limits</text>
+    </g>
+    <path d="M1080 303v25H200q-24 0-24-24v-7" fill="none" stroke="#73e0cc" stroke-opacity=".65" stroke-width="1.5" marker-end="url(#forward)"/>
+    <rect x="387" y="315" width="468" height="27" rx="13.5" fill="#152740"/>
+    <text x="621" y="334" text-anchor="middle" fill="#d1e9e4" font-size="14">Retain verified lessons for the next teammate and task</text>
+  </g>
+</svg>

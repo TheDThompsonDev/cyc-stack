@@ -65,6 +65,8 @@
     "docs/work-assessments.md",
     "docs/assets/cyc-method-library.svg",
     "docs/assets/cyc-overview.svg",
+    "docs/assets/cyc-readme-banner.svg",
+    "docs/assets/cyc-readme-banner-mobile.svg",
     "docs/assets/cyc-workflow-diagram.svg",
     "hooks",
     "rules",
