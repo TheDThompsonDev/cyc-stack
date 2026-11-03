@@ -21,6 +21,13 @@
   </p>
 </div>
 
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/cyc-readme-banner-mobile.svg">
+  <img src="docs/assets/cyc-readme-banner.svg" alt="Project knowledge informs the next change. Checks produce reviewable evidence, and verified lessons return to the project for the next task or teammate.">
+</picture>
+
+CYC uses project knowledge to guide the task, checks the work, and carries useful lessons forward. Here&rsquo;s the full workflow:
+
 <a id="workflow-diagram"></a>
 
 ![CYC workflow: project knowledge informs Scout, Build, Verify and Deliver; failed checks return to the responsible stage, and retained lessons support later work.](docs/assets/cyc-workflow-diagram.svg)
@@ -152,11 +159,6 @@ CYC's context method directs the agent to retain decisions, constraints, useful 
 ```text
 Find relevant knowledge → Check it against the code → Use it → Retain what you learned
 ```
-
-<picture>
-  <source media="(max-width: 600px)" srcset="docs/assets/cyc-readme-banner-mobile.svg">
-  <img src="docs/assets/cyc-readme-banner.svg" alt="Project knowledge informs the next change. Checks produce reviewable evidence, and verified lessons return to the project for the next task or teammate.">
-</picture>
 
 ### Token optimization: give context a purpose
 
