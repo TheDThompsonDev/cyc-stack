@@ -14,18 +14,32 @@
   <p><strong>17 supporting skills &middot; 15 task playbooks</strong> &nbsp; / &nbsp; one entry point: <code>/cyc</code></p>
   <p>
     <a href="#why-cyc"><strong>Why CYC</strong></a> &nbsp; &middot; &nbsp;
+    <a href="#installation">Installation</a> &nbsp; &middot; &nbsp;
+    <a href="#updating">Updating</a> &nbsp; &middot; &nbsp;
     <a href="#skills">Skills</a> &nbsp; &middot; &nbsp;
     <a href="#playbooks">Playbooks</a> &nbsp; &middot; &nbsp;
-    <a href="#get-started">Get started</a> &nbsp; &middot; &nbsp;
     <a href="docs/README.md">Docs</a>
   </p>
 </div>
 
 ## Why CYC?
 
+<table>
+<tr>
+<td>
+
 Architectural decisions, access rules, integration contracts and earlier failures shape what a correct change looks like. Your team needs that reasoning to remain available when the developer, AI tool or chat changes.
 
 **CYC makes that reasoning part of the work.** It guides the assistant to retrieve relevant project knowledge, check it against current code, trace the impact of a change, verify the promised behavior, and retain useful findings for the next task.
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/cyc-readme-banner-mobile.svg">
+  <img src="docs/assets/cyc-readme-banner.svg" alt="CYC context loop: project knowledge informs the next change, the work produces reviewable evidence, and verified lessons return to the project.">
+</picture>
+
+</td>
+</tr>
+</table>
 
 | What your team needs | What the workflow asks the assistant to leave |
 | --- | --- |
@@ -43,28 +57,126 @@ CYC directs the assistant to investigate pagination, filters and access rules be
 
 A teammate extending that export can then retrieve the saved constraint and its evidence, check whether it still holds, and continue without reconstructing the original conversation.
 
-<picture>
-  <source media="(max-width: 600px)" srcset="docs/assets/cyc-readme-banner-mobile.svg">
-  <img src="docs/assets/cyc-readme-banner.svg" alt="CYC context loop: project knowledge informs the next change, the work produces reviewable evidence, and verified lessons return to the project.">
-</picture>
-
-> **Pilot release.** Installation and host adapters are implemented. Registry/marketplace publication and fresh live-host qualification remain release work. [Validation boundaries →](#validation-status)
-
 <details>
 <summary><strong>On this page</strong></summary>
 
 - [Why CYC?](#why-cyc)
+- [Installation](#installation)
+- [Updating](#updating)
 - [Context engineering for enterprise teams](#context-engineering-for-enterprise-teams)
 - [How it works](#how-it-works)
 - [Every supporting skill](#skills)
 - [All 15 playbooks](#playbooks)
-- [Get started](#get-started)
 - [Validation status](#validation-status)
 - [Documentation](#documentation)
 - [Contribute](#contribute)
 - [License](#license)
 
 </details>
+
+<a id="get-started"></a>
+
+## Installation
+
+<table>
+<tr>
+<td>
+
+**Before you install**
+
+- **Runtime:** Node.js 20+. Your application can use any language.
+- **AI host:** Claude Code, Codex or Cursor.
+- **Tools:** [GitHub CLI](https://cli.github.com/) for the checkout below. Claude project hooks also need Bash, including Git Bash on Windows.
+
+</td>
+</tr>
+</table>
+
+> [!NOTE]
+> **Current pilot route: install from a source checkout.** npm and marketplace publication remain release work. [Other installation routes](#other-installation-routes) · [Validation status](#validation-status)
+
+### 1. Download CYC
+
+From a separate tools directory, clone the source:
+
+```sh
+gh repo clone TheDThompsonDev/cyc-stack cyc-source
+```
+
+Keep this checkout for updates. Run the next commands from the same tools directory.
+
+<a id="preview-and-install"></a>
+
+### 2. Preview and install
+
+Replace `/path/to/your-project` with the absolute path to your existing project. First, preview the changes:
+
+```sh
+node cyc-source/bin/cyc.mjs init --project "/path/to/your-project" --dry-run
+```
+
+Review the preview, then install:
+
+```sh
+node cyc-source/bin/cyc.mjs init --project "/path/to/your-project"
+```
+
+The installer adds CYC's engine, the `cyc` entry skill and host hooks. Existing project instructions and unrelated hooks are preserved. Hosts are detected automatically; [choose a host explicitly](docs/installation.md) when needed.
+
+### 3. Connect your project's checks
+
+Open the target project in your AI host, reload it and review any hook-trust prompts. Then ask:
+
+```text
+/cyc Set up CYC for this project. Find the checks we already use in CI,
+help me configure verification, and preserve our hooks and conventions.
+```
+
+Setup records approved commands in `.cyc/config.json` and reports their results. Confirm real prompt/Stop hook behavior in a fresh session; installed files alone do not establish activation. [Setup and activation guide](docs/installation.md#activation-and-diagnosis)
+
+### 4. Start your first task
+
+```text
+/cyc Add CSV export to the orders dashboard. Respect the current filters
+and access rules. Export all matching orders, not just the visible page.
+```
+
+If `/cyc` is unavailable, select the discovered `cyc` skill or say **“Use the cyc skill to…”**
+
+<a id="other-installation-routes"></a>
+
+<details>
+<summary><strong>Other installation routes</strong></summary>
+
+| Route | Start here |
+| --- | --- |
+| Ask your agent | [Agent-guided installation](docs/installation.md#agent-guided-installation) |
+| Native plugin | [Host installation and activation](INSTALL.md#install-as-a-plugin) |
+| npm, after publication | Run `npx cyc-stack init` from your application's root |
+
+Downloading a package and activating it in a project are separate steps. [Versions, archives and removal →](docs/installation.md)
+
+</details>
+
+[Full installation guide →](INSTALL.md)
+
+## Updating
+
+1. **Update your tools checkout** to the revision your team wants to use. To follow the current branch, run:
+
+   ```sh
+   git -C cyc-source pull --ff-only
+   ```
+
+2. **Repeat [Preview and install](#preview-and-install)** for the same target project. Review the proposed update before applying it. Valid project configuration and local run records are preserved.
+3. **Reload your AI host** and repeat the setup check so it uses the updated skills and hooks.
+
+> [!IMPORTANT]
+> If you edited a CYC-managed file, the installer reports a conflict and writes nothing. Back up and merge that customization before retrying. [Update and conflict guidance](docs/installation.md#updating-conflicts-and-removal)
+
+For team rollouts, select a fixed revision and qualify it with a representative task. [Release and validation boundaries](#validation-status)
+
+<p align="right"><a href="#readme-top">Back to top ↑</a></p>
 
 ## Context engineering for enterprise teams
 
@@ -212,57 +324,6 @@ build a usable mobile layout, and check keyboard, validation and recovery states
 Progress updates explain consequential decisions. Final summaries stay brief and link to detailed evidence. Use `expand` for more detail once, or `limit off` for longer replies throughout the conversation. [Response controls](docs/response-standard.md#character-limit-toggle)
 
 <p align="right"><a href="#readme-top">Back to top ↑</a></p>
-
-## Get started
-
-**Prerequisites:** Node.js 20+, a supported AI host, and the GitHub CLI for the checkout route. Your application can use any language. Claude project hooks also need Bash, including Git Bash on Windows.
-
-### 1. Install into your project
-
-Use a source checkout while registry publication is pending. From a separate tools directory:
-
-```sh
-gh repo clone TheDThompsonDev/cyc-stack cyc-source
-node cyc-source/bin/cyc.mjs init --project "/path/to/your-project" --dry-run
-node cyc-source/bin/cyc.mjs init --project "/path/to/your-project"
-```
-
-Replace the target path with your project directory. Review the preview before applying it. The installer adds the engine, one `cyc` skill and host hooks while preserving existing project instructions and unrelated hooks.
-
-<details>
-<summary><strong>Prefer an agent, a plugin, or npm?</strong></summary>
-
-| Route | Start here |
-| --- | --- |
-| Ask your agent | [Agent-guided installation](docs/installation.md#agent-guided-installation) |
-| Native plugin | [Host installation and activation](INSTALL.md#install-as-a-plugin) |
-| npm, after publication | Run `npx cyc-stack init` from your application's root |
-
-Downloading the package and activating it in a project are separate steps. [Versions, archives, updates and removal →](docs/installation.md)
-
-</details>
-
-### 2. Connect the checks your team trusts
-
-Reload your AI host, review its hook-trust prompts, then ask:
-
-```text
-/cyc Set up CYC for this project. Find the checks we already use in CI,
-help me configure verification, and preserve our hooks and conventions.
-```
-
-Setup records approved commands in `.cyc/config.json` and reports their results. Installing files alone does not prove verification is meaningful or hooks are active.
-
-### 3. Give it a real task
-
-```text
-/cyc Add CSV export to the orders dashboard. Respect the current filters
-and access rules. Export all matching orders, not just the visible page.
-```
-
-If your host does not expose `/cyc`, select the discovered `cyc` skill or say **“Use the cyc skill to…”**
-
-[Full installation guide →](INSTALL.md)
 
 ## Validation status
 
