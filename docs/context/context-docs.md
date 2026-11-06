@@ -2,7 +2,7 @@
 
 Covers: scripts/context-review.mjs, scripts/project-tools.mjs, scripts/runtime.mjs, scripts/work-review.mjs, bin/cyc.mjs, methods/cyc-context/**, docs/context/INDEX.md, docs/context.md, test/context-review.test.mjs, test-support/historical-runtime.test.fixture.mjs, test-support/historical-baseline.test.fixture.mjs
 
-Last changed by AI: 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · files: scripts/runtime.mjs
+Last changed by AI: 2026-11-06 · run 377be4c6-68d9-4a22-ab94-77a92707adbe · files: scripts/context-review.mjs
 
 ## Current view
 
@@ -18,6 +18,8 @@ Discovery and lint share a literal/glob grammar: bracketed route directories are
 
 Run node --test test/context-review.test.mjs, node bin/cyc.mjs context lint and module-by-module investigate checks in the actual checkout. The local context suite passed 29/29 cases after the owner/classification repairs; original-source proof exposed the missing-History, advisory and catch-up acceptance defects. Some other red diagnostics reflect new interfaces, not behavioral defects. Detailed final broad receipts remain local; a source-only reader must rerun checks. Installed disposable fixtures exercise fresh context, real proof/final verification, scope/freshness restrictions and source-only transfer. The historical-runtime.test.fixture helper seeds pre-retention states only for older gate-isolation tests. Its test-only historical-baseline.test.fixture wrapper holds the real existing worker until seeding is published, preserving its PID/environment/startup errors; direct post-start rewriting raced that worker and produced EPERM in a full finish. A controlled delayed-seed test observes the real worker reading the completed legacy state. The exhausted predecessor remains exhausted; the narrowly scoped follow-up records this fixture repair rather than resetting its budget; current-start cases use real APIs/installed CLI. Structural prose/layout checks cannot prove knowledge is true, complete or adopted; local receipts may be absent elsewhere and no token/time savings are claimed.
 
+INDEX.md is itself covered by this record. Adding or changing a reference row can advance its Git freshness boundary even if the executable feature contract is unchanged. Refresh this owner and index together under a new scoped update, retaining actual maintenance provenance. Reference rows point to supporting guides and do not inflate the component count; immutable release archives remain separate from later source documentation upkeep.
+
 ## Lessons
 
 - 2026-11-06 · run a81789bf: After targeted checks passed, fresh review demonstrated an omitted CSS owner. Known indexed ownership must not depend on source suffixes or test classification; keep novel-entrypoint detection separate. The repair also rejects advisory additions/deletions and requires catch-up provenance plus final checks.
@@ -31,6 +33,12 @@ Run node --test test/context-review.test.mjs, node bin/cyc.mjs context lint and 
 - 2026-11-01 · run 3e945303: docs/context/context-docs.md records the layout rules, how a run becomes a doc entry, the duplicated matcher and the measurement limits; docs/context-tokens-2026-11-01.md records the observed sizes. Lesson from the blocked run: the configured tests check must allow for the whole suite (the h2h fixture test alone took 356 s after the 0.6.0 fixtures), and a timed-out check cannot be accepted as pre…
 
 ## History
+
+### 2026-11-06 · run 377be4c6-68d9-4a22-ab94-77a92707adbe · Refresh the canonical index-owner record after adding the publishing setup reference, preserving ac…
+**Changed:** Retain the new release setup reference under its actual index-owner record, refreshing current history/index metadata without changing the published0.8.2 archive.
+**Learned:** The changed index is supporting metadata and cannot hash itself. Revalidated the actual unchanged context-review implementation as noncircular source evidence for this index-only upkeep; no application behavior changed. Generated empty evidence was repaired explicitly, not promoted or hidden.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 377be4c6-68d9-4a22-ab94-77a92707adbe command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/context-review.mjs@sha256:1abc921d49d3ee34386b4084dac2904b2591af08b6dc74c49f1bed03c7efc7e0
 
 ### 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · Preserve POSIX and encoded file URL identities when associating Node load diagnostics with their te…
 **Changed:** Repair Node importer diagnostic identity using fileURLToPath and native canonical paths, preserving containment and truthful module-load judgments. Encoded-path original and real 8.3-alias failures are retained; focused candidate completion checks pass 6/6, with full verification still required.
