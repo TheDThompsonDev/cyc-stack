@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { acceptFailure, finishRun, nextRun, readRun, startRun } from '../scripts/runtime.mjs';
+import { acceptFailure, finishRun, nextRun, readRun, startRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { checkPacket, digest } from '../scripts/response-gate.mjs';
 import { writePacket } from '../scripts/packet.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
@@ -102,7 +102,7 @@ test('packet: a completed run finish writes this request\'s review packet, and t
   assert.equal(packet.runId, id);
   assert.equal(packet.status, 'ready');
   assert.deepEqual(packet.checks, [{ criterion: 'add returns the sum', result: 'passed', evidence: 'adds test passes' }]);
-  assert.deepEqual(packet.artifacts.map(item => item.path).sort(), ['src/calc.mjs', 'test/add.test.mjs']);
+  assert.deepEqual(packet.artifacts.map(item => item.path).sort(), readRun(f.root, id).handoffs.at(-1).artifacts.map(item => item.path).sort(), 'delivery projection retains the canonical handoff artifacts, including error history');
   assert.equal(packet.artifacts.find(item => item.path === 'src/calc.mjs').sha256, digest(readFileSync(join(f.root, 'src/calc.mjs'))));
   assert.equal(packet.humanReview, undefined, 'the controller does not claim the agent reread its reply');
   assert.deepEqual(f.hook({ hook_event_name: 'Stop', last_assistant_message: answer }), {});
@@ -197,7 +197,7 @@ test('packet: without hook state (Cursor, or no gate) finish writes nothing, and
   assert.ok(!existsSync(join(root, '.cyc/runtime/cursor-cursor-chat-tag.review.json')), 'Cursor still writes its own packet with the exact reply');
   mkdirSync(join(root, '.cyc/runtime'), { recursive: true });
   writeFileSync(join(root, '.cyc/runtime/reply.md'), answer);
-  assert.equal(writePacket(root, { session: 'cursor-chat-tag', responseFile: '.cyc/runtime/reply.md', passed: ['Fixed :: tests'], reviewed: true }).status, 'ready');
+  assert.equal(writePacket(root, { executionMode: 'cursor', session: 'cursor-chat-tag', responseFile: '.cyc/runtime/reply.md', passed: ['Fixed :: tests'], reviewed: true }).status, 'ready');
 });
 
 // ---------- defaults: fields the controller can state truthfully ----------

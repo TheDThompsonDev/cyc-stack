@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { completeRun, nextRun, readRun, recordHandoff, retryRun, sourceSnapshot, startRun, verifyRun } from '../scripts/runtime.mjs';
+import { completeRun, nextRun, readRun, recordHandoff, retryRun, sourceSnapshot, startRun, verifyRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 
 // Measure baselines inline so tests are deterministic; one test covers the background worker.

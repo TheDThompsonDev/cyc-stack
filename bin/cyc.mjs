@@ -1,20 +1,22 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { resolveExecution, artifactFiles } from '../scripts/execution.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { catalog, routeTask } from '../scripts/catalog.mjs';
-import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun } from '../scripts/runtime.mjs';
+import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun, captureReview, recordReview, startOperation, waitOperation, prepareRunContext } from '../scripts/runtime.mjs';
 
 const args = process.argv.slice(2);
 const positionals = [];
 const options = {};
-const flags = new Set(['dry-run', 'help', 'verbose', 'verify', 'reviewed', 'write', 'all', 'expanded']);
+const flags = new Set(['dry-run', 'help', 'verbose', 'verify', 'reviewed', 'write', 'all', 'expanded', 'json']);
 try {
   for (let i = 0; i < args.length; i++) {
     if (!args[i].startsWith('--')) { positionals.push(args[i]); continue; }
     const name = args[i].slice(2);
     if (flags.has(name)) { options[name] = true; continue; }
-    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc'].includes(name)) throw new Error(`Unknown option --${name}`);
+    if (['mode', 'conversation', 'wait-ms', 'operation'].includes(name)) { const value = args[++i]; if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`); options[name] = value; continue; }
+    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc', 'update-run'].includes(name)) throw new Error(`Unknown option --${name}`);
     const value = args[++i];
     if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`);
     if (['scope', 'artifact', 'criterion', 'passed', 'unmet', 'tests', 'path'].includes(name)) {
@@ -27,6 +29,7 @@ try {
   if ((options.host !== undefined || options.token !== undefined) && command !== 'onboard') throw new Error('--host and --token are only supported by onboard.');
   if (options.kind !== undefined && command !== 'investigate' && (command !== 'recipe' || action !== 'list')) throw new Error('--kind is only supported by recipe list and investigate.');
   if (options.since !== undefined && command !== 'readiness' && command !== 'context') throw new Error('--since is only supported by readiness and context review.');
+  if (options['update-run'] !== undefined && (command !== 'context' || action !== 'review' || !options.write)) throw new Error('--update-run is only supported by context review --write.');
   if ((options.write || options.all || options.new !== undefined || options.doc !== undefined) && command !== 'context') throw new Error('--write, --all, --new and --doc are only supported by context.');
   if (options.verify && command !== 'onboard') throw new Error('--verify is only supported by onboard. Use run verify for task verification.');
   if (options.verify && options['dry-run']) throw new Error('Do not combine --verify with --dry-run. Plain onboard performs read-only inspection.');
@@ -51,7 +54,8 @@ Discover:
       (execute an applicable authorized recipe; retain diagnostic evidence)
 
 Component context docs (docs/context/):
-  cyc context review [--run ID | --since YYYY-MM-DD | --all] [--write] [--new NAME]
+  cyc context prepare --run ID [--file CONTEXT.json]
+  cyc context review [--run ID | --since YYYY-MM-DD | --all] [--write --update-run UPDATE_ID] [--new NAME]
       (map completed runs' changed files to component docs and propose the doc entry from each run's
        record: what changed, what was learned, the decisive check, files with hashes, date and run ID.
        Read-only without --write; --write appends the entries and refreshes INDEX.md)
@@ -75,12 +79,17 @@ Execute through your existing AI host:
       (from build or verify: record build, prove new tests, verify, record verify and deliver, and complete;
        artifacts default to the files this run changed; run next gives the assessment template)
   cyc run finish --file FINISH.json   (summary, assessment, criterionEvidence; optional runId and artifacts)
+      (versioned input uses canonical scenarioEvidence; needs-proof-review returns its bound continuation file)
+  cyc run wait --run ID --operation ID --wait-ms 30000   (bounded progress; finish/verify/prove-red also accept --wait-ms)
+  Start JSON: executionMode native-codex|native-claude|cursor|standalone, real conversationId, separate session label; optional frozen proofCommands.
   cyc run retry --run ID --stage build --reason "What changed in the approach"
   cyc run accept-failure --run ID --check CHECK_ID --reason "Why this pre-existing failure is unrelated"
   cyc run complete --run ID
   cyc run status --run ID
   cyc run recover --run ID   (read-only diagnosis and next action; preserves work and budgets)
   cyc run review --run ID   (refresh the shared developer/PR review artifact)
+  cyc run review-capture --run ID --file CAPTURE.json   (reviewer, optional scope)
+  cyc run review-record --run ID --file REVIEW.json   (reviewId, evidence, identity or null, findings)
   cyc run pause|resume|stop --run ID
 
 Deliver the reply:
@@ -92,6 +101,9 @@ Deliver the reply:
   cyc packet --session ID --passed "criterion :: evidence"... [--unmet "criterion :: evidence"]... [--artifact PATH]... [--status blocked --blocker TEXT] [--advisory "why no controller run applies"] [--response FILE] --reviewed
       (writes the review packet and runs the delivery gate's checks; the Stop gate checks your final reply itself.
        Cursor needs --response, the exact reply, to find its session's packet)
+
+Interactive init/install shows a short summary. Use --json for the complete structured result.
+Piped output and --verbose retain JSON for automation and diagnostics.
 
 All commands accept --project PATH. Criteria file: [{"id":"saved","description":"Survives reload"}].
 Store handoff files under .cyc/runs/ID/ to avoid changing the source being verified.
@@ -123,15 +135,19 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
     else if (action === 'run') {
       if (options['dry-run']) throw new Error('Use recipe list to inspect without execution; recipe run does not accept --dry-run.');
       if (!options.recipe) throw new Error('--recipe is required.');
-      result = tools.runRecipe(root, options.recipe, { run: options.run });
-      if (!options.verbose) result.results = result.results.map(({ id, command, args, passed, exitCode, error, errorCode, stdout, stderr }) => ({ id, command, args, passed, exitCode, error, errorCode, outputTail: `${stdout ?? ''}${stderr ?? ''}`.trim().split('\n').slice(-15).join('\n') }));
+      result = await tools.runRecipe(root, options.recipe, { run: options.run });
+      if (!options.verbose && result.results) result.results = result.results.map(({ id, command, args, passed, exitCode, error, errorCode, stdout, stderr }) => ({ id, command, args, passed, exitCode, error, errorCode, outputTail: `${stdout ?? ''}${stderr ?? ''}`.trim().split('\n').slice(-15).join('\n') }));
     } else throw new Error('Use recipe list or recipe run.');
   } else if (command === 'context') {
     const context = await import('../scripts/context-review.mjs');
-    if (action === 'review') result = context.reviewContext(root, { run: options.run, since: options.since, all: !!options.all, write: !!options.write, newDoc: options.new });
+    if (action === 'review') result = context.reviewContext(root, { run: options.run, since: options.since, all: !!options.all, write: !!options.write, newDoc: options.new, updateRun: options['update-run'] });
+    else if (action === 'prepare') {
+      if (!options.run) throw new Error('context prepare needs the exact --run ID.');
+      result = prepareRunContext(root, options.run, options.file ? inputObject(options.file, ['records', 'summary', 'reason']) : {});
+    }
     else if (action === 'lint') result = context.lintContext(root, { doc: options.doc });
     else if (action === 'measure') result = context.measureContext(root, { paths: options.path ?? [], run: options.run });
-    else throw new Error('Use context review, context lint, or context measure.');
+    else throw new Error('Use context prepare, context review, context lint, or context measure.');
   } else if (command === 'onboard') {
     result = (await import('../scripts/onboarding.mjs')).onboardProject(root, { verify: !!options.verify, host: options.host, session: options.session, token: options.token });
   } else if (['init', 'install', 'uninstall', 'doctor', 'activate'].includes(command)) {
@@ -145,9 +161,10 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
     const { checkReply } = await import('../scripts/response-gate.mjs');
     const { allowsLongResponse } = await import('../scripts/response-mode.mjs');
     let expanded = !!options.expanded;
-    if (options.session) {
+    const execution = options.mode ? resolveExecution(root, { executionMode: options.mode, conversationId: options.conversation, session: options.session }) : null;
+    if (options.session && execution?.mode !== 'standalone') {
       // The conversation's own setting decides the cap, as it does at Stop.
-      const statePath = resolve(root, '.cyc/runtime', `${options.session}.state.json`);
+      const statePath = resolve(root, '.cyc/runtime', `${execution?.gateSession ?? options.session}.state.json`);
       if (!existsSync(statePath)) throw new Error(`No hook state for session ${options.session} at ${statePath}.`);
       expanded = allowsLongResponse(JSON.parse(readFileSync(statePath, 'utf8').replace(/^﻿/, '')));
     }
@@ -156,7 +173,7 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
   } else if (command === 'readiness') {
     result = (await import('../scripts/run-gate.mjs')).sessionReadiness({ root, session: options.session, since: options.since });
   } else if (command === 'packet') {
-    result = (await import('../scripts/packet.mjs')).writePacket(root, { session: options.session, responseFile: options.response, status: options.status, blocker: options.blocker, advisory: options.advisory, passed: options.passed ?? [], unmet: options.unmet ?? [], artifacts: options.artifact ?? [], reviewed: !!options.reviewed });
+    result = (await import('../scripts/packet.mjs')).writePacket(root, { session: options.session, executionMode: options.mode, conversationId: options.conversation, responseFile: options.response, status: options.status, blocker: options.blocker, advisory: options.advisory, passed: options.passed ?? [], unmet: options.unmet ?? [], artifacts: options.artifact ?? [], reviewed: !!options.reviewed });
   } else if (command === 'playbooks') result = catalog;
   else if (command === 'route') {
     if (!options.goal) throw new Error('--goal is required.');
@@ -167,13 +184,14 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
         let input;
         if (options.file) {
           fileOnly(options, ['file', 'project', 'verbose']);
-          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan']);
+          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan', 'evidenceVersion', 'requirements', 'reviewPolicy', 'executionMode', 'conversationId', 'proofCommands', 'contextRetention']);
           for (const key of ['goal', 'playbook', 'session', 'plan']) if (input[key] !== undefined && typeof input[key] !== 'string') throw new Error(`${key} must be a string.`);
           if (input.scout !== undefined && !object(input.scout)) throw new Error('scout must be the Scout assessment object (run start without it returns the template).');
           if (input.criteria !== undefined && (!Array.isArray(input.criteria) || !input.criteria.length || input.criteria.some(item => !object(item) || typeof item.id !== 'string' || typeof item.description !== 'string'))) throw new Error('criteria must be a nonempty array of {id, description} string records.');
           if (input.allowedPaths !== undefined && (!Array.isArray(input.allowedPaths) || input.allowedPaths.some(p => typeof p !== 'string'))) throw new Error('allowedPaths must be an array of paths.');
         } else input = { goal: options.goal, playbook: options.playbook, criteria: options.criteria ? readJSON(options.criteria) : options.criterion ? options.criterion.map((description, index) => ({ id: `c${index + 1}`, description })) : undefined, allowedPaths: options.scope ?? [], session: options.session, scout: options.scout ? readJSON(options.scout) : undefined, plan: options.plan };
         // Without an explicit session, the run belongs to the calling conversation when the host names it.
+        if (!options.file) { input.executionMode = options.mode; input.conversationId = options.conversation; }
         input.session ??= callerSession();
         result = startRun(root, input); break;
       }
@@ -190,13 +208,14 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
         if (options.run && packet.runId !== options.run) throw new Error('--run and handoff runId differ.');
         result = recordHandoff(root, packet); break;
       }
-      case 'verify': result = verifyRun(root, options.run); break;
-      case 'prove-red': result = proveRun(root, options.run, { tests: options.tests }); break;
+      case 'verify': result = options['wait-ms'] === undefined ? verifyRun(root, options.run) : startOperation(root, options.run, { action: 'verify', waitMs: Number(options['wait-ms']) }); break;
+      case 'prove-red': result = options['wait-ms'] === undefined ? proveRun(root, options.run, { tests: options.tests }) : startOperation(root, options.run, { action: 'prove-red', input: { tests: options.tests }, waitMs: Number(options['wait-ms']) }); break;
+      case 'wait': if (!options.operation) throw new Error('run wait needs --operation ID from the returned handle.'); result = waitOperation(root, options.run, options.operation, Number(options['wait-ms'] ?? 30000)); break;
       case 'finish': {
         let input;
         if (options.file) {
-          fileOnly(options, ['file', 'project', 'verbose', 'run', 'session']);
-          input = inputObject(options.file, ['runId', 'summary', 'artifacts', 'passedEvidence', 'criterionEvidence', 'assessment', 'acceptFailures', 'testProof']);
+          fileOnly(options, ['file', 'project', 'verbose', 'run', 'session', 'wait-ms']);
+          input = inputObject(options.file, ['runId', 'summary', 'artifacts', 'passedEvidence', 'criterionEvidence', 'assessment', 'acceptFailures', 'testProof', 'scenarioEvidence', 'continuation']);
           // A test proof exemption belongs to the verify assessment; agents also put it at the top
           // level, so it is moved there unless the assessment already has a different one.
           if ('testProof' in input) {
@@ -211,26 +230,73 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
           if (!object(input.assessment)) throw new Error('assessment must be an object.');
           if (input.criterionEvidence !== undefined && (!object(input.criterionEvidence) || Object.values(input.criterionEvidence).some(v => typeof v !== 'string' || !v.trim()))) throw new Error('criterionEvidence must map criterion IDs to evidence strings.');
           if (input.passedEvidence !== undefined && (typeof input.passedEvidence !== 'string' || !input.passedEvidence.trim())) throw new Error('passedEvidence must be a nonempty string.');
-          for (const path of input.artifacts ?? []) readFileSync(projectFile(root, inputPath(root, path)));
+          artifactFiles(root, (input.artifacts ?? []).map(path => inputPath(root, path)));
           // finishRun checks evidence and assessments against the run before any test runs.
           options.run = options.run ?? input.runId ?? activeRun(root, options.session);
         } else input = { summary: options.summary, artifacts: options.artifact, passedEvidence: options['criteria-passed'], criterionEvidence: options['criterion-evidence'] ? parseJSON(options['criterion-evidence'], '--criterion-evidence') : undefined, assessment: options.assessment ? readJSON(options.assessment) : {} };
-        result = finishRun(root, options.run, input); break;
+        result = options['wait-ms'] === undefined ? finishRun(root, options.run, input) : startOperation(root, options.run, { action: 'finish', input, waitMs: Number(options['wait-ms']) }); break;
       }
       case 'retry': result = retryRun(root, options.run, { stage: options.stage, reason: options.reason }); break;
       case 'accept-failure': result = acceptFailure(root, options.run, { check: options.check, reason: options.reason }); break;
       case 'complete': result = completeRun(root, options.run); break;
       case 'review': result = reviewRun(root, options.run); break;
+      case 'review-capture':
+        if (!options.file) throw new Error('review-capture needs --file JSON with reviewer and optional scope.');
+        result = captureReview(root, options.run, inputObject(options.file, ['reviewer', 'scope', 'contextPaths', 'contextEvidence'])); break;
+      case 'review-record':
+        if (!options.file) throw new Error('review-record needs --file JSON with reviewId, evidence, identity and findings.');
+        result = recordReview(root, options.run, inputObject(options.file, ['reviewId', 'evidence', 'identity', 'findings'])); break;
       case 'pause': case 'resume': case 'stop': result = controlRun(root, options.run, action); break;
       default: throw new Error('Unknown run action. Use cyc help.');
     }
   } else throw new Error(`Unknown command ${command}. Use cyc help.`);
   if (command === 'run' && !options.verbose) result = compact(action, result, root, options);
-  console.log(JSON.stringify(result, null, 2));
-  if (result?.ok === false || ['halted', 'exhausted', 'blocked'].includes(result?.status) || result?.passed === false) process.exitCode = 1;
+  console.log(humanInstallOutput(command) ? formatInstall(result) : JSON.stringify(result, null, 2));
+  if (result?.ok === false || ['halted', 'exhausted', 'blocked'].includes(result?.status) || result?.passed === false || result?.result?.passed === false || ['halted', 'exhausted', 'blocked'].includes(result?.result?.status)) process.exitCode = 1;
 } catch (error) {
-  console.error(JSON.stringify({ ok: false, error: error.message }));
+  const result = { ok: false, error: error.message, ...(error.setup ? { setup: error.setup } : {}), ...(error.field ? { field: error.field, repairTemplate: error.repairTemplate } : {}) };
+  console.error(humanInstallOutput(positionals[0]) ? formatInstall(result) : JSON.stringify(result));
   process.exitCode = 1;
+}
+
+function humanInstallOutput(command) {
+  return process.stdout.isTTY && ['init', 'install'].includes(command) && !args.includes('--json') && !args.includes('--verbose');
+}
+
+function formatInstall(result) {
+  // JSON escaped terminal controls in paths and diagnostics; keep them visible here too.
+  const text = value => String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+  const changes = result.changes ?? [];
+  const counts = Object.fromEntries(['create', 'update', 'remove'].map(action => [action, changes.filter(c => c.action === action).length]));
+  const title = !result.ok ? 'Installation stopped' : result.dryRun ? `CYC Stack ${version} — installation preview` : !changes.length ? `CYC Stack ${version} is up to date` : `CYC Stack ${version} installed`;
+  const lines = [title, ''];
+  if (result.projectRoot) lines.push(`Project: ${text(result.projectRoot)}`);
+  if (result.hosts?.length) {
+    const names = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
+    lines.push(`Hosts: ${result.hosts.map(host => names[host] ?? text(host)).join(', ')}`);
+  }
+  if (result.ok) {
+    if (result.dryRun) lines.push(counts.create || counts.update || counts.remove ? `Would create ${counts.create} files, update ${counts.update}, remove ${counts.remove}.` : 'No file changes planned.', 'No files changed.');
+    else lines.push(changes.length ? `Files: ${[['create', 'created'], ['update', 'updated'], ['remove', 'removed']].filter(([action]) => counts[action]).map(([action, label]) => `${counts[action]} ${label}`).join(', ')}` : 'No file changes.');
+  }
+  if (result.error) lines.push('', text(result.error));
+  if (result.conflicts?.length) lines.push('', 'Conflicts:', ...result.conflicts.map(c => `  - ${text(c.path)}: ${text(c.reason)}`));
+  if (result.warnings?.length) {
+    const heading = !result.ok ? 'Installer notes (changes described below are not confirmed):' : result.dryRun ? 'Preview notes (changes described below are planned only):' : 'Setup notes:';
+    lines.push('', heading);
+    const width = Math.max(40, Math.min(process.stdout.columns ?? 78, 100));
+    for (const warning of result.warnings) {
+      let line = '  -';
+      for (const word of text(warning).split(/\s+/)) {
+        if (line.length + word.length + 1 > width && line !== '  -') { lines.push(line); line = '   '; }
+        line += ` ${word}`;
+      }
+      lines.push(line);
+    }
+  }
+  if (result.ok) lines.push('', 'Next:', ...(result.dryRun ? ['  Rerun without --dry-run to apply this plan.'] : ['  Reload your AI host and review any hook-trust prompt.', '  In your AI chat, run:', '    /cyc Set up CYC for this project.']));
+  return lines.join('\n');
 }
 
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
@@ -263,7 +329,9 @@ function preexistingHint(ids) {
 
 function compact(action, result, root, options) {
   if (!result || typeof result !== 'object' || ['status', 'recover'].includes(action)) return result;
+  if (result.operationId) return result;
   const id = result.runId ?? result.id ?? options.run;
+  if (['review-capture', 'review-record'].includes(action)) { const { files, ...receipt } = result; return receipt; }
   if (action === 'prove-red') return result;
   if (action === 'finish') return result.failedAt === 'verify' && 'verificationStatus' in result ? { ...compact('verify', result, root, options), finished: false, failedAt: 'verify' } : result;
   if (action === 'verify') {

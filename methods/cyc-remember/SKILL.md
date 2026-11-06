@@ -25,7 +25,7 @@ time	stage	decision	why	evidence	who
 
 Write a capsule of five bullets or fewer: destination, current stage, what's proven (with evidence pointers), what's open, and the next single action. Tag each open thread with one status: `[done]`, `[in progress]`, `[blocked: reason]`, or `[dropped: reason]`. Untagged threads count as not done.
 
-Point to canonical component context and its relevant constraints/checks instead of copying them into the capsule. Retain verified reusable findings through [Context](../cyc-context/SKILL.md) before final verification; a local decision log alone is not shared project memory. Keep adoption status and technical evidence distinct.
+Point to canonical component context and its relevant constraints/checks instead of copying them into the capsule. Retain verified reusable findings through [Context](../cyc-context/SKILL.md) before final verification; a local decision log alone is not shared project memory. Each new feature and meaningful contract change leaves its planned canonical target-project record/index before completion; use finish/context prepare and preserve restrictions as pending. Completed-run catch-up is a new scoped update with fresh verification, not an edit to old evidence. Keep adoption status and technical evidence distinct.
 
 ## When resuming
 

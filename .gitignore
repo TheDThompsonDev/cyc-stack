@@ -2,6 +2,7 @@
 .cyc/runs/
 .cyc/engine/
 *.tgz
+release-assets/
 node_modules/
 
 # Machine-specific hooks for developing CYC itself (absolute paths to this checkout)

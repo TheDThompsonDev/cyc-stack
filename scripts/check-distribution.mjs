@@ -22,6 +22,8 @@ export function checkDistribution(root, { tag } = {}) {
   const pkg = read('package.json');
   if (!pkg) return { ok: false, issues };
   const require = (condition, message) => { if (!condition) issues.push(message); };
+  const lock = read('package-lock.json');
+  require(lock?.name === pkg.name && lock?.version === pkg.version && lock?.packages?.['']?.name === pkg.name && lock?.packages?.['']?.version === pkg.version, 'package-lock.json: root identities must match package.json; use scripts/bump-version.mjs.');
   const https = value => {
     try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; }
     catch { return false; }
@@ -36,12 +38,21 @@ export function checkDistribution(root, { tag } = {}) {
   require(pkg.license === 'MIT' && existsSync(resolve(root, 'LICENSE')), 'Release must carry its declared MIT license.');
   require(pkg.bin?.['cyc-stack'] === 'bin/cyc.mjs' && pkg.bin?.cyc === 'bin/cyc.mjs', 'Both public CLI names must point to bin/cyc.mjs.');
   for (const hook of ['preinstall', 'install', 'postinstall']) require(!pkg.scripts?.[hook], `Remove ${hook}: downloading the package must not install project integration.`);
-  for (const path of ['INSTALL.md', 'bin', 'scripts/install.mjs', 'skills', 'methods', 'catalog', 'docs/installation.md', '.claude-plugin', '.codex-plugin', '.cursor-plugin', '.agents']) {
+  for (const path of ['INSTALL.md', 'plugin.json', 'bin', 'scripts/install.mjs', 'skills', 'methods', 'catalog', 'docs/installation.md', '.claude-plugin', '.codex-plugin', '.cursor-plugin', '.agents']) {
     require(Array.isArray(pkg.files) && pkg.files.includes(path), `Release file selection must include ${path}.`);
     require(existsSync(resolve(root, path)), `Missing release resource: ${path}.`);
   }
   try { require(JSON.stringify(readdirSync(resolve(root, 'skills')).sort()) === JSON.stringify(['cyc']), 'Expose exactly one public cyc skill; keep supporting methods internal.'); }
   catch (error) { issues.push(`skills: ${error.message}`); }
+  const portable = read('plugin.json');
+  const fallback = read('.codex-plugin/plugin.json');
+  if (portable) {
+    require(portable.$schema === 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json', 'plugin.json: declare the portable Agent Plugins schema.');
+    require(portable.name === 'cycstack' && portable.version === pkg.version && portable.description === pkg.description && portable.license === pkg.license, 'plugin.json: identity, version, description and license must agree with the package.');
+    const overlay = portable.extensions?.['com.openai'];
+    require(overlay?.hooks === './hooks/codex.json' && JSON.stringify(overlay?.interface) === JSON.stringify(fallback?.interface), 'plugin.json: OpenAI hooks and interface must agree with the Codex compatibility manifest.');
+    require(overlay?.onboardingSkill === './skills/cyc/SKILL.md', 'plugin.json: onboarding must use the single packaged cyc skill.');
+  }
   for (const host of ['claude', 'codex', 'cursor']) {
     const path = `.${host}-plugin/plugin.json`;
     const plugin = read(path);

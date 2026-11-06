@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startRun, recoverRun, readRun, quickHandoff, verifyRun, controlRun, completeRun } from '../scripts/runtime.mjs';
+import { startRun, recoverRun, readRun, quickHandoff, verifyRun, controlRun, completeRun } from '../test-support/historical-runtime.test.fixture.mjs';
 // These tests are not about run-start measurement; a background worker would outlive their temp folders.
 process.env.CYC_BASELINE_MODE = 'off';
 

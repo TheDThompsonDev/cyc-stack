@@ -142,7 +142,7 @@ test('standard install excludes development payload and engine documentation lin
   const installed = installProject(root);
   assert.equal(installed.ok, true, installed.error);
   const engine = join(root, '.cyc/engine');
-  for (const name of ['evals', 'test', 'scripts/bump-version.mjs', 'docs/assets/build-workflow-diagram.mjs', 'docs/assets/cyc-workflow.png', 'docs/assets/cyc-workflow-v2.png', 'docs/assets/cyc-workflow-diagram.png', 'docs/assets/cyc-method-library.png', 'docs/assets/cyc-workflow.html', 'docs/context', 'docs/quality-guidance-2026-10-21.md']) {
+  for (const name of ['evals', 'test', 'scripts/bump-version.mjs', 'docs/assets/build-workflow-diagram.mjs', 'docs/assets/cyc-workflow-diagram.png', 'docs/assets/cyc-method-library.png', 'docs/assets/cyc-workflow.html', 'docs/context', 'docs/quality-guidance-2026-10-21.md']) {
     assert.equal(existsSync(join(engine, name)), false, `development-only payload shipped: ${name}`);
   }
   for (const name of ['LICENSE', 'bin/cyc.mjs', 'scripts/runtime.mjs', 'scripts/baseline-worker.mjs', 'scripts/response-hook.mjs', 'scripts/recovery.mjs', 'scripts/source-snapshot.mjs', 'scripts/source-hash-worker.mjs', 'methods/cyc-context/scripts/evidence.mjs', 'docs/engineering/domain-design.md', 'docs/engineering/failure-handling.md']) assert.ok(existsSync(join(engine, name)), `missing operational file: ${name}`);
@@ -283,7 +283,7 @@ test('modified engine hook blocks update and uninstall atomically until its depe
 
 test('an old unmodified managed version can be updated and skill links resolve in the target project', t => {
   const root = fixture(t); assert.equal(installProject(root).ok, true);
-  const name = '.cyc/engine/scripts/check-response.mjs'; const oldVersion = '// previous release'; put(root, name, oldVersion);
+  const name = '.cyc/engine/scripts/catalog.mjs'; const oldVersion = '// previous release'; put(root, name, oldVersion);
   const record = get(root, '.cyc/install-manifest.json'); record.files[name] = createHash('sha256').update(oldVersion).digest('hex'); put(root, '.cyc/install-manifest.json', record);
   const updated = installProject(root); assert.equal(updated.ok, true); assert.ok(updated.changes.some(c => c.path === name));
   // Playbooks are read after selection, so every installed page must resolve, not just the entry.

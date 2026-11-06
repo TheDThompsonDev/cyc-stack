@@ -1,3 +1,6 @@
+import { digest } from './response-gate.mjs';
+import { retentionOf } from './context-review.mjs';
+
 // These checks establish recorded process evidence, not the truth of an agent's judgment.
 const text = value => typeof value === 'string' && value.trim().length > 0;
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -7,7 +10,49 @@ export const reviewPath = state => `.cyc/runs/${state.id}/review.md`;
 
 export function assessmentRequirements(state, stage) {
   if (state.workContractVersion !== 1) return [];
-  return ({ scout: ['context', 'approach', 'alignment', 'consumers'], verify: ['semanticReview', 'consumerChecks'], deliver: ['learning', 'errorHistory'] })[stage] ?? [];
+  const keys = ({ scout: ['context', 'approach', 'alignment', 'consumers'], verify: ['semanticReview', 'consumerChecks'], deliver: ['learning', 'errorHistory'] })[stage] ?? [];
+  return stage === 'verify' && state.evidenceVersion === 1 ? [...keys, 'criterionChecks'] : keys;
+}
+
+export const criterionClauses = state => state.criteria.flatMap(c => (c.clauses ?? [{ id: undefined }]).map(clause => ({ id: c.id, clause: clause.id })));
+
+// Coverage records describe source provenance. They do not attest reviewer independence.
+export function reviewCurrent(record, state, sourceHash, files, contextKey) {
+  if (!record || record.criteriaHash !== digest(JSON.stringify(state.criteria))) return false;
+  if (record.contextMode === 'bounded' && (!record.contextInputs?.bounded || record.contextInputs.key !== contextKey)) return false;
+  if (record.sourceHash === sourceHash) return true;
+  if (record.contextMode !== 'bounded' || !files) return false;
+  const prefixes = [...record.scope, ...record.contextPaths];
+  const covered = path => prefixes.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+  return [...new Set([...Object.keys(record.files), ...Object.keys(files)])].filter(covered).every(path => record.files[path] === files[path]);
+}
+export function reviewCoverage(state, review, source) {
+  const sourceHash = typeof source === 'string' ? source : source.hash;
+  const files = typeof source === 'string' ? undefined : source.files;
+  const refs = review?.receipts ?? [];
+  const entries = refs.map(id => (state.reviewReceipts ?? []).find(r => r.id === id));
+  if (!entries.length) return { status: review?.reviewer === 'self' ? 'self-assessment' : 'unlinked', entries: [] };
+  const stale = entries.some(r => !r || r.status !== 'recorded' || !reviewCurrent(r, state, sourceHash, files, typeof source === 'string' ? undefined : source.contextKey));
+  const kinds = new Set(entries.filter(Boolean).map(r => r.reviewer));
+  return { status: stale ? 'stale' : kinds.size > 1 ? 'mixed' : 'source-linked', entries };
+}
+
+export function validateProofReview(state, review) {
+  if (state.evidenceVersion !== 1 || !state.testProof?.passed || state.testProof.mode === 'green') return;
+  if (!object(review) || !Array.isArray(review.cases) || !review.cases.length) throw new Error('Diagnostic red needs proofReview.cases with a reason review of decisive failures; run prove-red first.');
+  if (!['current-proof', state.testProof.receiptPath].includes(review.receipt)) throw new Error('proofReview must reference the current proof receipt.');
+  if (new Set(review.cases.map(c => c?.id)).size !== review.cases.length) throw new Error('proofReview case ids must be unique.');
+  for (const item of review.cases) {
+    if (!state.testProof.failures?.some(f => f.id === item?.id)) throw new Error(`Unknown proof failure ${item?.id}.`);
+    requireChoice(item.category, ['behavioral', 'new-interface', 'setup', 'unclassified'], 'Proof category');
+    requireText(item.reason, 'Proof reason');
+    if (/^<.*>$/.test(item.reason.trim())) throw new Error('Replace the proof reason placeholder with actual evidence.');
+    if (item.category === 'behavioral') requireText(item.boundary, 'Existing observable boundary');
+    if (item.category === 'behavioral' && state.testProof.failures.find(f => f.id === item.id)?.hint === 'module-load') throw new Error('A module-load failure cannot establish an existing behavioral boundary; classify the absent interface or setup honestly.');
+    if (item.category === 'behavioral' && state.testProof.failures.find(f => f.id === item.id)?.error === 'test failed') throw new Error('A generic test-file failure has no decisive behavioral assertion; retain diagnostic uncertainty or provide focused evidence.');
+  }
+  const decisive = state.playbook === 'bug-fix' ? ['behavioral'] : ['behavioral', 'new-interface'];
+  if (!review.cases.some(c => decisive.includes(c.category))) throw new Error('No decisive behavioral proof for this bug fix (features may prove a new interface); setup and unclassified failures remain diagnostic.');
 }
 
 // Fields the controller records when the agent leaves them out, limited to what its own record
@@ -20,7 +65,7 @@ export function derivedAssessment(state, stage, { contextHistory = true } = {}) 
     context: { status: 'none', evidence: 'Not given at start: this project has no docs/context/INDEX.md and no ledger, so there was no recorded history to consult.', freshness: 'No recorded history exists to go stale.', sources: [] }
   };
   if (stage === 'deliver') return {
-    learning: { status: 'none', reason: 'Not given at finish: no reusable learning was recorded for this run.', artifacts: [] },
+    ...(retentionOf(state)?.disposition === 'required' ? {} : { learning: { status: 'none', reason: 'Not given at finish: no reusable learning was recorded for this run.', artifacts: [] } }),
     ...(state.playbook !== 'bug-fix' && !state.failures ? { errorHistory: { status: 'none', reason: 'Not given at finish: this run recorded no failed attempt.', artifacts: [] } } : {})
   };
   return {};
@@ -33,6 +78,7 @@ export function assessmentTemplate(state, stage) {
   const required = assessmentRequirements(state, stage);
   if (!required.length) return null;
   const scoutConsumers = state.handoffs?.findLast(item => item.stage === 'scout' && item.status === 'passed')?.assessment?.consumers ?? [];
+  const retention = retentionOf(state);
   const templates = {
     context: { status: 'used | none', evidence: '<what you searched for prior context>', freshness: '<why that context is still current, or why none applies>', sources: ['<project-relative path; [] when status is none>'] },
     approach: { kind: 'reuse | extend | repair | create', evidence: '<existing code you found and why this approach>' },
@@ -40,7 +86,8 @@ export function assessmentTemplate(state, stage) {
     consumers: [{ id: 'direct', description: '<the behavior you are changing>', check: '<how you will verify it>' }],
     semanticReview: { reviewer: 'self | fresh-context | peer', intent: '<does the diff do what was asked, nothing more>', consumers: '<are dependents still correct>', conventions: '<does it match project style>', findings: [] },
     consumerChecks: (scoutConsumers.length ? scoutConsumers : [{ id: 'direct' }]).map(item => ({ id: item.id, result: 'passed', evidence: '<the command or observation that showed it works>' })),
-    learning: { status: 'none | recorded | pending-acceptance', reason: '<why nothing is reusable, or what was recorded>', artifacts: [] },
+    criterionChecks: criterionClauses(state).map(item => ({ ...item, scenario: '<named scenario for this original outcome/clause>', check: '<configured command id>', receipt: 'current-verification', result: 'passed', origin: 'agent-reported', evidence: '<what this scenario established; not a suite count>' })),
+    learning: retention?.disposition === 'required' ? { status: 'recorded', reason: '<actual feature knowledge and limits retained>', artifacts: retention.features.map(f => f.doc), context: retention.features.map(f => ({ id: f.id, currentView: '<Describe capability, contracts, decisions, checks and limits; or author the canonical file and remove this context input.>' })) } : { status: 'none | recorded | pending-acceptance', reason: '<why nothing is reusable, or what was recorded>', artifacts: [] },
     errorHistory: { status: state.playbook === 'bug-fix' || state.failures > 0 ? 'recorded' : 'none | recorded', reason: '<what failed and how it was resolved, or why there was no error>', artifacts: state.playbook === 'bug-fix' || state.failures > 0 ? [state.ledgerPath ?? 'docs/context/error-ledger.md'] : [] }
   };
   return Object.fromEntries(required.map(key => [key, templates[key]]));
@@ -91,7 +138,7 @@ function normalizeAssessment(assessment) {
 
 const findingShape = 'Each finding is {"id": "...", "status": "resolved | dismissed | open", "evidence": "..."}.';
 
-export function validateAssessment(state, packet, fingerprint) {
+export function validateAssessment(state, packet, fingerprint, { proofPending = false } = {}) {
   const required = assessmentRequirements(state, packet.stage);
   if (packet.status !== 'passed' || !required.length) return [];
   const assessment = packet.assessment;
@@ -129,7 +176,11 @@ export function validateAssessment(state, packet, fingerprint) {
     for (const consumer of consumers) {
       if (!/^[a-zA-Z0-9_-]+$/.test(consumer?.id ?? '')) throw new Error('Consumer needs a stable id.');
       requireText(consumer.description, 'Consumer description');
-      requireText(consumer.check, 'Consumer check');
+        requireText(consumer.check, 'Consumer check');
+        if (consumer.journey !== undefined) {
+          requireText(consumer.journey.name, 'Journey name'); requireText(consumer.journey.writer, 'Authoritative writer entrypoint');
+          if (!Array.isArray(consumer.journey.operations) || consumer.journey.operations.length < 2 || consumer.journey.operations.some(op => !text(op))) throw new Error('Protected journey needs named subsequent read/write operations.');
+        }
     }
   }
   if (packet.stage === 'verify') {
@@ -137,7 +188,8 @@ export function validateAssessment(state, packet, fingerprint) {
     requireChoice(semanticReview?.reviewer, ['self', 'fresh-context', 'peer'], 'semanticReview.reviewer');
     for (const axis of ['intent', 'consumers', 'conventions']) requireText(semanticReview[axis], `Semantic review ${axis}`);
     if (!Array.isArray(semanticReview.findings)) throw new Error('Semantic review needs findings (an empty array means no findings).');
-    if (new Set(semanticReview.findings.map(item => item?.id)).size !== semanticReview.findings.length) throw new Error(`Review finding ids must be unique. ${findingShape}`);
+    const findingKey = item => state.evidenceVersion === 1 ? JSON.stringify([item?.reviewId ?? null, item?.id]) : item?.id;
+    if (new Set(semanticReview.findings.map(findingKey)).size !== semanticReview.findings.length) throw new Error(`Review finding ids must be unique within their receipt scope. ${findingShape}`);
     for (const finding of semanticReview.findings) {
       try {
         requireText(finding?.id, 'Finding id');
@@ -156,8 +208,30 @@ export function validateAssessment(state, packet, fingerprint) {
       requireText(check.evidence, 'Consumer check result');
       if (check.result !== 'passed') throw new Error(`Consumer ${check.id} is not verified; repair or record a blocked handoff.`);
     }
+    if (state.evidenceVersion === 1) {
+      const checks = assessment.criterionChecks;
+      if (!Array.isArray(checks)) throw new Error('criterionChecks needs original outcome/clause scenarios.');
+      const key = c => JSON.stringify([c?.id, c?.clause ?? null]);
+      const expected = criterionClauses(state);
+      if (new Set(checks.map(key)).size !== checks.length) throw new Error('Duplicate criterion/clause check.');
+      for (const c of expected) if (!checks.some(item => key(item) === key(c))) throw new Error(`Missing scenario for ${c.id}${c.clause ? `/${c.clause}` : ''}.`);
+      for (const check of checks) {
+        if (!expected.some(c => key(c) === key(check))) throw new Error(`Unknown criterion/clause ${check?.id}/${check?.clause}.`);
+        requireText(check.scenario, 'Criterion scenario'); requireText(check.evidence, 'Scenario observation');
+        if (!state.commands?.some(c => c.id === check.check)) throw new Error(`Unknown configured check ${check.check}.`);
+        if (check.result !== 'passed') throw new Error(`Criterion ${check.id} is unverified; repair or record a blocked handoff.`);
+        if (check.origin !== 'agent-reported') throw new Error('Scenario results are agent-reported; command success alone does not establish a named assertion.');
+        requireText(check.receipt, 'Scenario receipt');
+      }
+      for (const consumer of scout?.assessment?.consumers ?? []) if (consumer.journey && !checks.some(c => c.scenario === consumer.journey.name && c.consumers?.includes(consumer.id))) throw new Error(`Protected journey ${consumer.journey.name} is unverified; supply its named scenario observation, not a suite count.`);
+      if (semanticReview.reviewer !== 'self' && !semanticReview.receipts?.length) throw new Error('Fresh/peer review needs source-linked review receipts, not a reviewer label alone.');
+      if (semanticReview.receipts !== undefined && (!Array.isArray(semanticReview.receipts) || new Set(semanticReview.receipts).size !== semanticReview.receipts.length)) throw new Error('Review receipts need unique ids.');
+      // The runtime performs source and receipt-byte checks with the actual snapshot.
+      if (!proofPending && assessment.testProof?.status !== 'exempt') validateProofReview(state, assessment.proofReview);
+    }
   }
   if (packet.stage === 'deliver') {
+    if (retentionOf(state)?.disposition === 'required' && assessment.learning?.status !== 'recorded') throw new Error('Required feature context cannot be skipped by learning:none or pending-acceptance. Retain a restricted scope as incomplete instead.');
     for (const name of ['learning', 'errorHistory']) {
       const entry = assessment[name];
       requireChoice(entry?.status, name === 'learning' ? ['recorded', 'none', 'pending-acceptance'] : ['recorded', 'none'], `${name}.status`);
@@ -182,7 +256,7 @@ function findPlaceholder(value, path = 'assessment') {
 
 const safe = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('|', '\\|').replaceAll('`', '\\`').replaceAll('\r', '').replaceAll('\n', ' ');
 
-export function renderReview(state, currentSourceHash, artifactIssues = []) {
+export function renderReview(state, currentSourceHash, artifactIssues = [], currentFiles, contextKey) {
   const passed = stage => state.handoffs.findLast(item => item.stage === stage && item.status === 'passed');
   const scout = state.workContractVersion === 1 ? passed('scout')?.assessment : null;
   const verification = passed('verify');
@@ -202,6 +276,10 @@ export function renderReview(state, currentSourceHash, artifactIssues = []) {
   for (const criterion of state.criteria) {
     const result = (delivery ?? verification)?.criteria.find(item => item.id === criterion.id);
     lines.push(`| ${safe(criterion.description)} | ${safe(result ? (!evidenceCurrent ? 'stale / unverified' : result.result) : 'unverified')} | ${safe(result?.evidence ?? 'Not yet established')} |`);
+    for (const clause of criterion.clauses ?? []) {
+      const check = verification?.assessment?.criterionChecks?.find(c => c.id === criterion.id && c.clause === clause.id);
+      lines.push(`| ${safe(criterion.id)}/${safe(clause.id)}: ${safe(clause.description)} | ${check && evidenceCurrent ? safe(check.result) : 'unverified'} | ${check ? `${safe(check.scenario)} — ${safe(check.evidence)} (agent-reported)` : 'No scenario evidence recorded'} |`);
+    }
   }
   lines.push('', '## Context, approach, and alignment', '');
   if (scout) {
@@ -225,11 +303,24 @@ export function renderReview(state, currentSourceHash, artifactIssues = []) {
   else if (['bug-fix', 'feature', 'refactor'].includes(state.playbook) && state.base === null) lines.push('Test proof: unavailable (this older run has no Git base or run-start source capture).');
   const assessment = state.workContractVersion === 1 ? verification?.assessment : null;
   if (assessment) {
-    lines.push(`Semantic review: ${semanticCurrent ? 'current' : 'stale'}; reviewer: ${safe(assessment.semanticReview.reviewer)}.`);
+    const coverage = reviewCoverage(state, assessment.semanticReview, { hash: currentSourceHash, files: currentFiles, contextKey });
+    if (coverage.entries.length && artifactIssues.length) coverage.status = 'unverified (receipt/evidence unavailable)';
+    const reviewers = coverage.entries.length ? [...new Set(coverage.entries.filter(Boolean).map(r => r.reviewer))].join(' + ') : assessment.semanticReview.reviewer;
+    lines.push(`Semantic review: ${coverage.status === 'self-assessment' ? (semanticCurrent ? 'current' : 'stale') : coverage.status}; reviewer: ${safe(reviewers)}; provenance: agent-reported. Final assessment: ${semanticCurrent ? 'current' : 'stale'}.`);
+    for (const receipt of coverage.entries) lines.push(receipt ? `- Review ${safe(receipt.id)}: ${safe(receipt.reviewer)}, ${receipt.sourceHash === currentSourceHash ? 'matching source' : 'stale source'}; scope: ${safe(receipt.scope.length ? receipt.scope.join(', ') : 'whole covered source')}; identity: ${safe(receipt.identity ?? 'unknown')}; evidence: ${safe(receipt.path)}.` : '- Review receipt missing.');
+    if (state.evidenceVersion === 1) {
+      lines.push(`Original requirements: ${safe(state.requirements.sha256)}. Scenario observations below are agent-reported, not automatically verified named runner results.`);
+      for (const criterion of state.criteria) for (const clause of criterion.clauses ?? []) lines.push(`- Original clause ${safe(criterion.id)}/${safe(clause.id)}: ${safe(clause.description)}`);
+      for (const check of assessment.criterionChecks ?? []) lines.push(`- Outcome ${safe(check.id)}${check.clause ? `/${safe(check.clause)}` : ''}: ${evidenceCurrent ? safe(check.result) : 'stale / unverified'} — ${safe(check.scenario)}; check ${safe(check.check)}, receipt ${safe(check.receipt)}; ${safe(check.evidence)}`);
+    }
+    for (const failure of proof?.failures ?? []) {
+      const reason = assessment.proofReview?.cases?.find(c => c.id === failure.id);
+      lines.push(`- Baseline failure ${safe(failure.id)}: ${safe(failure.name)} — ${safe(reason?.category ?? 'unclassified')}; hint: ${safe(failure.hint)}. ${safe(reason?.reason ?? 'No semantic reason review recorded.')} ${reason?.boundary ? `Boundary: ${safe(reason.boundary)}.` : ''}`);
+    }
     for (const axis of ['intent', 'consumers', 'conventions']) lines.push(`- ${axis}: ${safe(assessment.semanticReview[axis])}`);
     for (const check of assessment.consumerChecks) lines.push(`- Consumer ${safe(check.id)}: ${safe(check.result)} — ${safe(check.evidence)}`);
     if (!assessment.semanticReview.findings.length) lines.push('- No semantic findings recorded.');
-    for (const finding of assessment.semanticReview.findings) lines.push(`- ${safe(finding.id)} (${safe(finding.status)}): ${safe(finding.evidence)}`);
+    for (const finding of assessment.semanticReview.findings) lines.push(`- ${finding.reviewId ? `${safe(finding.reviewId)}/` : ''}${safe(finding.id)} (${safe(finding.status)}): ${safe(finding.evidence)}`);
   } else lines.push('No passing semantic-review assessment recorded.');
   lines.push('', '## Learning and error history', '');
   lines.push(`Project ledger lookup: ${safe(state.projectLedgerPath ?? state.ledgerPath ?? 'not captured')}. Error history target: ${safe(state.ledgerPath ?? 'not captured')}.`);
@@ -238,7 +329,7 @@ export function renderReview(state, currentSourceHash, artifactIssues = []) {
     const entry = state.workContractVersion === 1 ? delivery?.assessment?.[name] : null;
     lines.push(entry ? `- ${name} (${safe(entry.status)}): ${safe(entry.reason)}${entry.artifacts.length ? ` — ${entry.artifacts.map(safe).join(', ')}` : ''}` : `- ${name}: not yet recorded.`);
   }
-  if (delivery) lines.push(`- Context docs touched: ${delivery.contextDocs?.length ? delivery.contextDocs.map(safe).join(', ') : 'none'}. Propose the component doc entry with cyc context review --run ${safe(state.id)}.`);
+  if (delivery) lines.push(`- Context docs touched: ${delivery.contextDocs?.length ? delivery.contextDocs.map(safe).join(', ') : 'none'}. ${retentionOf(state) ? 'Canonical retention was checked under this run’s actual contract.' : `Historical catch-up requires a new scoped update: cyc context review --run ${safe(state.id)} --write --update-run UPDATE_ID.`}`);
   lines.push('', '## Recovery, remaining risks, and decisions', '');
   for (const conflict of state.proofRecovery?.conflicts ?? []) lines.push(`- Proof conflict ${safe(conflict.path)}: ${safe(conflict.reason)}${conflict.savedUnexpected ? ` Unexpected bytes saved at ${safe(conflict.savedUnexpected)}.` : ''}${conflict.preservationError ? ` ${safe(conflict.preservationError)}` : ''}`);
   if (state.proofRecovery?.preservationError) lines.push(`- Proof recovery record: ${safe(state.proofRecovery.preservationError)}`);

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { finishRun, nextRun, readRun, recordHandoff, startRun } from '../scripts/runtime.mjs';
+import { finishRun, nextRun, readRun, recordHandoff, startRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 import { writePacket } from '../scripts/packet.mjs';
 

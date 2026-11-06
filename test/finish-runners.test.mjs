@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { finishRun, nextRun, readRun, recordHandoff, startRun } from '../scripts/runtime.mjs';
+import { finishRun, nextRun, readRun, recordHandoff, startRun } from '../test-support/historical-runtime.test.fixture.mjs';
 
 // One-call finish with test runner output: long output, mocha and jest, top-level testProof, and
 // runs that halt during finish. The fixtures are those of prove-red.test.mjs; these tests have their

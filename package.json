@@ -1,6 +1,6 @@
 {
   "name": "cyc-stack",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "license": "MIT",
   "private": false,
   "type": "module",
@@ -25,13 +25,14 @@
     "bin",
     "scripts/baseline-worker.mjs",
     "scripts/catalog.mjs",
-    "scripts/check-response.mjs",
     "scripts/claude-project-hook.mjs",
     "scripts/context-review.mjs",
     "scripts/host-activation.mjs",
     "scripts/install.mjs",
     "scripts/onboarding.mjs",
     "scripts/packet.mjs",
+    "scripts/execution.mjs",
+    "scripts/browser-audit.mjs",
     "scripts/project-tools.mjs",
     "scripts/recovery.mjs",
     "scripts/response-gate.mjs",
@@ -39,6 +40,7 @@
     "scripts/response-mode.mjs",
     "scripts/run-gate.mjs",
     "scripts/runtime.mjs",
+    "scripts/run-worker.mjs",
     "scripts/source-hash-worker.mjs",
     "scripts/source-snapshot.mjs",
     "scripts/test-output.mjs",
@@ -74,15 +76,16 @@
     ".claude-plugin",
     ".cursor-plugin",
     ".agents",
+    "plugin.json",
     "README.md",
     "INSTALL.md"
   ],
   "scripts": {
     "check:distribution": "node scripts/check-distribution.mjs",
+    "pack:release": "node scripts/pack-release.mjs",
     "build:workflow": "node docs/assets/build-workflow-diagram.mjs",
     "test": "node --test",
-    "cyc": "node bin/cyc.mjs",
-    "check-response": "node scripts/check-response.mjs"
+    "cyc": "node bin/cyc.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, 
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import * as runtime from '../scripts/runtime.mjs';
+import * as runtime from '../test-support/historical-runtime.test.fixture.mjs';
 const { completeRun, controlRun, lockAbandoned, lockIdentity, nextRun, proveRun, quickHandoff, readRun, reclaimLock, retryRun, runCheckProcess, runCommands, startRun, verifyRun } = runtime;
 const defaultCheckTimeoutMs = runtime.defaultCheckTimeoutMs;
 import * as snapshots from '../scripts/source-snapshot.mjs';

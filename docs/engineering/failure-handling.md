@@ -2,6 +2,12 @@
 
 Read this when an operation can reject input, fail during I/O, partially complete, or be retried. First inspect how callers already distinguish failures. Keep the project's existing result types, exception classes, and logging conventions; introduce a new taxonomy only when callers need a distinction they cannot currently express.
 
+## Preserve records when an operation recreates them
+
+For delete, replace, undo or compensation that recreates stored records, define what must survive before choosing the payload: identity, business fields, references and relevant access metadata. Inspect the existing schema and affected writers/importers; a UI projection may omit valid stored data. Keep the allowlist for new client edits separate from trusted restoration data. Use a server-owned checkpoint, authenticated snapshot or another approach that preserves the contract without accepting client-forged ownership or permissions.
+
+Check the semantic stored record after successful restore and after injected failure/retry, allowing only declared service-managed changes or intentional migrations. Include a valid field not rendered by the UI and nondefault permissions when they are part of the contract. The fixture must capture those fields and adapter arguments. Comparing two identically lossy projections or only an ID cannot establish complete restoration. Narrow tasks that do not recreate records need none of this extra procedure.
+
 ## Decide what a failure means
 
 | Trigger | Decision while building | Question during review |

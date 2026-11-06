@@ -1,8 +1,9 @@
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, statSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readRun } from './runtime.mjs';
+import { createHash } from 'node:crypto';
+import { readRun, contextUpdate } from './runtime.mjs';
 import { contextLinks } from './project-tools.mjs';
 
 // Component context docs under docs/context/ and their quality check. A doc is for one component,
@@ -56,11 +57,20 @@ const oneLine = (value, max = 160) => {
 const shortRun = id => String(id).slice(0, 8);
 const day = iso => String(iso ?? '').slice(0, 10);
 const fileName = path => path.split('/').at(-1);
-const isComponentDoc = path => !!path && dirname(path) === contextFolder && docFileName.test(fileName(path)) && !reservedDocs.has(fileName(path));
+export const isComponentDoc = (path, folder = contextFolder) => !!path && dirname(path) === folder && docFileName.test(fileName(path)) && !reservedDocs.has(fileName(path));
+
+export function contextLocation(root) {
+  const config = existsSync(join(root, '.cyc/config.json')) ? JSON.parse(readFileSync(join(root, '.cyc/config.json'), 'utf8').replace(/^\uFEFF/, '')) : {};
+  const folder = canonicalPattern(config.context?.directory ?? contextFolder, { patterns: false });
+  if (folder === '.cyc' || folder.startsWith('.cyc/')) throw Error('Target context must not use engine or runtime storage.');
+  const path = local(root, folder);
+  if (existsSync(path) && !statSync(path).isDirectory()) throw Error(`Target context directory is a file: ${folder}. Choose a project-owned directory before start.`);
+  return { folder, index: `${folder}/INDEX.md` };
+}
 
 export function canonicalPattern(pattern, { patterns = true } = {}) {
   const value = String(pattern ?? '').trim().replaceAll('`', '');
-  if (!value || /[\\:\0]/.test(value) || (!patterns && /[*?]/.test(value)) || /[\[\]{}]/.test(value) || value.split('/').some(p => !p || p === '.' || p === '..')) throw Error(`Use canonical project-relative ${patterns ? 'patterns' : 'paths'}: ${value || pattern}`);
+  if (!value || /[\\:\0]/.test(value) || (!patterns && /[*?]/.test(value)) || /[{}]/.test(value) || value.split('/').some(p => !p || p === '.' || p === '..')) throw Error(`Use canonical project-relative ${patterns ? 'patterns' : 'paths'}: ${value || pattern}`);
   return value;
 }
 
@@ -80,6 +90,14 @@ export function matches(pattern, path) {
   return new RegExp(`^${regex}$`).test(path) || (prefix && (prefix === path || prefix.startsWith(path + '/'))) || (!/[?*]/.test(pattern) && path.startsWith(pattern + '/'));
 }
 const covered = (covers, path) => covers.some(pattern => { try { return matches(pattern, path); } catch { return false; } });
+const sha = value => createHash('sha256').update(value).digest('hex');
+const catchAll = pattern => {
+  const parts = pattern.split('/');
+  if (parts[0] === 'src') parts.shift();
+  return pattern === 'all' || parts.every(part => !part.replace(/[*.?]/g, ''));
+};
+const testPath = path => /(^|\/)(tests?|test-support|__tests__)\/|[._-](test|spec)\./.test(path);
+const sourceEntrypoint = path => !testPath(path) && (/\.(?:[cm]?[jt]sx?|py|go|rs|rb|php|java|cs|swift|vue|svelte|sql|json|ya?ml|toml|sh|ps1)$/.test(path) || /(?:^|\/)SKILL\.md$/.test(path));
 
 function local(root, path) {
   canonicalPattern(path, { patterns: false });
@@ -92,10 +110,11 @@ function local(root, path) {
   return current;
 }
 const read = (root, path) => readFileSync(local(root, path), 'utf8').replace(/^﻿/, '').replaceAll('\r\n', '\n');
-function atomicWrite(path, content) {
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  writeFileSync(temporary, content);
-  renameSync(temporary, path);
+function atomicWrite(path, content, staging) {
+  if (staging) mkdirSync(staging, { recursive: true });
+  const temporary = staging ? join(staging, `${randomUUID()}.context`) : `${path}.${randomUUID()}.tmp`;
+  try { writeFileSync(temporary, content, { flag: 'wx' }); renameSync(temporary, path); }
+  finally { try { if (existsSync(temporary)) unlinkSync(temporary); } catch { /* retained staging is not source or successful evidence */ } }
 }
 
 // ---------------------------------------------------------------- component docs
@@ -138,7 +157,7 @@ export function parseDoc(source, name = 'doc.md') {
   const view = section('Current view');
   if (view) {
     if (!view.lines.some(line => line.trim())) issue('current-view', 'Current view is empty.', view.start);
-    const placeholder = view.lines.findIndex(line => /^\s*<[^>]*>\s*$/.test(line));
+    const placeholder = view.lines.findIndex(line => /<(?:write|describe|fill|replace|actual|placeholder|todo|what|feature details)\b[^>]*>/i.test(line));
     if (placeholder !== -1) issue('current-view', 'Current view still has a template placeholder.', view.start + placeholder);
   }
   const lessons = [];
@@ -177,13 +196,14 @@ export function parseDoc(source, name = 'doc.md') {
     if (history.length && lastChange !== null) {
       const newest = history[0];
       if (lastChange === 'none recorded' || lastChange.run !== newest.run || lastChange.date !== newest.date) issue('last-change-current', `Newest entry is ${newest.date} · run ${newest.run}.`, lastIndex);
-    }
+    } else if (lastChange && lastChange !== 'none recorded') issue('last-change-current', 'Last changed names a run with no History entry.', lastIndex);
   }
   if (lines.length > maxDocLines) issue('size', `${lines.length} lines.`);
-  return { name, title, covers, lastChange, lessons, history, lines: lines.length, issues };
+  return { name, title, covers, lastChange, lessons, history, currentView: view?.lines.join('\n').trim() ?? '', lines: lines.length, issues };
 }
 
 export function listDocs(root) {
+  const { folder: contextFolder } = contextLocation(root);
   const folder = local(root, contextFolder);
   if (!existsSync(folder)) return [];
   return readdirSync(folder).filter(name => name.endsWith('.md') && !reservedDocs.has(name) && lstatSync(join(folder, name)).isFile()).sort();
@@ -202,7 +222,7 @@ export function parseIndex(source) {
   const lines = source.replace(/^﻿/, '').replaceAll('\r\n', '\n').split('\n');
   const table = { header: null, headerLine: -1, separatorLine: -1, columns: {}, rows: [], lines };
   for (const [index, line] of lines.entries()) {
-    if (!/^\s*\|/.test(line)) { if (table.header && table.rows.length) break; table.header = null; continue; }
+    if (!/^\s*\|/.test(line)) { if (table.header && (table.rows.length || table.separatorLine >= 0)) break; table.header = null; continue; }
     const cells = line.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim().replaceAll('\\|', '|'));
     if (!table.header) {
       if (!cells.some(c => c.toLowerCase() === 'covers')) continue;
@@ -221,6 +241,7 @@ export function parseIndex(source) {
 }
 
 function resolveLink(root, link) {
+  const { index: indexName } = contextLocation(root);
   if (!link || /^[a-z]+:/i.test(link)) return null;
   return relative(root, resolve(dirname(local(root, indexName)), link)).replaceAll('\\', '/');
 }
@@ -255,7 +276,8 @@ export function docFreshness(root, docPath, covers) {
   return { status: dirtyPaths.length ? 'dirty' : 'fresh', docCommit: doc, coveredCommit, dirtyPaths };
 }
 
-export function lintIndex(root, { git: checkGit = true } = {}) {
+export function lintIndex(root, { git: checkGit = true, docs: selectedDocs } = {}) {
+  const { folder: contextFolder, index: indexName } = contextLocation(root);
   const issues = [];
   const issue = (rule, message, line) => issues.push({ rule, message, ...(line !== undefined ? { line: line + 1 } : {}) });
   const exists = existsSync(local(root, indexName));
@@ -277,10 +299,11 @@ export function lintIndex(root, { git: checkGit = true } = {}) {
     rows.push(entry);
     if (!docPath) { if (row.docText && !row.link) issue('toc-link', `No link in the Doc cell: ${oneLine(row.docText, 60)}`, row.line); continue; }
     if (!existsSync(local(root, docPath))) { issue('toc-link', `${docPath} does not exist.`, row.line); continue; }
-    if (!isComponentDoc(docPath)) continue;
+    if (!isComponentDoc(docPath, contextFolder)) continue;
     entry.componentDoc = true;
     if (seen.has(docPath)) issue('toc-unindexed', `${docPath} has more than one row (first at line ${seen.get(docPath) + 1}).`, row.line);
     seen.set(docPath, row.line);
+    if (selectedDocs && !selectedDocs.includes(docPath)) continue;
     const parsed = lintDoc(root, docPath);
     entry.docIssues = parsed.issues.length;
     if ([...parsed.covers].sort().join(',') !== [...row.covers].sort().join(',')) issue('toc-covers', `Row covers [${row.covers.join(', ')}] but ${docPath} covers [${parsed.covers.join(', ')}].`, row.line);
@@ -302,6 +325,7 @@ const docSummary = result => ({ path: result.path, ok: result.ok, issues: result
 
 export function lintContext(root, { doc, git: checkGit = true } = {}) {
   root = realpathSync(root);
+  const { folder: contextFolder } = contextLocation(root);
   if (doc) {
     const result = lintDoc(root, doc.replaceAll('\\', '/'));
     return { ok: result.ok, docs: [docSummary(result)], rules, note: 'Structure rules only: a passing doc can still be wrong about its component.' };
@@ -309,6 +333,137 @@ export function lintContext(root, { doc, git: checkGit = true } = {}) {
   const docs = listDocs(root).map(name => docSummary(lintDoc(root, `${contextFolder}/${name}`)));
   const index = lintIndex(root, { git: checkGit });
   return { ok: docs.every(d => d.ok) && index.ok, index: { path: index.path, exists: index.exists, ok: index.ok, issues: index.issues, freshness: index.freshness }, docs, rules, note: 'Structure and freshness rules only: a passing doc can still be wrong about its component, and a fresh doc is one whose covered paths have no later commit, not one that is correct.' };
+}
+
+// A current start plans records before scope freezes. Old stored runs without this
+// contract remain legacy; spelling an old start envelope does not disable the default.
+export function planRetention(root, { goal, build, allowedPaths = [], explicit } = {}) {
+  if (explicit?.version !== undefined && explicit.version !== 1) throw Error('Unsupported feature-retention version; use version 1.');
+  const { folder, index } = contextLocation(root);
+  const disposition = explicit?.disposition ?? (build ? 'required' : 'unnecessary');
+  if (!['required', 'unnecessary', 'restricted'].includes(disposition)) throw Error('context.retention.disposition must be required, unnecessary or restricted.');
+  if (disposition !== 'required' && !text(explicit?.reason) && (build || disposition === 'restricted')) throw Error('A nonrequired retention disposition needs its actual reason.');
+  let features = explicit?.features;
+  if (features === undefined && disposition === 'required') {
+    const existing = componentsOf(root).components.filter(c => c.inFolder && !c.covers.some(catchAll) && allowedPaths.some(p => covered(c.covers, p)));
+    features = [...new Map(existing.map(c => [c.doc, { id: fileName(c.doc).slice(0, -3), doc: c.doc, paths: allowedPaths.filter(p => covered(c.covers, p)) }])).values()];
+    if (!features.length) {
+      const id = String(goal).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'feature';
+      features = [{ id, doc: `${folder}/${id}.md`, paths: allowedPaths.filter(p => !p.startsWith('docs/') && !p.startsWith('.cyc/')) }];
+    }
+  }
+  features ??= [];
+  if (!Array.isArray(features) || features.length > 32 || new Set(features.map(f => f?.id)).size !== features.length || new Set(features.map(f => f?.doc)).size !== features.length || disposition === 'required' && !features.length) throw Error('Retention needs unique feature ids and canonical records (at most 32).');
+  features = structuredClone(features);
+  for (const f of features) {
+    if (!/^[a-z][a-z0-9-]{0,79}$/.test(f?.id ?? '') || !isComponentDoc(f.doc, folder) || !Array.isArray(f.paths)) throw Error('Each retention feature needs {id, doc: canonical feature path, paths: representative entrypoints}.');
+    local(root, f.doc);
+    for (const path of f.paths) { canonicalPattern(path, { patterns: false }); if (path.startsWith('.cyc/')) throw Error('Engine/runtime evidence is not a feature entrypoint.'); }
+    if (existsSync(local(root, f.doc))) f.baselineViewHash = sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView);
+  }
+  return { version: 1, disposition, routine: explicit?.routine === true, reason: explicit?.reason ?? (build ? 'Feature knowledge is required.' : 'Read-only/nonfeature route; implementation changes still require retention.'), folder, index, features: structuredClone(features) };
+}
+
+export const retentionOf = state => state.contextRetention ?? state.handoffs?.find(h => h.stage === 'scout' && h.status === 'passed')?.assessment?.context?.retention;
+const support = (path, folder) => path.startsWith('.cyc/') || path === `${folder}/INDEX.md` || path.startsWith(`${folder}/`) || /(?:^|\/)(?:error-ledger\.md|verify-recipe\.md)$/.test(path);
+function featureFiles(root, state, feature, files) {
+  const folder = retentionOf(state).folder;
+  const changed = Object.keys(files).filter(p => files[p] !== state.initialSource.files[p] && !support(p, folder));
+  const paths = feature.paths.length ? feature.paths : changed;
+  const recordCovers = existsSync(local(root, feature.doc)) ? parseDoc(read(root, feature.doc), fileName(feature.doc)).covers : [];
+  const selected = changed.filter(p => covered([...paths, ...recordCovers], p));
+  for (const path of paths) {
+    const sample = files[path] && !support(path, folder) ? path : selected.find(p => covered([path], p)) ?? Object.keys(files).find(p => covered([path], p) && !support(p, folder));
+    if (sample && !selected.includes(sample)) selected.push(sample);
+  }
+  return { paths, files: selected.slice(0, 32).map(path => ({ path, sha256: files[path] })) };
+}
+
+export function checkRetention(root, state, files) {
+  const plan = retentionOf(state);
+  if (!plan) return { ok: true, status: 'legacy', docs: [], issues: [], note: 'Historical run has no feature-retention contract.' };
+  const issues = [], docs = [], ownership = [];
+  const issue = (rule, message, doc) => issues.push({ rule, message, ...(doc ? { doc } : {}) });
+  const edits = [...new Set([...Object.keys(state.initialSource.files), ...Object.keys(files)])].filter(p => files[p] !== state.initialSource.files[p] && !p.startsWith('.cyc/'));
+  const changed = edits.filter(p => !support(p, plan.folder));
+  if (plan.disposition === 'restricted') return { ok: false, status: 'pending', docs, issues: [{ rule: 'scope-restriction', message: plan.reason }], note: 'Required context remains incomplete; no documentation permission is inferred.' };
+  if (plan.disposition === 'unnecessary') {
+    if (state.playbook === 'feature' || edits.length && (!plan.routine || edits.some(p => !state.initialSource.files[p] || !files[p]))) issue('feature-plan', 'Source changes require planned context or an explicit routine disposition; routine work cannot add/delete files or claim feature retention.');
+    return { ok: !issues.length, status: issues.length ? 'pending' : 'unnecessary', docs, issues };
+  }
+  const index = lintIndex(root, { git: false, docs: plan.features.map(f => f.doc) });
+  if (!index.exists) issue('toc-link', `Missing target index ${plan.index}.`);
+  issues.push(...index.issues);
+  for (const feature of plan.features) {
+    const doc = feature.doc;
+    if (!existsSync(local(root, doc))) { issue('feature-doc', `Missing canonical record for ${feature.id}.`, doc); continue; }
+    const parsed = lintDoc(root, doc), selected = featureFiles(root, state, feature, files);
+    ownership.push(...parsed.covers);
+    issues.push(...parsed.issues.map(i => ({ ...i, doc })));
+    if (!parsed.currentView.split('\n').some(line => !/^\s*(?:#|-|\||`)/.test(line) && line.trim().length >= 80)) issue('feature-knowledge', 'Supply proportionate capability, contracts, decisions, checks and limitations as prose; headings/filenames alone are insufficient.', doc);
+    if (parsed.covers.some(catchAll)) issue('feature-coverage', 'A catch-all is not focused feature ownership.', doc);
+    if (!selected.paths.length || selected.paths.some(path => !covered(parsed.covers, path))) issue('feature-coverage', `Covers must resolve representative feature paths: ${selected.paths.join(', ') || 'none planned'}.`, doc);
+    const rows = index.rows.filter(row => row.componentDoc && row.doc === doc);
+    if (rows.length !== 1 || selected.paths.some(path => !covered(rows[0]?.covers ?? [], path))) issue('feature-index', 'A canonical resolving index row must map the feature entrypoints.', doc);
+    const latest = parsed.history[0];
+    if (parsed.history.filter(h => h.run === state.id).length !== 1) issue('feature-history', 'Keep exactly one entry for the current run.', doc);
+    if (latest?.run !== state.id) issue('feature-history', 'Current feature work needs its own dated History entry before verification.', doc);
+    if (!latest?.files.length) issue('feature-evidence', 'Current History needs actual selected source evidence.', doc);
+    for (const item of latest?.files ?? []) {
+      try {
+        const path = canonicalPattern(item.path, { patterns: false });
+        if (support(path, plan.folder) || !files[path] || !files[path].startsWith(item.hash.replace(/^sha256:/, ''))) issue('feature-evidence', `Missing/stale current source evidence: ${path}.`, doc);
+      } catch (error) { issue('feature-evidence', error.message, doc); }
+    }
+    for (const item of selected.files) if (!latest?.files.some(f => f.path === item.path)) issue('feature-evidence', `No current source evidence for ${item.path}.`, doc);
+    const authored = state.contextPreparation?.authored?.[feature.id];
+    if (!authored || authored.viewHash !== sha(parsed.currentView) || authored.sourcesHash !== sha(JSON.stringify(selected.files))) issue('feature-authoring', 'Author or revalidate the focused Current view against this source; generated History alone is not retained feature knowledge.', doc);
+    if (!files[doc] || !files[plan.index]) issue('feature-source', 'Canonical context/index must be included in verified source, not ignored runtime data.', doc);
+    docs.push(doc);
+  }
+  for (const path of changed) {
+    if ((sourceEntrypoint(path) || !state.initialSource.files[path] && !testPath(path)) && !covered(ownership, path)) issue('feature-entrypoint', `Changed implementation path has no planned canonical feature owner: ${path}.`);
+    for (const row of index.rows.filter(row => row.componentDoc && covered(row.covers, path))) if (!plan.features.some(f => f.doc === row.doc)) issue('feature-owner', `Plan the affected canonical owner ${row.doc} for ${path} before Build; retention remains pending without broadening this run.`);
+  }
+  return { ok: !issues.length, status: issues.length ? 'pending' : 'retained', docs, issues, note: 'Layout, mapping, provenance and source checks only; authored semantic truth and user acceptance are not certified.' };
+}
+
+// Only the caller's active, scoped runtime transaction may invoke this writer.
+// It uses observations available now; final receipts stay outside covered source.
+export function prepareRetention(root, state, { records = [], summary = '', reason = '' } = {}, files, permit) {
+  const plan = retentionOf(state);
+  if (!plan || plan.disposition !== 'required') return { paths: [], authored: {} };
+  if (!Array.isArray(records) || new Set(records.map(r => r?.id)).size !== records.length || records.some(r => !plan.features.some(f => f.id === r?.id) || !text(r.currentView) || /<(?:write|describe|fill|actual|placeholder|todo)\b/i.test(r.currentView))) throw Error('learning.context needs unique planned ids and actual nonplaceholder currentView text.');
+  const writes = [], authored = {};
+  const date = state.contextPreparation?.date ?? new Date().toISOString().slice(0, 10);
+  for (const feature of plan.features) {
+    const exists = existsSync(local(root, feature.doc)), selected = featureFiles(root, state, feature, files);
+    let source = exists ? read(root, feature.doc) : newDocSource(feature.id.replaceAll('-', ' '), selected.files.length ? selected.files.map(f => f.path) : selected.paths);
+    let parsed = parseDoc(source, fileName(feature.doc));
+    if (parsed.issues.some(i => ['sections', 'title', 'last-change'].includes(i.rule)) || parsed.issues.some(i => i.rule === 'last-change-current') && parsed.lastChange?.run !== state.id) throw Error(`Repair existing context metadata/history first: ${feature.doc}. Do not invent an older run entry.`);
+    const record = records.find(r => r.id === feature.id);
+    if (record) source = source.replace(/(## Current view\n)[\s\S]*?(?=\n## Lessons)/, (_, heading) => `${heading}\n${record.currentView.trim()}\n`);
+    parsed = parseDoc(source, fileName(feature.doc));
+    const viewHash = sha(parsed.currentView), sourcesHash = sha(JSON.stringify(selected.files));
+    const prior = state.contextPreparation?.authored?.[feature.id];
+    if (record || viewHash !== (state.contextPreparation?.views?.[feature.id] ?? feature.baselineViewHash) || prior?.viewHash === viewHash && prior.sourcesHash === sourcesHash) authored[feature.id] = { viewHash, sourcesHash };
+    // Replace only this still-active run's preparation, preserving completed history.
+    const lines = source.split('\n');
+    for (const own of parsed.history.filter(h => h.run === state.id).reverse()) {
+      const next = parsed.history.find(h => h.line > own.line);
+      lines.splice(own.line - 1, (next ? next.line - 1 : source.split('\n').length) - (own.line - 1));
+    }
+    source = lines.join('\n');
+    const entry = [`### ${date} · run ${state.id} · ${oneLine(state.goal, 100)}`, `**Changed:** ${oneLine(summary || state.goal, 400)}`, `**Learned:** ${oneLine(reason || 'See the authored Current view; no user acceptance is inferred.', 400)}`, `**Decisive check:** Planned commands: ${state.commands.map(c => [c.command, ...c.args].join(' ')).join('; ') || 'none'}. Final outcomes are not yet claimed; inspect run ${state.id} command receipts separately. Local receipts may not travel with source.`, `**Files:** ${selected.files.map(f => `${f.path}@sha256:${f.sha256}`).join(', ')}`].join('\n');
+    source = applyEntry(source, { entry, lessons: [], lastChange: `Last changed by AI: ${date} · run ${state.id} · files: ${selected.files.map(f => f.path).join(', ')}` });
+    if (!exists || read(root, feature.doc) !== source) writes.push({ path: feature.doc, source });
+  }
+  for (const path of [...writes.map(w => w.path), plan.index]) { local(root, path); permit(path); }
+  const staging = local(root, `.cyc/runs/${state.id}/context-staging`);
+  for (const w of writes) { mkdirSync(dirname(local(root, w.path)), { recursive: true }); atomicWrite(local(root, w.path), w.source, staging); }
+  if (!existsSync(local(root, plan.index))) { mkdirSync(dirname(local(root, plan.index)), { recursive: true }); atomicWrite(local(root, plan.index), '# Feature context\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n', staging); }
+  refreshIndex(root, { staging, docs: plan.features.map(f => f.doc) });
+  return { paths: writes.map(w => w.path), date, authored, views: Object.fromEntries(plan.features.map(f => [f.id, sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView)])) };
 }
 
 // ---------------------------------------------------------------- run records
@@ -340,6 +495,7 @@ function ledgerEntriesFor(root, state) {
 // What a component doc entry needs, read from the run's own record: nothing here is invented, and
 // a field the run did not record is said to be missing.
 export function runRecord(root, state) {
+  const { folder: contextFolder } = contextLocation(root);
   const passed = stage => state.handoffs.findLast(h => h.stage === stage && h.status === 'passed');
   const build = state.handoffs.filter(h => h.stage === 'build' && h.status === 'passed');
   const deliver = passed('deliver'), verify = passed('verify');
@@ -364,7 +520,7 @@ export function runRecord(root, state) {
   if (errors?.status === 'recorded' && text(errors.reason)) lessons.push(oneLine(errors.reason, 400));
   for (const reason of retries) lessons.push(`Retry: ${oneLine(reason, 400)}`);
   for (const entry of ledger) lessons.push(`Ledger ${entry.id}: ${entry.title}`);
-  const contextDocs = deliver?.contextDocs ?? files.map(f => f.path).filter(p => p.startsWith(`${contextFolder}/`) && p.endsWith('.md'));
+  const contextDocs = (deliver?.contextDocs ?? files.map(f => f.path)).filter(p => isComponentDoc(p, contextFolder));
   return { runId: state.id, date, completedAt, goal: state.goal, playbook: state.playbook, status: state.status, session: state.session ?? null, files,
     changed: build.map(h => oneLine(h.summary.replace(/^Built: /, ''), 400)),
     learning: learning ? { status: learning.status, reason: oneLine(learning.reason, 400), artifacts: learning.artifacts ?? [] } : null,
@@ -387,16 +543,18 @@ const lessonBullets = record => record.lessons.map(lesson => `- ${record.date} �
 // ---------------------------------------------------------------- review: propose and write
 
 function componentsOf(root) {
+  const { folder: contextFolder, index: indexName } = contextLocation(root);
   const exists = existsSync(local(root, indexName));
   const table = exists ? parseIndex(read(root, indexName)) : { rows: [] };
   const components = table.rows.filter(row => !row.malformed).flatMap(row => (row.links.length ? row.links : [null]).map(link => {
     const doc = resolveLink(root, link);
-    return { component: row.component, covers: row.covers, doc, inFolder: isComponentDoc(doc) };
+    return { component: row.component, covers: row.covers, doc, inFolder: isComponentDoc(doc, contextFolder) };
   }));
   return { exists, components };
 }
 
 function recordedRuns(root, docs) {
+  const { folder: contextFolder } = contextLocation(root);
   const runs = new Map();
   for (const name of docs) {
     const parsed = parseDoc(read(root, `${contextFolder}/${name}`), name);
@@ -438,7 +596,8 @@ function indexCells(root, docPath) {
   return { parsed, last, lessons };
 }
 
-function refreshIndex(root) {
+export function refreshIndex(root, { staging, docs } = {}) {
+  const { folder: contextFolder, index: indexName } = contextLocation(root);
   const table = parseIndex(read(root, indexName));
   if (!table.header) throw Error(`${indexName} has no table with a Covers column.`);
   const lines = table.lines;
@@ -456,11 +615,13 @@ function refreshIndex(root) {
     if (row.malformed) continue;
     const docPath = resolveLink(root, row.link);
     const cells = [...row.cells, ...added.map(() => '')];
-    if (isComponentDoc(docPath) && existsSync(local(root, docPath))) {
+    if (isComponentDoc(docPath, contextFolder) && existsSync(local(root, docPath))) {
       seen.add(docPath);
-      const { parsed, last, lessons } = indexCells(root, docPath);
-      if (parsed.covers.length) cells[columns.covers] = parsed.covers.join(', ');
-      cells[columns.lastChange] = last; cells[columns.lessons] = lessons;
+      if (!docs || docs.includes(docPath)) {
+        const { parsed, last, lessons } = indexCells(root, docPath);
+        if (parsed.covers.length) cells[columns.covers] = parsed.covers.join(', ');
+        cells[columns.lastChange] = last; cells[columns.lessons] = lessons;
+      }
     }
     lines[row.line] = render(cells);
   }
@@ -468,7 +629,7 @@ function refreshIndex(root) {
   const appended = [];
   for (const name of listDocs(root)) {
     const docPath = `${contextFolder}/${name}`;
-    if (seen.has(docPath)) continue;
+    if (seen.has(docPath) || docs && !docs.includes(docPath)) continue;
     const { parsed, last, lessons } = indexCells(root, docPath);
     const cells = [...Array(width + added.length)].map(() => '');
     if (columns.component >= 0) cells[columns.component] = parsed.title ?? name;
@@ -478,12 +639,14 @@ function refreshIndex(root) {
     appended.push(render(cells));
   }
   lines.splice(lastRow + 1, 0, ...appended);
-  atomicWrite(local(root, indexName), `${lines.join('\n').replace(/\n*$/, '')}\n`);
+  const content = `${lines.join('\n').replace(/\n*$/, '')}\n`;
+  if (read(root, indexName) !== content) atomicWrite(local(root, indexName), content, staging);
   return { addedColumns: added, addedRows: appended.length };
 }
 
-export function reviewContext(root, { run, since, all = false, write = false, newDoc } = {}) {
+export function reviewContext(root, { run, since, all = false, write = false, newDoc, updateRun } = {}) {
   root = realpathSync(root);
+  const { folder: contextFolder, index: indexName } = contextLocation(root);
   if (newDoc !== undefined && (!docFileName.test(`${newDoc}.md`) || reservedDocs.has(`${newDoc}.md`))) throw Error(`--new needs a kebab-case component name (${docFileName.source} without .md).`);
   if (since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw Error('--since needs YYYY-MM-DD.');
   const { exists, components } = componentsOf(root);
@@ -503,6 +666,7 @@ export function reviewContext(root, { run, since, all = false, write = false, ne
     const unmapped = [];
     const retained = new Set([...record.contextDocs, ...(record.learning?.artifacts ?? []), ...(record.errorHistory?.artifacts ?? [])]);
     for (const file of record.files) {
+      if (file.path.startsWith('.cyc/') || [indexName, `${contextFolder}/error-ledger.md`, `${contextFolder}/verify-recipe.md`, `${contextFolder}/recipes.json`].includes(file.path)) continue;
       let mapped = false;
       for (const component of components) {
         if (!covered(component.covers, file.path)) continue;
@@ -511,7 +675,7 @@ export function reviewContext(root, { run, since, all = false, write = false, ne
         if (!perComponent.has(key)) perComponent.set(key, { ...component, files: [] });
         perComponent.get(key).files.push(file);
       }
-      if (!mapped && !retained.has(file.path)) unmapped.push(file);
+      if (!mapped && !retained.has(file.path) && !file.path.startsWith('.cyc/')) unmapped.push(file);
     }
     const proposal = { runId: record.runId, date: record.date, goal: record.goal, playbook: record.playbook, contextDocsTouched: record.contextDocs,
       components: [...perComponent.values()].map(component => {
@@ -533,6 +697,12 @@ export function reviewContext(root, { run, since, all = false, write = false, ne
   const result = { ok: true, index: { path: indexName, exists, components: components.length, componentDocs: docs.length }, runs: proposals, unmappedFiles: [...unmappedAll].map(([path, runs]) => ({ path, runs })), written: null,
     note: write ? 'Entries were appended from the runs\' own records; the Current view of each doc is yours to update. Review the diff before committing.' : 'Read-only proposal from completed run records: nothing was written. Add --write to append these entries and refresh the index; --new NAME creates a doc for unmapped files.' };
   if (!write) return result;
+  if (!updateRun) throw Error('Completed-run catch-up needs a new active scoped update: context review --run SOURCE_ID --write --update-run UPDATE_ID. Use context prepare for current work; a reply packet cannot verify changed context.');
+  const writePaths = [...new Set([indexName, ...proposals.flatMap(p => [...p.components.filter(c => c.writable && !c.alreadyRecorded).map(c => c.doc), ...(p.newDoc ? [p.newDoc.path] : [])])])];
+  return contextUpdate(root, updateRun, writePaths, state => {
+  const retention = retentionOf(state);
+  if (!state.requiresChecks || !state.commands.length || retention?.disposition !== 'required' || writePaths.some(path => path !== indexName && !retention.features.some(f => f.doc === path))) throw Error('Catch-up needs a required feature-context plan covering these records and executable final verification. Start an implementation update with those canonical docs before Build; advisory catch-up cannot complete the repair.');
+  const staging = local(root, `.cyc/runs/${updateRun}/context-staging`);
   const written = [];
   for (const proposal of proposals) {
     for (const component of proposal.components) {
@@ -542,7 +712,7 @@ export function reviewContext(root, { run, since, all = false, write = false, ne
       const blocking = parsed.issues.filter(i => ['sections', 'last-change', 'title'].includes(i.rule));
       if (blocking.length) { written.push({ doc: component.doc, runId: proposal.runId, written: false, reason: `Fix first: ${blocking.map(i => `${i.rule} (${i.message})`).join('; ')}` }); continue; }
       const lastChange = `Last changed by AI: ${proposal.date} · run ${proposal.runId} · files: ${component.files.map(f => f.path).join(', ')}`;
-      atomicWrite(local(root, component.doc), applyEntry(source, { entry: component.entry, lessons: component.lessons, lastChange }));
+      atomicWrite(local(root, component.doc), applyEntry(source, { entry: component.entry, lessons: component.lessons, lastChange }), staging);
       recorded.set(proposal.runId, [...(recorded.get(proposal.runId) ?? []), component.doc]);
       written.push({ doc: component.doc, runId: proposal.runId, written: true });
     }
@@ -551,17 +721,19 @@ export function reviewContext(root, { run, since, all = false, write = false, ne
       const title = newDoc.split('-').map((w, i) => i ? w : w[0].toUpperCase() + w.slice(1)).join(' ');
       const source = existsSync(local(root, path)) ? read(root, path) : newDocSource(title, covers);
       if (parseDoc(source, `${newDoc}.md`).history.some(e => e.run === proposal.runId)) continue;
-      atomicWrite(local(root, path), applyEntry(source, { entry, lessons, lastChange: `Last changed by AI: ${proposal.date} · run ${proposal.runId} · files: ${covers.join(', ')}` }));
+      mkdirSync(dirname(local(root, path)), { recursive: true });
+      atomicWrite(local(root, path), applyEntry(source, { entry, lessons, lastChange: `Last changed by AI: ${proposal.date} · run ${proposal.runId} · files: ${covers.join(', ')}` }), staging);
       written.push({ doc: path, runId: proposal.runId, written: true, created: !proposal.newDoc.exists });
     }
   }
   let index = null;
   if (written.some(w => w.written)) {
-    if (!existsSync(local(root, indexName))) atomicWrite(local(root, indexName), '# Context index\n\nRead the index, then the docs whose Covers match the paths you are about to change.\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n');
-    index = refreshIndex(root);
+    if (!existsSync(local(root, indexName))) { mkdirSync(dirname(local(root, indexName)), { recursive: true }); atomicWrite(local(root, indexName), '# Context index\n\nRead the index, then the docs whose Covers match the paths you are about to change.\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n', staging); }
+    index = refreshIndex(root, { staging });
   }
   const lint = lintContext(root, { git: false });
   return { ...result, written, indexRefreshed: index, lint: { ok: lint.ok, index: lint.index.issues, docs: lint.docs.filter(d => !d.ok).map(d => ({ path: d.path, issues: d.issues })) } };
+  });
 }
 
 // ---------------------------------------------------------------- measure: what the index path costs
@@ -571,6 +743,7 @@ const tokensEstimate = chars => Math.round(chars / 4);
 
 export function measureContext(root, { paths = [], run } = {}) {
   root = realpathSync(root);
+  const { folder: contextFolder, index: indexName } = contextLocation(root);
   if (!Array.isArray(paths)) throw Error('Paths must be an array.');
   const { exists, components } = componentsOf(root);
   if (!exists) throw Error(`${indexName} does not exist; nothing to measure.`);

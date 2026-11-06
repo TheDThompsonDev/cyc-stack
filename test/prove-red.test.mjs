@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
-import { acceptFailure, finishRun, nextRun, proveRun, readRun, recordHandoff, startRun, quickHandoff, recoverRun, verifyRun } from '../scripts/runtime.mjs';
+import { acceptFailure, finishRun, nextRun, proveRun, readRun, recordHandoff, startRun, quickHandoff, recoverRun, verifyRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { sourceSnapshot } from '../scripts/source-snapshot.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 

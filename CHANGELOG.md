@@ -2,13 +2,37 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.8.0 (2026-11-06)
+
+- Retain new and changed feature context in the target project's indexed `docs/context/` folder. Normal completion prepares the current view and chronological history, checks path ownership and index links, and refuses missing, stale or misleading coverage. Keep legacy stored runs compatible.
+- Make execution mode and conversation ownership explicit; support authorized standalone work without claiming hook activation. Generate exact run commands, usable review templates and clear artifact errors.
+- Resume completion through proof judgments, captured reviews and one canonical scenario record. Separate focused original-code proof from broad candidate checks, and reuse only compatible evidence.
+- Add bounded check progress, source-bound incremental review, external browser/accessibility recipes, and demonstration fixtures for protected state transitions and asynchronous actor/resource responses.
+- Repair CYC's feature history and mappings, preserve installer feedback and checked package/plugin distribution, and add behavioral and refusal regressions. Local tests and fixtures do not demonstrate improved results on unseen model tasks or live native-host activation.
+
+## 0.7.1 (2026-11-04)
+
+- Show a concise summary, setup notes and next step for interactive `init` and `install` commands instead of listing every managed engine file.
+- Preserve complete JSON for piped output, `--json` and `--verbose`; keep previews, customized-file conflicts and errors explicit without reporting planned writes as completed.
+- Retain the controller and instruction improvements from 0.7.0. File installation does not establish native host hook activation.
+
+## 0.7.0 (2026-11-04)
+
+- Add trusted whole-record preservation and representative fixture guidance for destructive restoration, including relevant references and access metadata.
+- Add opt-in versioned evidence records for original outcomes/clauses, source-linked review capture and receipt-scoped finding dispositions. Preserve unversioned clients and historical evidence limits.
+- Retain baseline failure diagnostics with case-specific behavioral, new-interface and setup interpretations; bind both red and green proof receipts through completion.
+- Include the checked npm/plugin packaging and installer/documentation cleanup present in this source checkout. Native host activation and effectiveness on unseen tasks remain separate checks.
+
 ## Unreleased
+
+- Add a portable root plugin manifest with guided setup, shared checked npm/plugin archive builds and checksums, version/lockfile consistency checks, and first-publication instructions. Keep registry authentication and native hook trust as explicit release prerequisites.
 
 - Rebuild the frontend design method around three gates: a decision sheet (named layout archetype, typeface pair, seven palette values, signature element, rejection condition) before any markup, a rendered signature section scored against a numbered generic-tells list before the page is extended, and a set-divergence table when several sites are requested. Replace the abstract art-direction, technique and craft references with concrete typography, color, layout-archetype and craft-rule references and observed reference standards.
 - Organize maintained documentation around installation, workflow, context and validation. Retire dated research reports and benchmark campaigns; retain task-focused development fixtures.
 - Prepare npm, agent-guided and native plugin installation routes with public package metadata, release preflight and a manually triggered publishing workflow. Registry publication and native plugin qualification remain pending.
 - Share context measurement and discovery link extraction. Count each matching document once, retain per-component catch-up work and preserve chronological history.
 - Add `cyc check-reply` for draft length and visual checks, shorter completion corrections and bounded cleanup of old hook bookkeeping.
+- Remove the standalone `check-response` script and `npm run check-response`; `cyc check-reply` and `cyc packet` cover its checks, and updating an install removes the unchanged old copy. Drop two unlinked workflow PNGs from the source checkout.
 - Add component context review, layout/freshness validation and reading-size inspection. Measurements describe local files, not demonstrated token savings.
 - Make Windows timeout-fixture cleanup tolerate delayed release of temporary directories without changing refusal assertions.
 

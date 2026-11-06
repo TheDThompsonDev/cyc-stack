@@ -256,3 +256,13 @@ export function testsOf(result) {
 
 // Output whose earlier lines were dropped, with no complete summary to stand in for them.
 export const cutOff = result => result?.tests ? !result.tests.complete : [result?.stdout, result?.stderr].some(stream => (stream ?? '').length >= outputLimit);
+
+// Diagnostic hints only. A TypeError or load failure can itself be the real old bug;
+// only a case-specific reason review can establish the meaning of a failure.
+export function failureHint(entry) {
+  const error = `${entry.error ?? ''}\n${(entry.details ?? []).join('\n')}`;
+  if (/ERR_MODULE_NOT_FOUND|Cannot find (?:module|package)|does not provide an export|ModuleNotFoundError/.test(error)) return 'module-load';
+  if (/AssertionError|ERR_ASSERTION|assertion failed|Expected:|expected .* to /i.test(error)) return 'assertion';
+  if (/timeout|timed out|ENOENT|ECONNREFUSED/.test(error)) return 'execution-or-setup';
+  return 'unclassified';
+}

@@ -1,12 +1,16 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { finishRun, nextRun, readRun, recordHandoff, retryRun, startRun } from '../scripts/runtime.mjs';
-import { applyEntry, lintContext, measureContext, parseDoc, reviewContext, rules } from '../scripts/context-review.mjs';
+import { finishRun, nextRun, readRun, recordHandoff, retryRun, startRun } from '../test-support/historical-runtime.test.fixture.mjs';
+import { applyEntry, lintContext, measureContext, parseDoc, reviewContext as actualReviewContext, rules } from '../scripts/context-review.mjs';
+import * as live from '../scripts/runtime.mjs';
+import * as contextTools from '../scripts/context-review.mjs';
 import { investigateProject } from '../scripts/project-tools.mjs';
 import { installProject } from '../scripts/install.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
@@ -54,6 +58,7 @@ function twoRuns(root) {
   return { first, second };
 }
 function run(root, args) {
+  if (args[0] === 'context' && args[1] === 'review' && args.includes('--write') && !args.includes('--update-run')) args = [...args, '--update-run', updateRun(root, args.includes('--new') ? args[args.indexOf('--new') + 1] : undefined)];
   const result = spawnSync(process.execPath, [cli, ...args, '--project', root], { encoding: 'utf8' });
   return { ...result, data: JSON.parse(result.stdout || result.stderr) };
 }
@@ -64,6 +69,14 @@ function treeBytes(root) {
   }).sort(([a], [b]) => a.localeCompare(b));
 }
 const sha = (root, id, path) => readRun(root, id).handoffs.findLast(h => h.stage === 'deliver').artifacts.find(a => a.path === path).sha256;
+
+// These older backlog fixtures intentionally contain incomplete historical runs.
+// Writes now happen inside a separate authorized update, never in their receipt.
+function updateRun(root, newDoc) {
+  const names = [...new Set([...contextTools.lintContext(root, { git: false }).docs.map(d => d.path), ...(newDoc ? [`docs/context/${newDoc}.md`] : [])])];
+  return live.startRun(root, { goal: 'Repair retained historical context.', playbook: 'feature', executionMode: 'standalone', allowedPaths: ['docs/context'], contextRetention: { disposition: 'required', features: names.map(doc => ({ id: doc.split('/').at(-1).slice(0, -3), doc, paths: [] })) } }).runId;
+}
+function reviewContext(root, options = {}) { return actualReviewContext(root, options.write && !options.updateRun ? { ...options, updateRun: updateRun(root, options.newDoc) } : options); }
 
 test('context review maps two completed runs to one component and proposes both entries with their evidence, read-only', t => {
   const root = fixture(t);
@@ -156,7 +169,7 @@ test('the Deliver handoff records the context docs the change touched and review
   const deliverOf = id => readRun(root, id).handoffs.findLast(h => h.stage === 'deliver');
   assert.deepEqual(deliverOf(touched).contextDocs, ['docs/context/orders.md']);
   assert.deepEqual(deliverOf(untouched).contextDocs, []);
-  assert.match(readFileSync(join(root, `.cyc/runs/${touched}/review.md`), 'utf8'), /- Context docs touched: docs\/context\/orders\.md\. Propose the component doc entry with cyc context review --run /);
+  assert.match(readFileSync(join(root, `.cyc/runs/${touched}/review.md`), 'utf8'), /- Context docs touched: docs\/context\/orders\.md\. Historical catch-up requires a new scoped update: cyc context review --run /);
   assert.match(readFileSync(join(root, `.cyc/runs/${untouched}/review.md`), 'utf8'), /- Context docs touched: none\./);
   const review = reviewContext(root, { all: true });
   const byRun = Object.fromEntries(review.runs.map(r => [r.runId, r.components.find(c => c.component === 'Orders')]));
@@ -227,7 +240,7 @@ test('--write refuses a doc without the layout and names what to fix; review ref
   const id = completeRun(root, { goal: 'Persist orders.', edit: () => put(root, 'src/orders/order.txt', 'v2') });
   const before = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
   const result = run(root, ['context', 'review', '--run', id, '--write']);
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 0, JSON.stringify(result.data));
   assert.equal(result.data.written[0].written, false);
   assert.match(result.data.written[0].reason, /^Fix first: last-change \(Missing "Last changed by AI:" line\.\); sections \(Found sections: none\.\)/);
   assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), before, 'nothing was written to the nonconforming doc');
@@ -296,11 +309,11 @@ test('context measure counts the index path against every doc and the run record
 test('the entry skill reads the index first and the context method states the rules, without claiming savings as fact', () => {
   const entry = readFileSync(join(repo, 'skills/cyc/SKILL.md'), 'utf8');
   assert.match(entry, /Read the project's context index first, `docs\/context\/INDEX\.md`, and then only the component docs whose Covers match/);
-  assert.match(entry, /context review --run <ID> --write/);
+  assert.match(entry, /Completed-run catch-up needs a new scoped update/);
   const method = readFileSync(join(repo, 'methods/cyc-context/SKILL.md'), 'utf8');
-  assert.match(method, /Read the index first, then only the matched docs/);
+  assert.match(method, /Read the target index, then matched records/);
   for (const rule of Object.keys(rules)) assert.ok(method.includes(`\`${rule}\``) || method.includes(`(${rule}`), `the method names rule ${rule}`);
-  assert.match(method, /Whether that saves tokens is a measurement, not a premise/);
+  assert.match(method, /not provider usage, savings or successful reuse/);
   assert.doesNotMatch(method, /saves \d|\d+% fewer tokens|reduces tokens by/);
 });
 
@@ -399,4 +412,336 @@ test('installed context discovery works for a fresh user and a teammate without 
   const host = JSON.parse(setup.stdout).steps.find(s => s.id === 'host');
   assert.equal(host.reason, 'prompt-not-observed', 'installed files alone must not claim live activation');
   assert.equal(host.canStartTask, false);
+});
+
+// Current retention contract: real API, not the historical fixture constructor above.
+const retainedView = 'Orders expose the persisted text through src/orders/order.txt. The local adapter owns the value and the checks read that same source; this fixture has no remote service or authentication claim. The configured check guards controller integration only, not a production order system. Review the current source and run node --test for independent behavior assertions; local run receipts do not travel with a source-only copy.';
+function currentFeature(t, extra = {}, opts = {}) {
+  const root = fixture(t, { index: null, doc: null, ...opts });
+  const id = live.startRun(root, { goal: 'Persist orders for the next task.', playbook: 'feature', criteria: [{ id: 'c1', description: 'Persist the fixture order value.' }], executionMode: 'standalone', allowedPaths: ['src/orders'], contextRetention: { version: 1, disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] }, ...extra }).runId;
+  live.quickHandoff(root, id, { summary: 'Read existing order storage and planned target context.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+  put(root, 'src/orders/order.txt', 'v2');
+  const state = live.readRun(root, id), assessment = { ...fixtureAssessment(state, 'verify'), ...fixtureAssessment(state, 'deliver') };
+  assessment.learning = { status: 'recorded', reason: 'Retain the actual fixture storage boundary, checks and local-only limitations.', artifacts: ['docs/context/orders.md'] };
+  const input = { summary: 'Order fixture updates its persisted text; no production-service claim.', criterionEvidence: { c1: 'Configured fixture check and retained-context assertions.' }, assessment };
+  return { root, id, input };
+}
+test('retention: default old-shaped feature input cannot complete without canonical context', t => {
+  const root = fixture(t, { index: null, doc: null });
+  const id = live.startRun(root, { goal: 'Add order state.', playbook: 'feature', allowedPaths: ['src'] }).runId;
+  assert.equal(live.readRun(root, id).contextRetention.version, 1);
+  live.quickHandoff(root, id, { summary: 'Read source.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') }); put(root, 'src/orders/order.txt', 'v2');
+  const state = live.readRun(root, id);
+  assert.throws(() => live.finishRun(root, id, { summary: 'A feature cannot discard retained knowledge.', passedEvidence: 'Fixture checks.', assessment: { ...fixtureAssessment(state, 'verify'), ...fixtureAssessment(state, 'deliver') } }), /feature context|learning/);
+  assert.notEqual(live.readRun(root, id).status, 'complete');
+  const feature = live.readRun(root, id).contextRetention.features[0], assessment = { ...fixtureAssessment(live.readRun(root, id), 'verify'), ...fixtureAssessment(live.readRun(root, id), 'deliver') };
+  assessment.learning = { status: 'recorded', reason: 'Retain focused order knowledge from the inferred directory scope.', artifacts: [feature.doc], context: [{ id: feature.id, currentView: retainedView }] };
+  assert.equal(live.finishRun(root, id, { summary: 'The inferred order record owns actual changed files.', passedEvidence: 'Isolated controller gate checks.', assessment }).finished, true);
+  const generated = parseDoc(readFileSync(join(root, feature.doc), 'utf8'), feature.doc.split('/').at(-1));
+  assert.deepEqual(generated.covers, ['src/orders/order.txt'], 'broad edit permission does not become a catch-all or unrelated billing mapping');
+});
+test('retention: normal finish scaffolds target records, rejects placeholders, then completes before stable verification', t => {
+  const { root, id, input } = currentFeature(t);
+  const planned = live.readRun(root, id);
+  assert(planned.allowedPaths.includes('docs/context/orders.md')); assert(planned.allowedPaths.includes('docs/context/INDEX.md'));
+  const first = live.finishRun(root, id, structuredClone(input));
+  assert.equal(first.status, 'needs-context', JSON.stringify(first)); assert.equal(first.finished, false); assert.equal(live.readRun(root, id).verification, null);
+  assert.equal(lintContext(root, { git: false }).ok, false);
+  input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }];
+  const second = live.finishRun(root, id, input); assert.equal(second.finished, true, JSON.stringify(second));
+  const state = live.readRun(root, id);
+  assert.deepEqual(state.handoffs.at(-1).contextDocs, ['docs/context/orders.md']);
+  assert.equal(lintContext(root, { git: false }).ok, true);
+  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.filter(h => h.run === id).length, 1);
+  assert.equal(state.verification.sourceHash, state.handoffs.at(-1).sourceHash);
+  const found = investigateProject(root, { paths: ['src/orders/order.txt'] }); assert(found.contexts.some(c => c.records.some(r => r.path === 'docs/context/orders.md')));
+});
+test('retention: learning recorded cannot conceal the audited missing History mismatch', t => {
+  const bad = validDoc().replace('Last changed by AI: none recorded', 'Last changed by AI: 2026-11-04 · run ed2b9913-a853-46b9-82da-3da9fe989c7f · files: src/orders/order.txt');
+  const { root, id, input } = currentFeature(t, {}, { doc: bad, index: validIndex('| Orders | src/orders/** | [Orders](orders.md) | 2026-11-04 · run ed2b9913 | none |') });
+  assert(lintContext(root, { git: false }).docs[0].issues.some(i => i.rule === 'last-change-current') || !parseDoc(bad, 'orders.md').history.length);
+  input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }];
+  assert.throws(() => live.finishRun(root, id, input), /metadata\/history|older run|incomplete/);
+  assert.notEqual(live.readRun(root, id).status, 'complete');
+});
+
+test('retention: focused records reject missing links, mappings, placeholders and inconsistent metadata before checks', t => {
+  const corruptions = [
+    ...['**/*', 'src/**/*', '**/*.*', 'src/**/**'].map(pattern => [`catch-all ${pattern}`, root => {
+      put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace('Covers: src/orders/order.txt', `Covers: ${pattern}`));
+      contextTools.refreshIndex(root, { docs: ['docs/context/orders.md'] });
+    }]),
+    ['new-entrypoint', root => put(root, 'src/orders/helper.mjs', 'export const helper=()=>1;')],
+    ['new-stylesheet', root => put(root, 'src/orders/theme.css', 'body{color:blue}')],
+    ['unindexed', (root) => fs.unlinkSync(join(root, 'docs/context/INDEX.md'))],
+    ['broken-link', root => put(root, 'docs/context/INDEX.md', readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8').replace('(orders.md)', '(missing.md)'))],
+    ['missing-mapping', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace('Covers: src/orders/order.txt', 'Covers: src/unrelated.mjs'))],
+    ['inline-placeholder', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace(retainedView, 'Still unfinished: <Describe the feature contracts here>.'))],
+    ['last-history', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace(/^Last changed by AI:.+$/m, 'Last changed by AI: 2026-11-05 · run other-run · files: src/orders/order.txt'))]
+  ];
+  for (const [kind, corrupt] of corruptions) {
+    const { root, id } = currentFeature(t);
+    assert.equal(live.prepareRunContext(root, id, { records: [{ id: 'orders', currentView: retainedView }], summary: 'Actual fixture source inspected.' }).ok, true);
+    corrupt(root);
+    assert.equal(contextTools.checkRetention(root, live.readRun(root, id), live.sourceSnapshot(root).files).ok, false, kind);
+    const blocked = live.verifyRun(root, id); assert.equal(blocked.status, 'needs-context', kind); assert.equal(live.readRun(root, id).verification, null);
+  }
+  for (const doc of ['docs/context/INDEX.md', 'docs/context/error-ledger.md', 'docs/context/verify-recipe.md', 'docs/feature-guide.md', '.cyc/runtime/handoff.md']) {
+    const root = fixture(t, { index: null, doc: null });
+    assert.throws(() => live.startRun(root, { goal: 'Add an order feature.', playbook: 'feature', contextRetention: { disposition: 'required', features: [{ id: 'orders', doc, paths: ['src/orders/order.txt'] }] } }), /canonical|feature/);
+  }
+});
+test('retention: changed existing feature revalidates its record; distinct features keep separate records and unrelated docs', t => {
+  const { root, id, input } = currentFeature(t);
+  input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }]; assert.equal(live.finishRun(root, id, input).finished, true);
+  put(root, 'docs/context/unrelated.md', validDoc('Unrelated capability', 'src/unrelated/**'));
+  contextTools.refreshIndex(root); const unrelated = readFileSync(join(root, 'docs/context/unrelated.md'));
+  const read = fs.readFileSync;
+  try {
+    fs.readFileSync = (path, ...args) => { assert.notEqual(String(path), join(root, 'docs/context/unrelated.md'), 'bounded refresh must not read unrelated historical prose'); return read(path, ...args); }; syncBuiltinESMExports();
+    contextTools.refreshIndex(root, { docs: ['docs/context/orders.md'] });
+  } finally { fs.readFileSync = read; syncBuiltinESMExports(); }
+  const nextId = live.startRun(root, { goal: 'Change the order storage contract.', playbook: 'feature', criteria: [{ id: 'c1', description: 'Stored text contract remains discoverable.' }], allowedPaths: ['src/orders', 'src/billing'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }, { id: 'billing', doc: 'docs/context/billing.md', paths: ['src/billing/bill.txt'] }] } }).runId;
+  live.quickHandoff(root, nextId, { summary: 'Plan existing orders and distinct billing knowledge.', assessment: fixtureAssessment(live.readRun(root, nextId), 'scout') });
+  put(root, 'src/orders/order.txt', 'v3'); put(root, 'src/billing/bill.txt', 'v2');
+  const a = { ...fixtureAssessment(live.readRun(root, nextId), 'verify'), ...fixtureAssessment(live.readRun(root, nextId), 'deliver') };
+  a.learning = { status: 'recorded', reason: 'Revalidate existing order knowledge and separately retain billing.', artifacts: ['docs/context/orders.md', 'docs/context/billing.md'] };
+  const nextInput = { summary: 'Order v3 and billing v2 are isolated persistence fixtures.', passedEvidence: 'Fixture checks.', assessment: a };
+  assert.equal(live.finishRun(root, nextId, structuredClone(nextInput)).status, 'needs-context', 'generated History cannot masquerade as authored contract revalidation');
+  a.learning.context = [{ id: 'orders', currentView: retainedView + ' This change now retains the third fixture value.' }, { id: 'billing', currentView: 'Billing owns the text in src/billing/bill.txt and is independent of orders. Its local check has no network or payment integration; the fixture does not certify a billing service. Keep billing decisions separate, run the configured check, and inspect real integrations before reuse. Ignored receipts are local evidence only.' }];
+  assert.equal(live.finishRun(root, nextId, nextInput).finished, true);
+  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.length, 2);
+  assert.deepEqual(readFileSync(join(root, 'docs/context/unrelated.md')), unrelated);
+  assert.deepEqual(live.readRun(root, nextId).handoffs.at(-1).contextDocs, ['docs/context/orders.md', 'docs/context/billing.md']);
+});
+test('retention: restrictions stay pending, routine/read-only stays proportional, and misleading routes cannot add a feature', t => {
+  const { root, id, input } = currentFeature(t, { allowedPaths: ['src/orders'], contextRetention: { disposition: 'restricted', reason: 'The user explicitly forbids documentation edits.', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] } });
+  input.assessment.learning = { status: 'none', reason: 'Required context is pending the explicit documentation restriction.', artifacts: [] };
+  const before = treeBytes(root), result = live.finishRun(root, id, input);
+  assert.equal(result.finished, false); assert.equal(result.retention.status, 'pending'); assert.deepEqual(treeBytes(root), before);
+  const readonly = fixture(t), checkId = live.startRun(readonly, { goal: 'Verify existing fixture state.', playbook: 'verify' }).runId;
+  live.quickHandoff(readonly, checkId, { summary: 'Read-only verification selected.' }); assert.equal(live.verifyRun(readonly, checkId).passed, true);
+  const mislabel = fixture(t), badId = live.startRun(mislabel, { goal: 'Inspect existing state.', playbook: 'verify' }).runId;
+  live.quickHandoff(mislabel, badId, { summary: 'Read-only route does not authorize feature completion.' }); put(mislabel, 'src/new-feature.mjs', 'export const added=()=>1;');
+  assert.equal(live.verifyRun(mislabel, badId).status, 'needs-context');
+  const routine = fixture(t); put(routine, 'src/format.mjs', 'export const n=1;\n');
+  const routineId = live.startRun(routine, { goal: 'Format existing spacing only.', playbook: 'refactor', contextRetention: { disposition: 'unnecessary', routine: true, reason: 'Agent-reviewed formatting; no new capability or reusable contract changed.' } }).runId;
+  put(routine, 'src/format.mjs', 'export const n = 1;\n');
+  assert.equal(contextTools.checkRetention(routine, live.readRun(routine, routineId), live.sourceSnapshot(routine).files).status, 'unnecessary');
+});
+
+test('retention: changed shared entrypoints require every indexed canonical owner, including stylesheet and test owners', t => {
+  for (const [owner, sharedPath, original, candidate] of [
+    ['auth', 'src/auth.mjs', 'export const authorized=()=>false;', 'export const authorized=()=>true;'],
+    ['styling', 'src/styles.css', 'body{color:red}', 'body{color:blue}'],
+    ['contract-tests', 'test/shared-contract.test.mjs', 'export const expected=false;', 'export const expected=true;']
+  ]) for (const includeShared of [false, true]) {
+    const doc = `docs/context/${owner}.md`;
+    const root = fixture(t, { doc: validDoc('Orders', `src/orders/order.mjs, ${sharedPath}`), index: validIndex(`| Orders | src/orders/order.mjs, ${sharedPath} | [Orders](orders.md) | none recorded | none |\n| Shared ${owner} | ${sharedPath} | [Shared](${owner}.md) | none recorded | none |`) });
+    put(root, doc, validDoc(`Shared ${owner}`, sharedPath));
+    put(root, 'src/orders/order.mjs', 'export const order=()=>0;'); put(root, sharedPath, original);
+    const before = readFileSync(join(root, doc));
+    const features = [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.mjs'] }, ...(includeShared ? [{ id: owner, doc, paths: [sharedPath] }] : [])];
+    const id = live.startRun(root, { goal: 'Change order and shared contract fixtures.', playbook: 'feature', allowedPaths: ['src/orders/order.mjs', sharedPath], contextRetention: { disposition: 'required', features } }).runId;
+    live.quickHandoff(root, id, { summary: 'Inspect both existing contracts.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+    put(root, 'src/orders/order.mjs', 'export const order=()=>1;'); put(root, sharedPath, candidate);
+    const assessment = { ...fixtureAssessment(live.readRun(root, id), 'verify'), ...fixtureAssessment(live.readRun(root, id), 'deliver') };
+    assessment.learning = { status: 'recorded', reason: 'Retain both inspected contract changes.', artifacts: features.map(f => f.doc), context: features.map(f => ({ id: f.id, currentView: `The ${f.id} fixture owns ${f.paths[0]} and is isolated from a real service. This change updates its local contract and requires its existing indexed shared record as well as order context. Run the configured check and inspect both contracts before reuse; these synthetic gate assertions do not certify production behavior or user acceptance. Detailed receipts remain local.` })) };
+    const result = live.finishRun(root, id, { summary: 'Both existing contracts changed.', passedEvidence: 'Isolated gate checks.', assessment });
+    if (includeShared) {
+      assert.equal(result.finished, true, `${owner}: ${JSON.stringify(result)}`);
+      assert.equal(parseDoc(readFileSync(join(root, doc), 'utf8'), `${owner}.md`).history[0].run, id);
+    } else {
+      assert.equal(result.status, 'needs-context', owner); assert.equal(result.finished, false);
+      assert(result.retention.issues.some(i => i.rule === 'feature-owner' && i.message.includes(doc)), owner);
+      assert.deepEqual(readFileSync(join(root, doc)), before);
+      assert(!live.readRun(root, id).allowedPaths.includes(doc), 'late discovery cannot broaden the frozen plan');
+      assert.equal(live.readRun(root, id).verification, null);
+    }
+  }
+});
+
+test('retention: advisory completion cannot hide Markdown features or source deletions behind unnecessary/routine dispositions', t => {
+  for (const routine of [false, true]) for (const remove of [false, true]) {
+    const root = fixture(t, { index: null, doc: null }); put(root, 'src/existing.mjs', 'export const value=1;');
+    const id = live.startRun(root, { goal: 'Investigate a capability.', playbook: 'investigation', executionMode: 'standalone', allowedPaths: ['methods/new-capability', 'src/existing.mjs'], ...(routine ? { contextRetention: { disposition: 'unnecessary', routine: true, reason: 'Synthetic routine claim must not authorize adding/deleting implementation files.' } } : {}) }).runId;
+    live.quickHandoff(root, id, { summary: 'Read the fixture.' });
+    if (remove) fs.unlinkSync(join(root, 'src/existing.mjs')); else put(root, 'methods/new-capability/SKILL.md', '# New capability\n\nReusable implementation instructions added through an advisory route.');
+    assert.throws(() => { live.quickHandoff(root, id, { summary: 'Claim advisory delivery.', passedEvidence: 'Inspected source.' }); live.completeRun(root, id); }, /context|retention/i);
+    assert.notEqual(live.readRun(root, id).status, 'complete');
+    assert(contextTools.checkRetention(root, live.readRun(root, id), live.sourceSnapshot(root).files).issues.some(i => i.rule === 'feature-plan'));
+  }
+});
+
+test('retention: catch-up refuses advisory writers and requires the repair run history plus fresh verification', t => {
+  const root = fixture(t), oldId = completeRun(root, { goal: 'Historical stored order.', edit: () => put(root, 'src/orders/order.txt', 'historical') });
+  const old = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`));
+  const advisory = live.startRun(root, { goal: 'Investigate missing history.', playbook: 'investigation', allowedPaths: ['docs/context'] }).runId;
+  live.quickHandoff(root, advisory, { summary: 'Read the old record.' }); const before = treeBytes(root);
+  assert.throws(() => actualReviewContext(root, { run: oldId, write: true, updateRun: advisory }), /required feature-context plan.*executable final verification/);
+  assert.deepEqual(treeBytes(root), before, 'advisory catch-up rejects before writes');
+  const id = live.startRun(root, { goal: 'Retain the missing order history.', playbook: 'feature', allowedPaths: ['docs/context'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] } }).runId;
+  live.quickHandoff(root, id, { summary: 'Inspect actual historical evidence and canonical order record.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+  const written = actualReviewContext(root, { run: oldId, write: true, updateRun: id }); assert.equal(written.lint.ok, true);
+  assert.equal(live.verifyRun(root, id).status, 'needs-context', 'historical entry alone is not evidence of a verified repair');
+  const a = { ...fixtureAssessment(live.readRun(root, id), 'verify'), ...fixtureAssessment(live.readRun(root, id), 'deliver') };
+  a.learning = { status: 'recorded', reason: 'Restore actual older evidence while documenting this repair under its own run.', artifacts: ['docs/context/orders.md'], context: [{ id: 'orders', currentView: retainedView }] };
+  assert.equal(live.finishRun(root, id, { summary: 'Historical order evidence is retained; the repair has current provenance.', passedEvidence: 'Actual context and configured fixture checks.', assessment: a }).finished, true);
+  const completed = live.readRun(root, id), parsed = parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md');
+  assert.equal(completed.verification.passed, true); assert.equal(parsed.history[0].run, id); assert(parsed.history.some(h => h.run === oldId));
+  assert.deepEqual(readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), old);
+  assert.deepEqual(completed.handoffs.at(-1).contextDocs, ['docs/context/orders.md']); assert.equal(lintContext(root, { git: false }).ok, true);
+});
+test('retention: paths, source freshness and conversation ownership survive context preparation', t => {
+  const { root, id, input } = currentFeature(t);
+  assert.throws(() => live.prepareRunContext(root, id, { records: [{ id: 'late-feature', currentView: retainedView }] }), /planned ids/);
+  input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }];
+  assert.equal(live.prepareRunContext(root, id, { records: input.assessment.learning.context }).ok, true);
+  live.quickHandoff(root, id, { summary: 'Actual feature code built.' }); assert.equal(live.verifyRun(root, id).passed, true);
+  put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace(retainedView, retainedView + ' Changed after verification.'));
+  assert.throws(() => live.quickHandoff(root, id, { summary: 'Old verification cannot pass new context.', passedEvidence: 'Old result.', assessment: fixtureAssessment(live.readRun(root, id), 'verify') }), /context|changed|stale/);
+  assert.throws(() => live.prepareRunContext(root, id, { records: input.assessment.learning.context }), /after verification|retry/);
+  const other = fixture(t), previous = process.env.CYC_SESSION; process.env.CYC_SESSION = 'retention-owner';
+  try {
+    const owned = live.startRun(other, { goal: 'Retain owned state.', playbook: 'feature', executionMode: 'standalone' }).runId;
+    process.env.CYC_SESSION = 'foreign-retention-chat'; const before = treeBytes(other);
+    assert.throws(() => live.prepareRunContext(other, owned, {}), /belongs to conversation/); assert.deepEqual(treeBytes(other), before);
+  } finally { if (previous === undefined) delete process.env.CYC_SESSION; else process.env.CYC_SESSION = previous; }
+  // A simulated native gate checks the same current retention contract without
+  // certifying real host activation or permitting a foreign preparation.
+  const native = fixture(t), keys = ['CYC_SESSION', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID'], saved = keys.map(key => process.env[key]);
+  const owner = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', foreign = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  for (const key of [owner, foreign]) put(native, `.cyc/runtime/${key}.state.json`, JSON.stringify({ host: 'codex', token: 'simulated-retention-test', updatedAt: new Date().toISOString() }));
+  try {
+    keys.forEach(key => delete process.env[key]); process.env.CYC_SESSION = owner;
+    const nativeId = live.startRun(native, { goal: 'Retain native order context.', playbook: 'feature', executionMode: 'native-codex', session: owner, allowedPaths: ['src/orders'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] } }).runId;
+    live.quickHandoff(native, nativeId, { summary: 'Inspect native fixture storage.', assessment: fixtureAssessment(live.readRun(native, nativeId), 'scout') }); put(native, 'src/orders/order.txt', 'v2');
+    process.env.CYC_SESSION = foreign;
+    assert.throws(() => live.prepareRunContext(native, nativeId, { records: [{ id: 'orders', currentView: retainedView }] }), /native gate|conversation/);
+    process.env.CYC_SESSION = owner;
+    const a = { ...fixtureAssessment(live.readRun(native, nativeId), 'verify'), ...fixtureAssessment(live.readRun(native, nativeId), 'deliver') };
+    a.learning = { status: 'recorded', reason: 'Retain native fixture behavior with simulated gate provenance.', artifacts: ['docs/context/orders.md'], context: [{ id: 'orders', currentView: retainedView }] };
+    const finished = live.finishRun(native, nativeId, { summary: 'Native fixture retains canonical context.', passedEvidence: 'Isolated gate assertions.', assessment: a });
+    assert.equal(finished.finished, true); assert.equal(finished.packet.written, true);
+    const packet = JSON.parse(readFileSync(join(native, finished.packet.path)));
+    assert.equal(packet.token, 'simulated-retention-test');
+    assert.deepEqual(live.readRun(native, nativeId).handoffs.at(-1).contextDocs, ['docs/context/orders.md']);
+  } finally { keys.forEach((key, index) => saved[index] === undefined ? delete process.env[key] : process.env[key] = saved[index]); }
+});
+test('retention: interrupted multi-record preparation resumes without duplicate History or unrelated writes', t => {
+  const { root, id, input } = currentFeature(t, { allowedPaths: ['src/orders', 'src/billing'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }, { id: 'billing', doc: 'docs/context/billing.md', paths: ['src/billing/bill.txt'] }] } });
+  put(root, 'src/billing/bill.txt', 'v2');
+  const records = [{ id: 'orders', currentView: retainedView }, { id: 'billing', currentView: 'Billing owns src/billing/bill.txt as a local stored text fixture. Its contract is distinct from orders and has no payment or network service. The configured check protects controller behavior only; run and inspect actual billing integrations before reuse. Local receipts do not constitute user acceptance.' }];
+  const rename = fs.renameSync; let injected = false;
+  fs.renameSync = (from, to) => { if (!injected && String(to).replaceAll('\\', '/').endsWith('/docs/context/billing.md')) { injected = true; throw new Error('seeded context publication failure'); } return rename(from, to); }; syncBuiltinESMExports();
+  try { assert.throws(() => live.prepareRunContext(root, id, { records }), /seeded context publication/); }
+  finally { fs.renameSync = rename; syncBuiltinESMExports(); }
+  assert.equal(readFileSync(join(root, 'src/orders/order.txt'), 'utf8'), 'v2');
+  assert.equal(live.prepareRunContext(root, id, { records }).ok, true);
+  for (const name of ['orders', 'billing']) assert.equal(parseDoc(readFileSync(join(root, `docs/context/${name}.md`), 'utf8'), `${name}.md`).history.filter(h => h.run === id).length, 1);
+  const bytes = treeBytes(root); assert.equal(live.prepareRunContext(root, id, { records }).ok, true); assert.deepEqual(treeBytes(root), bytes, 'unchanged preparation writes no new History or source');
+  const name = 'docs/context/orders.md', prepared = readFileSync(join(root, name), 'utf8');
+  const own = prepared.slice(prepared.indexOf('### '));
+  put(root, name, prepared + '\n' + own);
+  assert.equal(live.prepareRunContext(root, id, { records }).ok, true);
+  assert.equal(parseDoc(readFileSync(join(root, name), 'utf8'), 'orders.md').history.filter(h => h.run === id).length, 1, 'resumption repairs duplicate active entries without changing completed history');
+});
+test('retention: equivalent project context and literal dynamic-route paths resolve without engine-map substitution', t => {
+  const root = fixture(t, { index: null, doc: null }), cfg = JSON.parse(readFileSync(join(root, '.cyc/config.json')));
+  cfg.context = { directory: 'knowledge/features' }; put(root, '.cyc/config.json', JSON.stringify(cfg));
+  const route = 'src/app/api/events/[eventId]/route.ts'; put(root, route, 'export const GET=()=>"fixture";');
+  const id = live.startRun(root, { goal: 'Retain a dynamic route contract.', playbook: 'feature', allowedPaths: [route], contextRetention: { disposition: 'required', features: [{ id: 'event-route', doc: 'knowledge/features/event-route.md', paths: [route] }] } }).runId;
+  put(root, route, 'export const GET=()=>"updated fixture";');
+  assert.equal(live.prepareRunContext(root, id, { records: [{ id: 'event-route', currentView: 'The source at src/app/api/events/[eventId]/route.ts owns this dynamic-route fixture. Brackets are literal directory characters, not character classes. This test validates discovery and byte provenance, not a running Next.js server. Inspect actual authorization and rerun framework checks before application reuse; local controller receipts are not portable validation.' }] }).ok, true);
+  const found = investigateProject(root, { paths: [route] }); assert.equal(found.index.path, 'knowledge/features/INDEX.md'); assert(found.contexts.some(c => c.records.some(r => r.path === 'knowledge/features/event-route.md')));
+  assert.equal(investigateProject(root, { paths: ['src/app/api/events/[otherId]/route.ts'] }).totalContextMatches, 0);
+  assert.throws(() => investigateProject(root, { paths: ['../foreign/route.ts'] }), /canonical|project-relative/);
+  assert.equal(lintContext(root, { git: false }).ok, true);
+});
+test('retention: completed catch-up needs a new scoped update and cannot mutate the completed receipt', t => {
+  const root = fixture(t), oldId = completeRun(root, { goal: 'Historical orders.', edit: () => put(root, 'src/orders/order.txt', 'old done') });
+  const receipt = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), bytes = treeBytes(root);
+  assert.throws(() => actualReviewContext(root, { run: oldId, write: true }), /new active scoped update/); assert.deepEqual(treeBytes(root), bytes);
+  const active = live.startRun(root, { goal: 'Plan a small source-only investigation.', playbook: 'plan', allowedPaths: ['src/orders'] }).runId;
+  assert.throws(() => actualReviewContext(root, { run: oldId, write: true, updateRun: active }), /outside frozen/);
+  assert.deepEqual(readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), receipt);
+});
+
+test('retention: installed fresh feature finishes through context and proof continuation, then transfers without local receipts', t => {
+  const root = mkdtempSync(join(tmpdir(), 'cyc-retain-installed-'));
+  const portable = mkdtempSync(join(tmpdir(), 'cyc-retain-portable-'));
+  t.after(() => { for (const [path, prefix] of [[root, 'cyc-retain-installed-'], [portable, 'cyc-retain-portable-']]) { assert.equal(dirname(path), resolve(tmpdir())); assert(path.startsWith(join(resolve(tmpdir()), prefix))); rmSync(path, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); } });
+  put(root, 'package.json', JSON.stringify({ type: 'module' }));
+  const installation = installProject(root, { hosts: ['codex'] }); assert.equal(installation.ok, true, JSON.stringify(installation));
+  const installedConfig = JSON.parse(readFileSync(join(root, '.cyc/config.json')));
+  installedConfig.verification = { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"] }] };
+  put(root, '.cyc/config.json', JSON.stringify(installedConfig));
+  const installedCli = join(root, '.cyc/engine/bin/cyc.mjs');
+  function installed(args) { const r = spawnSync(process.execPath, [installedCli, ...args], { cwd: root, encoding: 'utf8', timeout: 30000 }); assert.equal(r.status, 0, r.stderr || r.stdout); return JSON.parse(r.stdout); }
+  const doc = 'docs/context/greeting.md';
+  const start = { goal: 'Add a local greeting capability.', playbook: 'feature', executionMode: 'standalone', session: 'fresh-installed', evidenceVersion: 1, requirements: 'A pure greet(name) returns Hello plus that name; retained target knowledge remains discoverable.', criteria: [{ id: 'greeting', description: 'greet returns the expected string.' }], allowedPaths: ['src', 'test'], contextRetention: { disposition: 'required', features: [{ id: 'greeting', doc, paths: ['src/greet.mjs', 'test/greet.test.mjs'] }] } };
+  put(root, '.cyc/runtime/start.json', JSON.stringify(start)); const began = installed(['run', 'start', '--file', '.cyc/runtime/start.json']); const id = began.runId;
+  assert.equal(live.readRun(root, id).contextRetention.index, 'docs/context/INDEX.md');
+  put(root, '.cyc/runtime/scout.json', JSON.stringify({ runId: id, stage: 'scout', attempt: began.attempt, status: 'passed', summary: 'Read the blank target and plan greeting context before Build.', evidence: [{ kind: 'observation', detail: 'Target index absent; engine development docs are not target context.' }], artifacts: [], criteria: [{ id: 'greeting', result: 'unverified', evidence: 'Later behavioral check.' }], assessment: fixtureAssessment(live.readRun(root, id), 'scout') }));
+  installed(['run', 'record', '--run', id, '--file', '.cyc/runtime/scout.json']);
+  put(root, 'src/greet.mjs', 'export const greet=name=>"Hello "+name;');
+  put(root, 'test/greet.test.mjs', 'import test from "node:test";import assert from "node:assert/strict";import {greet} from "../src/greet.mjs";test("greet returns the name",()=>assert.equal(greet("Ada"),"Hello Ada"));');
+  const a = { ...fixtureAssessment(live.readRun(root, id), 'verify'), ...fixtureAssessment(live.readRun(root, id), 'deliver') }; delete a.testProof;
+  a.learning = { status: 'recorded', reason: 'Retain the pure greeting entrypoint, check, and absence of persistence/network behavior.', artifacts: [doc] };
+  const input = { runId: id, summary: 'The local greeting returns its supplied name.', scenarioEvidence: [{ id: 'greeting', scenario: 'greet returns the name', check: 'behavior', receipt: 'current-verification', result: 'passed', origin: 'agent-reported', consumers: ['behavior'], evidence: 'Actual isolated assertion compares greet(Ada) with Hello Ada; not a production integration claim.' }], assessment: a };
+  put(root, '.cyc/runtime/finish.json', JSON.stringify(input));
+  assert.equal(installed(['run', 'finish', '--run', id, '--file', '.cyc/runtime/finish.json']).status, 'needs-context');
+  assert.equal(live.readRun(root, id).verification, null); assert.equal(lintContext(root, { git: false }).ok, false);
+  a.learning.context = [{ id: 'greeting', currentView: 'The user capability is a pure local greet(name), exported by src/greet.mjs, that returns Hello followed by the supplied name. It has no storage, membership policy, network request or asynchronous lifecycle. Keeping it pure avoids a service dependency for this capability. Run node --test: test/greet.test.mjs checks Ada maps to Hello Ada. These are isolated development checks, not user acceptance, native hook activation or unseen-task evidence. Detailed controller receipts stay in ignored local storage and may be absent in another checkout; re-run the command and inspect the source before reuse.' }];
+  put(root, '.cyc/runtime/finish.json', JSON.stringify(input));
+  const proof = installed(['run', 'finish', '--run', id, '--file', '.cyc/runtime/finish.json']); assert.equal(proof.status, 'needs-proof-review', JSON.stringify(proof));
+  const remaining = JSON.parse(readFileSync(join(root, proof.nextAction.inputTemplate)));
+  remaining.assessment.proofReview.cases = proof.proof.failures.map(f => ({ id: f.id, category: 'new-interface', reason: 'The original blank target lacks src/greet.mjs, observed by the actual import diagnostic; this feature establishes a new interface rather than a repaired existing behavior.', boundary: f.boundary ?? '' }));
+  put(root, '.cyc/runtime/remaining.json', JSON.stringify(remaining));
+  assert.equal(installed(['run', 'finish', '--run', id, '--file', '.cyc/runtime/remaining.json']).finished, true);
+  const completed = live.readRun(root, id); assert.equal(completed.verification.role, 'candidate'); assert.equal(completed.verification.results[0].exitCode, 0); assert.deepEqual(completed.handoffs.at(-1).contextDocs, [doc]);
+  assert.equal(lintContext(root, { git: false }).ok, true);
+  for (const path of ['src', 'test', 'docs', 'package.json', '.cyc/config.json']) { mkdirSync(dirname(join(portable, path)), { recursive: true }); cpSync(join(root, path), join(portable, path), { recursive: true }); }
+  assert.equal(fs.existsSync(join(portable, '.cyc/runtime')), false);
+  const found = investigateProject(portable, { paths: ['src/greet.mjs'] }); assert.equal(found.index.path, 'docs/context/INDEX.md'); assert(found.contexts.some(c => c.records.some(r => r.path === doc)));
+  const knowledge = readFileSync(join(portable, doc), 'utf8'); assert.match(knowledge, /pure local greet\(name\)/); assert.match(knowledge, /no storage/); assert.match(knowledge, /node --test/); assert.match(knowledge, /ignored local storage/);
+  const checked = spawnSync(process.execPath, ['-e', "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"], { cwd: portable, encoding: 'utf8' }); assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  const edited = knowledge.replace('pure local greet(name)', 'changed local greet(name)'); put(root, doc, edited);
+  assert.throws(() => live.finishRun(root, id, {}), /changed|Stale|modified|artifact/i, 'replacing delivery evidence cannot certify edited canonical context');
+});
+test('retention: linked context cannot write to another project', t => {
+  const root = fixture(t, { index: null, doc: null }), outside = fixture(t, { index: null, doc: null });
+  put(outside, 'feature.md', 'Outside bytes stay unchanged.');
+  try { fs.symlinkSync(outside, join(root, 'docs/linked-context'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('Host cannot create the isolated link fixture.'); throw error; }
+  const cfg = JSON.parse(readFileSync(join(root, '.cyc/config.json'))); cfg.context = { directory: 'docs/linked-context' }; put(root, '.cyc/config.json', JSON.stringify(cfg));
+  assert.throws(() => live.startRun(root, { goal: 'Add linked feature.', playbook: 'feature' }), /Linked path/);
+  assert.equal(readFileSync(join(outside, 'feature.md'), 'utf8'), 'Outside bytes stay unchanged.');
+});
+
+test('retention: historical seeding precedes the real background worker even when the seed write is delayed', async t => {
+  const root = fixture(t), cfg = JSON.parse(readFileSync(join(root, '.cyc/config.json')));
+  cfg.verification = { baseline: true, commands: [{ id: 'observed', command: process.execPath, args: ['-e', "const fs=require('node:fs');const id=fs.readdirSync('.cyc/runs').find(x=>fs.existsSync('.cyc/runs/'+x+'/state.json'));const state=JSON.parse(fs.readFileSync('.cyc/runs/'+id+'/state.json'));fs.writeFileSync('.cyc/runtime/observed-historical.json',JSON.stringify({retention:state.contextRetention??null}));process.exit(state.contextRetention?1:0)"] }] };
+  put(root, '.cyc/config.json', JSON.stringify(cfg));
+  const mode = process.env.CYC_BASELINE_MODE, rename = fs.renameSync; let stateWrites = 0, held = false;
+  process.env.CYC_BASELINE_MODE = 'background';
+  fs.renameSync = (from, to) => {
+    if (String(to).endsWith('state.json') && ++stateWrites === 2) {
+      const end = Date.now() + 10000;
+      while (!readdirSync(join(root, '.cyc/runtime')).some(p => p.endsWith('.ready.started')) && Date.now() < end) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+      assert(readdirSync(join(root, '.cyc/runtime')).some(p => p.endsWith('.ready.started')), 'a real existing worker reached the seed barrier');
+      assert.equal(fs.existsSync(join(root, '.cyc/runtime/observed-historical.json')), false, 'worker must not read unseeded current state');
+      held = true;
+    }
+    return rename(from, to);
+  }; syncBuiltinESMExports();
+  let id;
+  try { id = startRun(root, { goal: 'Exercise historical background measurement.', playbook: 'feature' }).runId; }
+  finally { fs.renameSync = rename; syncBuiltinESMExports(); mode === undefined ? delete process.env.CYC_BASELINE_MODE : process.env.CYC_BASELINE_MODE = mode; }
+  assert.equal(held, true);
+  const end = Date.now() + 15000;
+  while (!fs.existsSync(join(root, `.cyc/runs/${id}/baseline.json`)) && Date.now() < end) await new Promise(done => setTimeout(done, 25));
+  assert.equal(JSON.parse(readFileSync(join(root, '.cyc/runtime/observed-historical.json'))).retention, null);
+  assert.equal(JSON.parse(readFileSync(join(root, `.cyc/runs/${id}/baseline.json`))).results[0].exitCode, 0);
+  assert.equal(live.readRun(root, id).contextRetention, undefined);
 });

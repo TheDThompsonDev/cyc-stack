@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, renameSync, symlinkSync,
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { sourceSnapshot, startRun, quickHandoff, verifyRun, nextRun, readRun } from '../scripts/runtime.mjs';
+import { sourceSnapshot, startRun, quickHandoff, verifyRun, nextRun, readRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 
 function fixture(t, git = true) {

@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "recipes": [
     {
+      "id": "quality-contract-journeys",
+      "kind": "verification",
+      "description": "Exercise known authority/response contracts and external browser recipe isolation",
+      "covers": ["methods/cyc-scout/**", "methods/cyc-challenge/**", "methods/cyc-verify/**", "scripts/browser-audit.mjs", "scripts/project-tools.mjs", "test/quality-journeys.test.mjs", "test/browser-recipe.test.mjs"],
+      "command": "node",
+      "args": ["--test", "test/quality-journeys.test.mjs", "test/browser-recipe.test.mjs"],
+      "timeoutMs": 90000,
+      "expected": "Known inconsistent contract is detected, coherent controls pass; browser prerequisite/interruption contracts pass. Live desktop/phone assertions run only with the isolated harness and otherwise explicitly skip.",
+      "effects": "Isolated storage/session handlers and disposable browser preview; no external application/layout/configuration edits or model benchmark",
+      "prerequisites": ["Use the CYC development checkout", "For live browser checks: isolated .cyc/runtime/quality-efficiency/browser-harness Playwright/axe and a supported local browser; missing prerequisites do not establish browser success"],
+      "references": ["test/quality-journeys.test.mjs", "test/browser-recipe.test.mjs", "test-support/contract-journeys.mjs"]
+    },
+    {
       "id": "context-evidence",
       "kind": "investigation",
       "description": "Inspect selected CYC development context files for byte drift",

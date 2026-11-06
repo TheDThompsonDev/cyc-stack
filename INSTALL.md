@@ -16,6 +16,8 @@ npx cyc-stack@latest init
 
 Accept npm's download prompt if it appears. Add `--dry-run` to preview changes before installing. No source checkout or global installation is needed, and the command does not add a dependency to your application's `package.json`.
 
+Interactive terminals show a short installation summary, setup notes and the next step. Add `--json` for the complete structured result; piped output and `--verbose` continue to use JSON. Previews and conflicts are labeled explicitly.
+
 Installation adds CYC's engine, one public `cyc` skill and host hooks. CYC detects hosts from existing project files; if none are detected, it sets up all three supported hosts. It preserves existing project instructions and unrelated hooks, and refuses conflicts with unowned or customized files.
 
 ### 2. Set up CYC in your AI chat
@@ -85,7 +87,15 @@ claude plugin marketplace add TheDThompsonDev/cyc-stack
 claude plugin install cycstack@cycstack
 ```
 
-For **Codex desktop**, use a supported manual/local repository marketplace install of the full bundle. The repository catalog is `.agents/plugins/marketplace.json`; the compatibility manifest is `.codex-plugin/plugin.json`. CYC's lifecycle-hook plugin cannot currently be listed unchanged in OpenAI's public directory. Installing a skills-only listing on the web would not deploy local hooks. [OpenAI distribution limits](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks).
+For **Codex desktop**, register the public repository marketplace using a current Codex CLI:
+
+```sh
+codex plugin marketplace add TheDThompsonDev/cyc-stack
+```
+
+Restart the desktop app, open its plugin browser, select the **CYC Stack** marketplace and install **CYC Stack**. Review and trust its hooks through the host UI, then run setup. If your client lacks this marketplace command, use the [manual repository marketplace flow](https://developers.openai.com/plugins/build/plugins#install-a-local-plugin-manually).
+
+The repository catalog is `.agents/plugins/marketplace.json`. Root `plugin.json` is the portable manifest; `.codex-plugin/plugin.json` remains the compatibility fallback. The same npm archive contains both. CYC's lifecycle-hook plugin cannot currently be listed unchanged in OpenAI's public directory. Installing a skills-only listing on the web would not deploy local hooks. [OpenAI distribution limits](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks).
 
 For **Cursor**, use its native plugin flow with `.cursor-plugin/plugin.json`; the full bundle includes rules and Cursor-specific hooks. Local import can be restricted by team policy. Official marketplace listing is a separate review step. [Cursor plugin installation](https://cursor.com/docs/plugins).
 

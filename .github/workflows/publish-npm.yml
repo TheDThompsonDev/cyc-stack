@@ -50,9 +50,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: node --test
       - name: Pack reviewed candidate
-        run: |
-          mkdir release-assets
-          npm pack --ignore-scripts --pack-destination release-assets
-          sha256sum release-assets/*.tgz
+        run: npm run pack:release
+      - name: Retain the exact publication candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-candidate
+          path: release-assets/
       - name: Publish through npm OIDC
         run: npm publish release-assets/*.tgz --access public --tag "$RELEASE_CHANNEL" --ignore-scripts

@@ -12,13 +12,18 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? '')) {
   process.exit(1);
 }
 
-export const versionFiles = ['package.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.cursor-plugin/plugin.json'];
+export const versionFiles = ['package.json', 'plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.cursor-plugin/plugin.json'];
 for (const file of versionFiles) {
   const path = resolve(root, file);
   const value = JSON.parse(readFileSync(path, 'utf8'));
   value.version = version;
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
+const lockPath = resolve(root, 'package-lock.json');
+const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+lock.version = version;
+lock.packages[''].version = version;
+writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
 const marketplacePath = resolve(root, '.claude-plugin/marketplace.json');
 const marketplace = JSON.parse(readFileSync(marketplacePath, 'utf8'));
 for (const plugin of marketplace.plugins) if (plugin.name === 'cycstack' && Object.hasOwn(plugin, 'version')) plugin.version = version;

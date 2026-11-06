@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { atomicJSON, configuration, readRun, runCommands, sourceSnapshot } from './runtime.mjs';
+import { runBrowserAudit, validateBrowserPlan } from './browser-audit.mjs';
+import { canonicalPattern, matches, contextLocation } from './context-review.mjs';
 
 const registryName = 'docs/context/recipes.json';
 const indexName = 'docs/context/INDEX.md';
@@ -14,8 +16,7 @@ const idPattern = /^[a-z][a-z0-9-]{0,63}$/;
 const recipeKinds = ['investigation', 'verification'];
 
 function canonical(path, patterns = false) {
-  if (!text(path) || /[\\:\0]/.test(path) || (!patterns && /[*?\[\]{}]/.test(path)) || /[\[\]{}]/.test(path) || path.split('/').some(p => !p || p === '.' || p === '..')) throw Error(`Use canonical project-relative ${patterns ? 'patterns' : 'paths'}: ${path}`);
-  return path;
+  return canonicalPattern(path, { patterns });
 }
 
 // Reject linked ancestors even inside the project: receipts must remain excluded
@@ -29,19 +30,6 @@ function local(root, path) {
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   return current;
-}
-
-function matches(pattern, path) {
-  canonical(pattern, true); canonical(path);
-  let regex = '';
-  for (let i = 0; i < pattern.length; i++) {
-    if (pattern[i] === '*' && pattern[i + 1] === '*') { i++; if (pattern[i + 1] === '/') { i++; regex += '(?:.*/)?'; } else regex += '.*'; }
-    else if (pattern[i] === '*') regex += '[^/]*';
-    else if (pattern[i] === '?') regex += '[^/]';
-    else regex += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-  const prefix = pattern.split(/[?*]/)[0].replace(/\/$/, '');
-  return new RegExp(`^${regex}$`).test(path) || (prefix && (prefix === path || prefix.startsWith(path + '/'))) || (!/[?*]/.test(pattern) && path.startsWith(pattern + '/'));
 }
 
 function selection(root, { paths = [], goal = '', run } = {}) {
@@ -72,6 +60,7 @@ function registry(root) {
     ids.add(recipe.id);
     if (recipe.command.includes('\0') || recipe.args.some(arg => arg.includes('\0'))) throw Error('Recipe command/args cannot contain null bytes.');
     recipe.covers.forEach(p => canonical(p, true));
+    if (recipe.browser !== undefined) { validateBrowserPlan(recipe.browser); recipe.browser.prerequisiteFiles.forEach(p => canonical(p)); }
     for (const name of recipe.references) if (!lstatSync(local(root, name)).isFile()) throw Error(`Recipe reference is not a regular file: ${name}`);
     if (recipe.timeoutMs !== undefined && (!Number.isSafeInteger(recipe.timeoutMs) || recipe.timeoutMs <= 0 || recipe.timeoutMs > 2147483647)) throw Error('Recipe timeoutMs must be between 1 and 2147483647.');
   }
@@ -89,6 +78,7 @@ function receiptStatus(root, recipe, loaded, environment) {
     const result = receipt.results?.[0];
     const current = environment();
     if (receipt.schemaVersion !== 1 || receipt.recipeHash !== hash(JSON.stringify(recipe)) || receipt.registryHash !== loaded.hash || receipt.sourceHash !== current.sourceHash || receipt.configHash !== current.configHash) return { status: 'stale', receiptPath };
+    if (recipe.browser) return { status: receipt.passed && receipt.browser?.status === 'passed' && receipt.sourceStable && receipt.definitionStable && receipt.configStable ? 'passed' : receipt.browser?.status ?? 'failed', receiptPath, checkedAt: receipt.checkedAt };
     const passed = receipt.passed === true && receipt.sourceStable === true && receipt.definitionStable === true && receipt.configStable === true && receipt.results.length === 1 && result.id === recipe.id && result.command === recipe.command && JSON.stringify(result.args) === JSON.stringify(recipe.args) && result.passed === true && result.exitCode === 0 && !result.error;
     return { status: passed ? 'passed' : 'failed', receiptPath, checkedAt: receipt.checkedAt };
   } catch { return { status: 'invalid', receiptPath }; }
@@ -129,6 +119,7 @@ export function contextLinks(cell) {
 }
 
 export function investigateProject(target, options = {}) {
+  const { index: indexName } = contextLocation(realpathSync(target));
   validateRecipeKind(options.kind);
   const root = realpathSync(target), selected = selection(root, options), limit = options.limit ?? 8;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw Error('Limit must be between 1 and 50.');
@@ -172,10 +163,21 @@ export function investigateProject(target, options = {}) {
     note: 'Paths and records are leads, not an exhaustive dependency map. Read matched records and inspect current consumers. Matching bytes do not establish semantic correctness. Project commands were not executed.' };
 }
 
-export function runRecipe(target, id, { run } = {}) {
+export function runRecipe(target, id, { run, driver, scanner, signal } = {}) {
   const root = realpathSync(target), loaded = registry(root), recipe = loaded.recipes.find(r => r.id === id);
   if (!recipe) throw Error(`Unknown recipe: ${id}`);
   if (run && readRun(root, run).status !== 'running') throw Error('Recipe execution associated with a run needs that run to be running.');
+  if (recipe.browser) {
+    const before = sourceSnapshot(root), configBefore = configHash(root);
+    return runBrowserAudit(root, recipe.browser, { driver, scanner, signal }).then(browser => {
+      const after = sourceSnapshot(root), configAfter = configHash(root), definitionStable = registry(root).hash === loaded.hash;
+      const receipt = { schemaVersion: 1, recipe: id, kind: recipe.kind, runId: run ?? null, checkedAt: new Date().toISOString(), registryHash: loaded.hash, recipeHash: hash(JSON.stringify(recipe)), sourceHash: after.hash, configHash: configAfter, sourceStable: before.hash === after.hash, definitionStable, configStable: configBefore === configAfter, browser };
+      receipt.passed = browser.ok && receipt.sourceStable && definitionStable && receipt.configStable;
+      const receiptPath = `.cyc/runtime/recipes/${id}/${Date.now()}-${randomUUID()}.json`;
+      atomicJSON(local(root, receiptPath), receipt);
+      return { ...browser, ok: receipt.passed, recipe: id, receiptPath, expected: recipe.expected, note: 'Named external browser/scanner observations; no command receipt or native activation is inferred.' };
+    });
+  }
   local(root, `.cyc/runtime/recipes/${id}`); // Validate receipt ancestors before execution.
   const before = sourceSnapshot(root), configBefore = configHash(root);
   if (before.skipped.length) throw Error('Recipe verification cannot cover linked source; inspect the links first.');

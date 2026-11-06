@@ -31,6 +31,10 @@ Your job is to break it, not to praise it. "No findings" is a valid result; manu
 
 ## Done when
 
+Prioritize demonstrated authority/state transitions before cosmetic findings. For a new protected consumer, call the existing writer, existing status reader, and new protected read/write boundaries together, especially with conflicting legacy/canonical records. Require one shared authoritative resolver or explicit reconciliation. A new resolver passing its own tests does not establish agreement with the existing writer.
+
+For asynchronous reads **and writes**, validate returned actor/resource against the captured operation context before merging data or acknowledging success. Test a mismatched send response while visible props and cached identity remain unchanged; rerender/unmount is a different case. Older operation/context responses must not merge. Keep server authorization separate: client rejection cannot reverse a completed server write. If switched-session writes must be prevented, require a server-verified expected-session precondition. Preserve acknowledged sends when an older empty history poll resolves. Retain history continuity and keyboard/return-focus review.
+
 Each Act-on item has a location, the triggering condition, the consequence, the evidence (with its rung from [Impact](../cyc-impact/SKILL.md)), and the smallest fix or test. Every axis has either findings or a line saying what was examined.
 
 ## Anti-patterns

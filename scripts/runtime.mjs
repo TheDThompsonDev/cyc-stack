@@ -7,10 +7,12 @@ import { hostname, tmpdir } from 'node:os';
 import { digest } from './response-gate.mjs';
 import { getPlaybook, routeTask } from './catalog.mjs';
 import { forgetDisproved, inspectSource as inspectSourceFiles, saveCache, sourcePolicy } from './source-snapshot.mjs';
-import { assessmentRequirements, assessmentTemplate, derivedAssessment, renderReview, reviewPath, validateAssessment } from './work-review.mjs';
+import { assessmentRequirements, assessmentTemplate, derivedAssessment, renderReview, reviewPath, validateAssessment, reviewCoverage, reviewCurrent, validateProofReview } from './work-review.mjs';
 import { recoveryGuidance } from './recovery.mjs';
-import { cutOff, outputLimit, stable, summarizeTests, testsOf } from './test-output.mjs';
+import { cutOff, outputLimit, stable, summarizeTests, testsOf, failureHint } from './test-output.mjs';
 import { runPacketDigest, writeRunPacket } from './packet.mjs';
+import { artifactFiles, resolveExecution } from './execution.mjs';
+import { planRetention, retentionOf, prepareRetention, checkRetention, contextLocation, isComponentDoc, parseDoc } from './context-review.mjs';
 export { sourceSnapshot } from './source-snapshot.mjs';
 
 const text = value => typeof value === 'string' && value.trim().length > 0;
@@ -30,6 +32,7 @@ const slash = path => path.split(sep).join('/');
 let cacheStage = null;
 // The operation lock this process holds, so a running check can record how long it may last.
 let activeOwnership = null;
+let activeProgress = null;
 const inspectSource = (root, options) => inspectSourceFiles(root, { ...options, writeCache: cacheStage ?? false });
 const sourceSnapshot = (root, options) => inspectSource(root, options).snapshot;
 // Views between checks reuse cached hashes. Snapshots that record evidence, at run start, around
@@ -156,6 +159,7 @@ export function configuration(root) {
     if (!limitKeys.includes(key) || !Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid run limit: ${key}`);
   }
   const commands = config.verification?.commands ?? [];
+  validateCommands(commands, 'verification.commands');
   if (!Array.isArray(commands)) throw new Error('verification.commands must be an array.');
   const ids = new Set();
   for (const command of commands) {
@@ -166,6 +170,35 @@ export function configuration(root) {
   if (config.verification?.baseline !== undefined && typeof config.verification.baseline !== 'boolean') throw new Error('verification.baseline must be true or false.');
   const ledgerPath = normalizePaths(root, [config.context?.ledgerPath ?? (existsSync(resolve(root, 'INCIDENT-LEDGER.md')) ? 'INCIDENT-LEDGER.md' : 'docs/context/error-ledger.md')], 'context.ledgerPath')[0];
   return { limits, commands, ledgerPath, baseline: config.verification?.baseline === true, protectedPaths: normalizePaths(root, ['.cyc/config.json', ...(config.protectedPaths ?? [])], 'protectedPaths') };
+}
+function validateCommands(commands, label) {
+  if (!Array.isArray(commands) || new Set(commands.map(c => c?.id)).size !== commands.length || commands.some(c => !text(c?.id) || !text(c.command) || !Array.isArray(c.args) || c.args.some(a => typeof a !== 'string' || a.includes('\0')) || (c.timeoutMs !== undefined && (!Number.isSafeInteger(c.timeoutMs) || c.timeoutMs <= 0)))) throw new Error(`${label} needs unique id, command, string args and positive timeoutMs.`);
+  for (const command of commands) if (command.reuse !== undefined && (command.reuse?.kind !== 'local-deterministic' || !Array.isArray(command.reuse.inputs) || command.reuse.inputs.some(p => !text(p)))) throw new Error(`${label}.reuse needs {kind:"local-deterministic", inputs:[explicit dependency/input paths]}; external or freshness-dependent checks cannot opt in.`);
+}
+// This is a compatibility key, not a second cache. Environment values are hashed, never logged.
+// Unknown executables, links or an excessive dependency tree disable reuse conservatively.
+function measurementInputs(root, commands) {
+  const files = {}; let count = 0, bytes = 0, limitation = null;
+  const visit = (path, key) => {
+    const info = lstatSync(path);
+    if (info.isSymbolicLink()) throw new Error(`Linked dependency: ${key}`);
+    if (info.isDirectory()) { files[key] = 'directory'; for (const name of readdirSync(path).sort()) visit(resolve(path, name), `${key}/${name}`); }
+    else if (info.isFile()) { if (++count > 50000 || (bytes += info.size) > 512 * 1024 * 1024) throw new Error('Dependency inputs exceed bounded reuse inspection.'); files[key] = digest(readFileSync(path)); }
+    else throw new Error(`Nonregular input: ${key}`);
+  };
+  try {
+    files.node = digest(readFileSync(process.execPath));
+    if (existsSync(resolve(root, 'node_modules'))) visit(resolve(root, 'node_modules'), 'node_modules');
+    for (const command of commands) {
+      const candidates = isAbsolute(command.command) ? [command.command] : [resolve(root, command.command), ...(process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':').flatMap(folder => [resolve(folder, command.command), ...(process.platform === 'win32' ? (process.env.PATHEXT ?? '.EXE;.CMD').split(';').map(ext => resolve(folder, command.command + ext.toLowerCase())) : [])])];
+      const executable = candidates.find(path => { try { return lstatSync(path).isFile(); } catch { return false; } });
+      if (!executable) throw new Error(`Cannot bound executable ${command.command}`);
+      files[`executable:${command.id}`] = digest(readFileSync(realpathSync(executable)));
+      for (const path of command.reuse?.inputs ?? []) visit(projectFile(root, path), path);
+    }
+  } catch (error) { limitation = error.message; }
+  const key = digest(JSON.stringify({ files, commands, config: existsSync(resolve(root, '.cyc/config.json')) ? digest(readFileSync(resolve(root, '.cyc/config.json'))) : null, node: process.versions, platform: process.platform, arch: process.arch, environment: digest(JSON.stringify(Object.entries(process.env).filter(([name]) => name !== 'CODEX_TOOL_CALL_ID').sort())) }));
+  return { key, bounded: limitation === null, suitable: !limitation && commands.every(c => c.reuse?.kind === 'local-deterministic'), limitation };
 }
 
 function runPath(root, id) {
@@ -188,7 +221,7 @@ export function activeRun(root, session = callerSession()) {
     .map(entry => { try { return json(resolve(directory, entry.name, 'state.json')); } catch { return null; } })
     .filter(run => run && ['running', 'paused', 'blocked'].includes(run.status));
   const key = session === undefined ? undefined : gateSession(root, session);
-  const candidates = key === undefined ? runs : runs.filter(run => run.session === key || !run.session);
+  const candidates = key === undefined ? runs.filter(run => !run.execution?.conversationId) : runs.filter(run => run.execution ? run.execution.conversationId === session || (!run.execution.conversationId && !run.session) : run.session === key || !run.session);
   if (candidates.length === 1) return candidates[0].id;
   if (!candidates.length) throw new Error(key === undefined || !runs.length ? 'No active CYC run in this project. Start one with run start, or pass --run ID for a finished run.' : `No active run for session ${key}; other conversations' runs are not selected implicitly. Pass --run ID.`);
   throw new Error(`Several runs are active: ${candidates.map(run => `${run.id} (${run.status}: ${run.goal.slice(0, 60)})`).join('; ')}. Pass --run ID or --session.`);
@@ -335,7 +368,9 @@ function withWorkspaceLock(root, operation, protectedPaths, work) {
 }
 
 function transact(root, id, work) {
+  if (operationCancelled() && !activeProgress.stopping) throw new Error('Operation cancelled; no further workflow stages will advance.');
   const path = runPath(root, id);
+  assertRunOwner(root, json(path));
   return withWorkspaceLock(root, `update run ${id}`, json(path).protectedPaths, ownership => {
     const lock = `${path}.lock`;
     // The run lock is taken only while holding the workspace lock, so one left behind belongs to an
@@ -375,6 +410,14 @@ function transact(root, id, work) {
 function requireActive(state) {
   if (state.status !== 'running') throw new Error(`Run is ${state.status}; it cannot advance.`);
   if (state.engineVersion && state.engineVersion !== engineVersion) throw new Error(`Run started with CYC ${state.engineVersion}, current engine is ${engineVersion}. Stop this run, reload host skills, and explicitly start a new run; previous evidence is retained.`);
+}
+export function assertRunOwner(root, state) {
+  if (!state.execution) return;
+  const execution = state.execution, caller = callerSession();
+  if (execution.conversationId && execution.conversationId !== caller) throw new Error(`Run ${state.id} belongs to conversation ${execution.conversationId}; the current conversation cannot mutate it.`);
+  if (execution.gateSession && !caller) throw new Error(`Run ${state.id} needs its current conversation context before mutation.`);
+  const observed = resolveExecution(root, { executionMode: execution.mode, conversationId: execution.gateSession ? caller : execution.conversationId ?? undefined, ...(execution.gateSession ? {} : { session: execution.workflowSession ?? undefined }) });
+  if (execution.gateSession && observed.gateSession !== execution.gateSession) throw new Error(`Run ${state.id} belongs to native gate ${execution.gateSession}; the current conversation cannot mutate it.`);
 }
 function budget(state) {
   if (!state.limits.maxDurationMs || Date.now() - Date.parse(state.startedAt) < state.limits.maxDurationMs) return true;
@@ -454,7 +497,14 @@ const tailBytes = outputLimit * 4;
 export function runCheckProcess(spec, io) {
   return new Promise(finish => {
     const streams = {};
-    let child, timedOut = false, failure = null, done = false, grace, drain, watch;
+    let child, timedOut = false, failure = null, done = false, grace, drain, watch, progressTimer, lastOutputAt = null, lastProgressAt = 0;
+    const report = status => {
+      if (!spec.progressPath) return;
+      lastProgressAt = Date.now();
+      const latestOutput = Object.values(streams).map(s => Buffer.concat(s.tail).toString('utf8')).join('\n').slice(-2000);
+      const record = { ...spec.progress, status, check: spec.checkId, elapsedSeconds: (Date.now() - Date.parse(spec.progress.startedAt)) / 1000, latestOutput, lastOutputAt, logs: { stdout: spec.stdout, stderr: spec.stderr }, updatedAt: new Date().toISOString() };
+      try { const temp = `${spec.progressPath}.${process.pid}.tmp`; io.writeFileSync(temp, JSON.stringify(record)); io.renameSync(temp, spec.progressPath); } catch { /* a lost progress update cannot decide the check */ }
+    };
     const stop = () => {
       if (!child?.pid) return;
       if (process.platform === 'win32') {
@@ -466,25 +516,30 @@ export function runCheckProcess(spec, io) {
     const end = status => {
       if (done) return;
       done = true;
-      clearTimeout(timer); clearTimeout(grace); clearTimeout(drain); clearInterval(watch);
+      clearTimeout(timer); clearTimeout(grace); clearTimeout(drain); clearInterval(watch); clearInterval(progressTimer);
       const bytes = {}, stored = {}, tailPeak = {};
       for (const [name, stream] of Object.entries(streams)) {
         io.closeSync(stream.fd);
         io.writeFileSync(`${spec[name]}.tail`, Buffer.concat(stream.tail).subarray(-spec.tailBytes));
         bytes[name] = stream.bytes; stored[name] = stream.stored; tailPeak[name] = stream.tailPeak;
       }
+      report(timedOut ? 'timeout' : failure?.code === 'CYC_CHECK_CANCELLED' ? 'cancelled' : failure?.code === 'CYC_CONTROLLER_ENDED' ? 'interrupted' : failure ? 'crashed' : 'check-complete');
       finish({ status: timedOut ? null : status, timedOut, error: failure, bytes, stored, tailPeak });
     };
     // A process that ignores the kill and keeps its output open must not hold the controller.
     const timer = setTimeout(() => { timedOut = true; stop(); grace = setTimeout(() => end(null), 5000); }, spec.timeoutMs);
-    if (spec.parentPid) {
+    if (spec.parentPid || spec.cancelPath) {
       watch = setInterval(() => {
-        try { process.kill(spec.parentPid, 0); } catch (error) { if (error.code === 'ESRCH') { stop(); failure = { code: 'CYC_CONTROLLER_ENDED', message: 'The controller ended while the check ran.' }; end(null); } }
-      }, 500);
+        if (spec.cancelPath && io.existsSync(spec.cancelPath)) { failure = { code: 'CYC_CHECK_CANCELLED', message: 'Check cancelled by the owned stop request.' }; stop(); end(null); return; }
+        if (spec.parentPid) try { process.kill(spec.parentPid, 0); } catch (error) { if (error.code === 'ESRCH') { failure = { code: 'CYC_CONTROLLER_ENDED', message: 'The controller ended while the check ran.' }; stop(); end(null); } }
+      }, 200);
     }
-    if (spec.forwardSignals) for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { stop(); process.exit(1); });
+    if (spec.forwardSignals) for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { failure = { code: 'CYC_CHECK_CANCELLED', message: `Check cancelled by ${signal}.` }; stop(); end(null); });
     for (const name of ['stdout', 'stderr']) streams[name] = { fd: io.openSync(spec[name], 'w'), bytes: 0, stored: 0, tail: [], tailLength: 0, tailPeak: 0 };
+    report('running');
+    if (spec.progressPath) progressTimer = setInterval(() => report('running'), 1000);
     const env = { ...process.env };
+    delete env.CODEX_TOOL_CALL_ID; // invocation transport metadata is neither a check input nor a reusable context
     if (spec.nodeOptions === null) delete env.NODE_OPTIONS; else if (spec.nodeOptions !== undefined) env.NODE_OPTIONS = spec.nodeOptions;
     try { child = io.spawn(spec.command, spec.args, { cwd: spec.cwd, env, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' }); }
     catch (error) { failure = { code: error.code ?? null, message: error.message }; end(null); return; }
@@ -496,10 +551,13 @@ export function runCheckProcess(spec, io) {
           // A write that fails (a full disk) stops storing; the stream then counts as cut off.
           try { stream.stored += io.writeSync(stream.fd, chunk, 0, Math.min(chunk.length, spec.limit - stream.stored)); } catch { /* stored stays short of bytes */ }
         }
+        const firstOutput = lastOutputAt === null;
         stream.bytes += chunk.length;
+        lastOutputAt = new Date().toISOString();
         stream.tail.push(chunk); stream.tailLength += chunk.length;
         while (stream.tailLength - stream.tail[0].length >= spec.tailBytes) stream.tailLength -= stream.tail.shift().length;
         stream.tailPeak = Math.max(stream.tailPeak, stream.tailLength);
+        if (firstOutput || Date.now() - lastProgressAt >= 250) report('running');
       });
     }
     child.on('error', error => { failure = { code: error.code ?? null, message: error.message }; if (!child.pid) end(null); });
@@ -544,18 +602,21 @@ function readOutput(path, bytes, stored, limit) {
   return { whole: null, tail: keepTail(readFileSync(`${path}.tail`).toString('utf8')) };
 }
 
-export function runCommands(root, commands, remaining = () => Infinity, { readLimit = outputReadLimit } = {}) {
+export function runCommands(root, commands, remaining = () => Infinity, { readLimit = outputReadLimit, phase = 'candidate' } = {}) {
   const results = [];
   for (const command of commands) {
+    if (operationCancelled()) throw Object.assign(new Error('Operation cancelled before the next check; proof restoration still runs.'), { code: 'CYC_OPERATION_CANCELLED' });
     const left = remaining();
     if (left <= 0) break;
     const timeoutMs = Math.min(command.timeoutMs ?? defaultCheckTimeoutMs, left);
-    const folder = checkFolder(root);
+    const logsRoot = activeProgress ? projectFile(root, `.cyc/runs/${activeProgress.runId}/check-logs`) : null;
+    if (logsRoot) mkdirSync(logsRoot, { recursive: true });
+    const folder = logsRoot ? mkdtempSync(resolve(logsRoot, 'check-')) : checkFolder(root);
     let run, stdout = '', stderr = '', tests = null;
     try {
       const file = name => resolve(folder, name);
       // The runner gets no NODE_OPTIONS, so a preload cannot break it; the check still gets them.
-      const spec = { command: command.command, args: command.args ?? [], cwd: root, timeoutMs, limit: readLimit, tailBytes, stdout: file('stdout'), stderr: file('stderr'), parentPid: process.pid, forwardSignals: true, nodeOptions: process.env.NODE_OPTIONS ?? null };
+      const spec = { command: command.command, args: command.args ?? [], cwd: root, timeoutMs, limit: readLimit, tailBytes, stdout: file('stdout'), stderr: file('stderr'), parentPid: process.pid, forwardSignals: true, nodeOptions: process.env.NODE_OPTIONS ?? null, ...(activeProgress ? { cancelPath: activeProgress.cancelPath, progressPath: activeProgress.path, progress: { ...activeProgress, phase }, checkId: command.id } : {}) };
       writeFileSync(file('runner.cjs'), checkRunnerSource);
       writeFileSync(file('spec.json'), JSON.stringify(spec));
       const { NODE_OPTIONS, ...env } = process.env;
@@ -577,7 +638,7 @@ export function runCommands(root, commands, remaining = () => Infinity, { readLi
     } finally {
       // A scanner can still hold the files open on Windows; a folder left in the temp directory
       // must not decide the check.
-      try { rmSync(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* left for the system's temp cleanup */ }
+      if (!activeProgress) try { rmSync(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* left for the system's temp cleanup */ }
     }
     // A check cut short by the run's own deadline needs a longer budget, not a longer timeout.
     const error = !run.timedOut ? run.error?.message ?? null
@@ -585,6 +646,7 @@ export function runCommands(root, commands, remaining = () => Infinity, { readLi
       : `Check timed out after ${timeoutMs} ms. If it needs longer, give it a larger timeoutMs; a check without one gets ${defaultCheckTimeoutMs / 60000} minutes.`;
     results.push({ id: command.id, command: command.command, args: command.args, exitCode: run.status,
       passed: run.status === 0 && !run.error && !run.timedOut, stdout, stderr, ...(tests ? { tests } : {}), error, errorCode: run.timedOut ? 'ETIMEDOUT' : run.error?.code ?? null, timeoutMs });
+    if (run.error?.code === 'CYC_CHECK_CANCELLED') break;
   }
   return results;
 }
@@ -618,7 +680,7 @@ export function measureBaseline(root, id) {
     try { atomicJSON(path, record); } catch { /* the run may have been removed */ }
     return record;
   }
-  const base = { cacheKey: state.baseline.cacheKey, sourceHash: state.baseline.sourceHash, startedAt: new Date().toISOString() };
+  const base = { role: 'original-only', inputs: state.baseline.inputs, cacheKey: state.baseline.cacheKey, sourceHash: state.baseline.sourceHash, startedAt: new Date().toISOString() };
   let record;
   try {
     // The agent's first command and this measurement both take the operation lock. The measurement
@@ -630,12 +692,13 @@ export function measureBaseline(root, id) {
       const results = runCommands(root, state.commands).map(measuredResult);
       const after = sourceSnapshot(root);
       // Edits by the agent, another session, or a file-writing check make the measurement unreliable.
-      const clean = before.hash === state.baseline.sourceHash && after.hash === state.baseline.sourceHash;
+      const inputs = state.baseline.inputs ? measurementInputs(root, state.commands) : null;
+      const clean = before.hash === state.baseline.sourceHash && after.hash === state.baseline.sourceHash && (!inputs || inputs.bounded && inputs.key === state.baseline.inputs.key);
       return clean
         ? { ...base, status: 'complete', checkedAt: new Date().toISOString(), results }
         : { ...base, status: 'invalid', checkedAt: new Date().toISOString(), results, reason: 'Project files changed while the baseline was measured (an edit started before it finished, another session edited the folder, or a configured check writes files). Pre-existing failures cannot be accepted for this run.' };
     }));
-    if (record.status === 'complete') cacheBaseline(root, record);
+    if (record.status === 'complete' && state.baseline.inputs?.suitable) cacheBaseline(root, record);
   } catch (error) {
     record = { ...base, status: 'error', reason: error.message };
   }
@@ -653,6 +716,78 @@ function retryWhileBusy(work, { attempts = 40, delayMs = 250 } = {}) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
     }
   }
+}
+
+const progressPath = (root, id) => projectFile(root, `.cyc/runs/${id}/progress.json`);
+const cancellationPath = (root, id, operationId) => projectFile(root, `.cyc/runs/${id}/operations/${operationId}.cancel.json`);
+const operationCancelled = () => Boolean(activeProgress?.cancelPath && existsSync(activeProgress.cancelPath));
+const sameLockIdentity = owner => Object.entries(lockIdentity()).every(([key, value]) => (owner[key] ?? null) === value);
+function operationView(root, id, operationId) {
+  const record = json(progressPath(root, id));
+  if (record.operationId !== operationId) throw new Error('Unknown or superseded operation handle; use the exact run/operation IDs returned by the controller.');
+  if (!record.result && !record.error && record.workerPid && sameLockIdentity(record) && !processAlive(record.workerPid)) return { ...record, status: 'crashed', error: { message: 'Operation worker ended without a result. Use run recover with this run ID; retain ownership and any proof backup.' } };
+  return { ...record, elapsedSeconds: (Date.now() - Date.parse(record.startedAt)) / 1000 };
+}
+export function waitOperation(root, id, operationId, waitMs = 30000) {
+  assertRunOwner(root, readRun(root, id));
+  if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > 60000) throw new Error('waitMs must be 0-60000; use a bounded 30000-60000 ms wait when the host permits.');
+  const deadline = Date.now() + waitMs;
+  let view;
+  do {
+    view = operationView(root, id, operationId);
+    if (view.result || view.error || Date.now() >= deadline) break;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(200, deadline - Date.now()));
+  } while (true);
+  const { path, ...safe } = view;
+  return { ...safe, runId: id, operationId, operationComplete: Boolean(view.result || view.error), finished: view.result?.finished === true, ...(view.error ? { ok: false } : {}), nextAction: view.result?.nextAction ?? (view.result || view.error ? null : { action: 'wait', command: `run wait --run ${id} --operation ${operationId} --wait-ms 30000`, instruction: 'This background operation remains active. Wait on this handle; locks are reserved for ownership/recovery.' }) };
+}
+export function startOperation(root, id, { action, input = {}, waitMs = 30000 } = {}) {
+  const state = readRun(root, id); assertRunOwner(root, state); requireActive(state);
+  if (!['finish', 'verify', 'prove-red'].includes(action)) throw new Error('Background operation must be finish, verify or prove-red.');
+  if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > 60000) throw new Error('waitMs must be 0-60000.');
+  let pending;
+  try { pending = json(progressPath(root, id)); } catch { /* no active handle */ }
+  if (pending && !pending.result && !pending.error && pending.workerPid && processAlive(pending.workerPid)) return waitOperation(root, id, pending.operationId, waitMs);
+  const operationId = withWorkspaceLock(root, `launch ${action} run ${id}`, state.protectedPaths, () => {
+    const operationId = randomUUID(), requestPath = projectFile(root, `.cyc/runs/${id}/operations/${operationId}.json`);
+    atomicJSON(requestPath, { action, input });
+    const record = { runId: id, operationId, action, phase: 'starting', status: 'running', startedAt: new Date().toISOString(), latestOutput: '', lastOutputAt: null, ...lockIdentity() };
+    const worker = spawn(process.execPath, [fileURLToPath(new URL('./run-worker.mjs', import.meta.url)), root, id, operationId], { cwd: tmpdir(), detached: true, windowsHide: true, stdio: 'ignore' });
+    record.workerPid = worker.pid ?? null;
+    if (!worker.pid) record.error = { message: 'Operation worker could not start.' };
+    atomicJSON(progressPath(root, id), record);
+    worker.on('error', error => atomicJSON(progressPath(root, id), { ...record, status: 'crashed', error: { message: error.message } })); worker.unref();
+    return operationId;
+  });
+  return waitOperation(root, id, operationId, waitMs);
+}
+export function executeOperation(root, id, operationId) {
+  if (!/^[a-f0-9-]{36}$/.test(operationId ?? '')) throw new Error('Invalid operation ID.');
+  const path = progressPath(root, id), initial = operationView(root, id, operationId);
+  if (initial.workerPid !== process.pid) throw new Error('Operation belongs to a different worker.');
+  const request = json(projectFile(root, `.cyc/runs/${id}/operations/${operationId}.json`));
+  activeProgress = { ...initial, path, cancelPath: cancellationPath(root, id, operationId), phase: request.action };
+  const acknowledgeStop = () => {
+    if (!operationCancelled()) return false;
+    const state = readRun(root, id);
+    activeProgress.stopping = true;
+    try { if (!terminal.has(state.status)) controlRun(root, id, 'stop'); }
+    finally { activeProgress.stopping = false; }
+    return true;
+  };
+  try {
+    if (operationCancelled()) throw new Error('Operation cancelled before starting.');
+    const result = retryWhileBusy(() => request.action === 'finish' ? finishRun(root, id, request.input) : request.action === 'prove-red' ? proveRun(root, id, request.input) : verifyRun(root, id));
+    const cancelled = acknowledgeStop();
+    if (cancelled) Object.assign(result, { cancelled: true, passed: false, finished: false, status: readRun(root, id).status });
+    if (result.results) result.results = result.results.map(({ stdout, stderr, ...r }) => ({ ...r, outputTail: `${stdout ?? ''}\n${stderr ?? ''}`.slice(-2000) }));
+    const latest = json(path);
+    atomicJSON(path, { ...latest, status: cancelled ? 'cancelled' : 'finished', completedAt: new Date().toISOString(), result });
+  } catch (error) {
+    const cancelled = acknowledgeStop();
+    const latest = json(path);
+    atomicJSON(path, { ...latest, status: cancelled ? 'cancelled' : 'failed', completedAt: new Date().toISOString(), error: { message: error.message, field: error.field, repairTemplate: error.repairTemplate, setup: error.setup } });
+  } finally { activeProgress = null; }
 }
 
 // The background worker's process, recorded at start so a worker that ended without writing its
@@ -761,6 +896,7 @@ function testProofStatus(root, state, snapshot = null) {
   const proof = state.testProof;
   if (!proof?.passed) return { required: true, mode, status: proof ? 'failed' : 'missing', command: `run prove-red --run ${state.id}`, ...(proof ? { verdict: proof.verdict } : {}) };
   const files = (snapshot ?? cachedSnapshot(root)).files;
+  if (proof.commandPlanHash && (proof.commandPlanHash !== digest(JSON.stringify(state.proofCommands ?? state.commands)) || proof.inputs?.key !== measurementInputs(root, state.proofCommands ?? state.commands).key)) return { required: true, mode, status: 'stale', stale: ['proof commands/toolchain/environment/dependencies'], command: `run prove-red --run ${state.id}` };
   const stale = Object.entries(proof.testFiles).filter(([path, hash]) => files[path] !== hash).map(([path]) => path);
   return stale.length ? { required: true, mode, status: 'stale', stale, command: `run prove-red --run ${state.id}` } : { required: true, mode, status: 'proven', testFiles: Object.keys(proof.testFiles) };
 }
@@ -770,7 +906,7 @@ function testProofStatus(root, state, snapshot = null) {
 // project must pass, so the failure comes from the new tests. Refactors must stay green, which
 // shows the tests pin behavior the original code already had. Files are restored afterwards; a
 // backup stays until the restored tree matches the pre-proof snapshot exactly.
-export function proveRun(root, id, { tests } = {}) {
+export function proveRun(root, id, { tests, measureOriginal = false } = {}) {
   return transact(root, id, (state, ownership) => {
     requireActive(state);
     if (!budget(state) || !guard(root, state)) return state;
@@ -780,6 +916,9 @@ export function proveRun(root, id, { tests } = {}) {
     const baseline = currentBaseline(root, state);
     if (baseline?.status === 'pending') throw new Error('The baseline is still measuring in the background. Try again when run next shows it complete.');
     const mode = state.playbook === 'refactor' ? 'green' : 'red';
+    const proofCommands = state.proofCommands ?? state.commands;
+    const proofInputs = measurementInputs(root, proofCommands);
+    if (typeof measureOriginal !== 'boolean') throw new Error('measureOriginal must be boolean.');
     const before = sourceSnapshot(root);
     const initial = state.initialSource.files;
     const changed = [...new Set([...Object.keys(initial), ...Object.keys(before.files)])].filter(path => initial[path] !== before.files[path]);
@@ -868,10 +1007,16 @@ export function proveRun(root, id, { tests } = {}) {
       }
       return added;
     };
-    let treatment; let control = null; let controlSource = null; let added = null; let failure;
+    let treatment; let control = null; let broadControl = null; let broadInputs = null; let controlSource = null; let added = null; let failure; let reusedTreatmentFrom = null;
+    let previous = null;
+    if (measureOriginal && state.testProof?.passed && state.testProof.commandPlanHash === digest(JSON.stringify(proofCommands)) && state.testProof.inputs?.bounded && state.testProof.inputs.key === proofInputs.key && Object.entries(state.testProof.testFiles).every(([path, hash]) => before.files[path] === hash) && testFiles.length === Object.keys(state.testProof.testFiles).length) {
+      assertArtifacts(root, [{ path: state.testProof.receiptPath, sha256: state.testProof.receiptHash }]);
+      previous = json(projectFile(root, state.testProof.receiptPath)); reusedTreatmentFrom = state.testProof.receiptPath;
+    }
     try {
       apply(sourceFiles, originals);
-      if (!conflicts.size) treatment = runCommands(root, state.commands);
+      if (!conflicts.size) treatment = previous?.treatment ?? runCommands(root, proofCommands, undefined, { phase: 'original-plus-new-tests' });
+      if (operationCancelled()) throw Object.assign(new Error('Original-source proof cancelled.'), { code: 'CYC_OPERATION_CANCELLED' });
       inspect();
       if (!conflicts.size && mode === 'red') {
         // The control run measures the run-start code, to tell a failure the new tests cause from
@@ -879,10 +1024,15 @@ export function proveRun(root, id, { tests } = {}) {
         // check (the new tests would not catch the change), or when every failure is in a new file.
         added = treatment.every(result => result.passed) ? {} : failuresInNewTestFiles(treatment);
         if (added) controlSource = Object.keys(added).length ? 'not needed: every failure is in a test file this change added' : 'not needed: every check passed with the new tests';
-        else if (baseline?.status === 'complete' && baseline.sourceHash === state.initialSource.hash) { control = baseline.results; controlSource = 'baseline at run start'; }
-        else { apply(testFiles, originals); if (!conflicts.size) { control = runCommands(root, state.commands); controlSource = 'in place'; } }
+        else if (previous?.control) { control = previous.control; controlSource = `reused original-only from ${reusedTreatmentFrom}`; }
+        else if (baseline?.status === 'complete' && baseline.sourceHash === state.initialSource.hash && digest(JSON.stringify(proofCommands)) === digest(JSON.stringify(state.commands))) { control = baseline.results; controlSource = 'baseline at run start'; }
+        else { apply(testFiles, originals); if (!conflicts.size) { control = runCommands(root, proofCommands, undefined, { phase: 'original-only' }); controlSource = 'in place'; } }
       }
-    } catch (error) { failure = error.message; }
+      if (!conflicts.size && measureOriginal && digest(JSON.stringify(proofCommands)) !== digest(JSON.stringify(state.commands))) {
+        apply(testFiles, originals); broadInputs = measurementInputs(root, state.commands);
+        if (!conflicts.size) broadControl = runCommands(root, state.commands, undefined, { phase: 'original-only-broad' });
+      }
+    } catch (error) { if (error.code !== 'CYC_OPERATION_CANCELLED') failure = error.message; }
     finally {
       inspect();
       // Restore owned paths independently: one I/O failure must not abandon the
@@ -912,6 +1062,13 @@ export function proveRun(root, id, { tests } = {}) {
       return { runId: id, status: state.status, passed: false, error: `Proof halted. Preserve current files and compare them with candidate versions in ${backup}; do not overwrite either blindly.`, recovery: state.proofRecovery };
     }
     rmSync(backup, { recursive: true, force: true });
+    if (operationCancelled()) {
+      const receiptPath = `.cyc/runs/${id}/checks/proof-cancelled-${randomUUID()}.json`;
+      atomicJSON(projectFile(root, receiptPath), { passed: false, cancelled: true, restored: true, treatment: treatment ?? [], control, checkedAt: new Date().toISOString() });
+      state.testProof = null; state.verification = null;
+      log(state, 'proof-cancelled', { receipt: receiptPath, restored: true });
+      return { runId: id, passed: false, cancelled: true, restored: true, receiptPath };
+    }
     const summary = results => results?.map(({ id: check, passed, exitCode }) => ({ id: check, passed, exitCode })) ?? null;
     // With test runner output (TAP, mocha, jest) the proof sees test names: treatment and control
     // differ only by the new tests, so a failing test that the control run did not have is one of
@@ -947,13 +1104,35 @@ export function proveRun(root, id, { tests } = {}) {
         : 'The tests fail on the run-start code, so they assert new behavior. A refactor must preserve behavior; fix the tests or reclassify the work.');
     // The sentence a reply may quote: what this check-level proof shows, and what it does not.
     const claim = !passed ? null : mode !== 'red' ? 'The new tests pass on the original code, so they pin its behavior.'
+      : state.evidenceVersion === 1 ? `Diagnostic red on original code (${caught.join(', ')}); behavioral meaning requires the case-specific proofReview. Failing test counts are not repaired-defect counts.`
       : listed ? `These new tests fail on the original code: ${listed} (check ${caught.join(', ')}).`
       : `At least one new test fails on the original code (check ${caught.join(', ')}); the cases were not run one by one.`;
     const receiptPath = `.cyc/runs/${id}/checks/proof-${randomUUID()}.json`;
-    atomicJSON(projectFile(root, receiptPath), { mode, passed, verdict, claim, base: state.base?.commit ?? null, originalSourceHash: state.initialSource.hash, testFiles, sourceFiles, treatment, control, ...(controlSource ? { controlSource } : {}), checkedAt: new Date().toISOString() });
-    state.testProof = { mode, passed, verdict, claim, testFiles: Object.fromEntries(testFiles.map(path => [path, before.files[path]])), sourceFiles, receiptPath, checkedAt: new Date().toISOString() };
+    const failures = treatment.flatMap(result => {
+      if (!caught.includes(result.id)) return [];
+      const parsed = testsOf(result);
+      const selected = [...(parsed?.failing.values() ?? [])].filter(entry => !named[result.id]?.length || named[result.id].includes(entry.path.join(' > ')));
+      if (!selected.length) return [{ id: digest(`${result.id}:check`).slice(0, 24), check: result.id, name: result.id, file: null, error: result.error ?? '', hint: 'unclassified' }];
+      const loads = new Map(); let headerFile = null;
+      for (const line of parsed.other?.values() ?? []) {
+        const header = line.match(/^# (file:\/\/\/.+?):\d+(?::\d+)?$/);
+        if (header) headerFile = projectRelative(header[1]);
+        const importer = projectRelative(line.split(' imported from ')[1]?.trim()) ?? (/does not provide an export/.test(line) ? headerFile : null);
+        if (importer && /Cannot find (?:module|package)|does not provide an export/.test(line)) loads.set(importer, [...(loads.get(importer) ?? []), line]);
+      }
+      return selected.map(entry => {
+        // Node reports a load failure outside its generic file-level "test failed" wrapper.
+        // Associate only an explicit matching importer, never another test's suite diagnostic.
+        const diagnostics = loads.get(projectRelative(entry.file)) ?? [];
+        const observed = diagnostics.length ? { ...entry, error: diagnostics.join('\n'), details: [...(entry.details ?? []), ...diagnostics] } : entry;
+        return { id: digest(`${result.id}:${entry.file}:${entry.path.join(' > ')}`).slice(0, 24), check: result.id, name: entry.path.join(' > '), file: entry.file ?? null, error: observed.error ?? '', details: observed.details, hint: failureHint(observed), boundary: diagnostics[0]?.match(/Cannot find (?:module|package) '([^']+)'|requested module ('[^']+' does not provide an export named '[^']+')/)?.slice(1).find(Boolean) ?? null };
+      });
+    });
+    const commandPlanHash = digest(JSON.stringify(proofCommands)), broadCommandsHash = digest(JSON.stringify(state.commands));
+    atomicJSON(projectFile(root, receiptPath), { mode, passed, verdict, claim, failures, roles: { treatment: 'original-plus-new-tests', control: control ? 'original-only' : 'not-executed', broadControl: broadControl ? 'original-only-broad' : 'not-executed' }, commandPlanHash, broadCommandsHash, focused: commandPlanHash !== broadCommandsHash, inputs: proofInputs, broadInputs, broadControl, ...(reusedTreatmentFrom ? { reusedTreatmentFrom } : {}), base: state.base?.commit ?? null, originalSourceHash: state.initialSource.hash, testFiles, sourceFiles, treatment, control, ...(controlSource ? { controlSource } : {}), checkedAt: new Date().toISOString() });
+    state.testProof = { mode, passed, verdict, claim, failures, commandPlanHash, inputs: proofInputs, testFiles: Object.fromEntries(testFiles.map(path => [path, before.files[path]])), sourceFiles, receiptPath, receiptHash: digest(readFileSync(projectFile(root, receiptPath))), checkedAt: new Date().toISOString() };
     log(state, 'test-proof', { mode, passed, receipt: receiptPath });
-    return { runId: id, mode, passed, verdict, ...(claim ? { proofClaim: claim } : {}), testFiles, sourceFiles, treatment: summary(treatment), control: summary(control), receiptPath };
+    return { runId: id, mode, passed, verdict, failures, ...(state.evidenceVersion === 1 && passed && mode === 'red' ? { proofReviewTemplate: { receipt: 'current-proof', cases: failures.map(f => ({ id: f.id, category: 'behavioral | new-interface | setup | unclassified', reason: '<why this failure establishes the selected category>', boundary: '' })) } } : {}), ...(claim ? { proofClaim: claim } : {}), testFiles, sourceFiles, treatment: summary(treatment), control: summary(control), receiptPath };
   });
 }
 
@@ -1026,29 +1205,41 @@ function declaredChecks(root) {
   return { source: commands.length > 1 ? `${found[0].source}, run as ${commands.map(command => command.id).join(', ')}` : found[0].source, commands };
 }
 
-export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background' }) {
+export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background', evidenceVersion, requirements, reviewPolicy, executionMode, conversationId, proofCommands, contextRetention }) {
   root = realpathSync(root);
   if (!text(goal)) throw new Error('A nonempty goal is required.');
   const selected = getPlaybook(playbook ?? routeTask(goal).playbook);
   const config = configuration(root);
   const declared = selected.requiresChecks && !config.commands.length ? declaredChecks(root) : null;
   const commands = declared?.commands ?? config.commands;
+  if (proofCommands !== undefined) { validateCommands(proofCommands, 'proofCommands'); if (!proofCommands.length || !proofPlaybooks.includes(selected.id)) throw new Error('proofCommands needs a nonempty feature/bug-fix/refactor proof plan frozen at start.'); }
   // Checks are frozen into the run and the config is protected while it runs, so a run that
   // starts without them can never verify. Refuse before any run record exists.
   if (selected.requiresChecks && !commands.length) throw new Error(`The ${selected.id} playbook needs project checks, but .cyc/config.json has no verification.commands and the project declares no test command (package.json scripts.test, a Makefile test target, pytest configuration, go.mod, or Cargo.toml). Configure them before starting: follow the CYC Setup method (methods/cyc-setup/SKILL.md, steps 3-7) and add only commands the project already defines, running each once. Editing .cyc/config.json after a run starts halts that run. Advisory playbooks (investigation, explore, plan, review) start without checks.`);
   const inferredCriteria = criteria === undefined;
   criteria ??= [{ id: 'goal', description: goal }];
   if (!Array.isArray(criteria) || !criteria.length || criteria.some(item => !item || !/^[a-zA-Z0-9_-]+$/.test(item.id ?? '') || !text(item.description)) || new Set(criteria.map(item => item.id)).size !== criteria.length) throw new Error('Criteria must be a nonempty array of unique {id, description} records.');
+  if (evidenceVersion !== undefined && evidenceVersion !== 1) throw new Error('Unsupported evidenceVersion; use 1 or omit for legacy clients.');
+  if (evidenceVersion === 1 && (!text(requirements) || inferredCriteria || !selected.stages.includes('build'))) throw new Error('evidenceVersion 1 needs original requirements text, explicit criteria and an implementation playbook.');
+  if (reviewPolicy !== undefined && (evidenceVersion !== 1 || !['self-allowed', 'fresh-required'].includes(reviewPolicy))) throw new Error('reviewPolicy needs evidenceVersion 1 and self-allowed or fresh-required.');
+  for (const c of criteria) if (c.clauses !== undefined && (!Array.isArray(c.clauses) || !c.clauses.length || new Set(c.clauses.map(x => x?.id)).size !== c.clauses.length || c.clauses.some(x => !/^[a-zA-Z0-9_-]+$/.test(x?.id ?? '') || !text(x.description)))) throw new Error(`Criterion ${c.id} clauses need unique {id, description} records.`);
   if (session !== undefined && !/^[A-Za-z0-9_-]{4,80}$/.test(session)) throw new Error('--session must be 4-80 letters, digits, dashes, or underscores.');
-  session = gateSession(root, session);
+  const execution = executionMode !== undefined || conversationId !== undefined ? resolveExecution(root, { executionMode, conversationId, session }) : null;
+  session = execution ? execution.gateSession ?? execution.conversationId ?? undefined : gateSession(root, session);
   const id = randomUUID();
   // Scout can be recorded with the start. Check it before any run exists, so a bad assessment
   // creates nothing and the agent fixes one file instead of repairing a half-started run.
   const workContractVersion = selected.stages.includes('build') ? 1 : null;
+  allowedPaths = normalizePaths(root, allowedPaths, 'allowedPaths');
+  const retention = planRetention(root, { goal, build: !!workContractVersion, allowedPaths, explicit: contextRetention ?? scout?.context?.retention });
+  const contextScope = retention.disposition === 'required' ? [retention.index, ...retention.features.map(f => f.doc)] : [];
+  const protectedContext = contextScope.filter(path => protectedPathMatcher(root, config.protectedPaths)(path));
+  if (protectedContext.length) { retention.disposition = 'restricted'; retention.reason = `Context is protected: ${protectedContext.join(', ')}. Retention remains pending.`; }
+  else if (allowedPaths.length) allowedPaths = [...new Set([...allowedPaths, ...contextScope])];
   if (scout !== undefined) {
     if (selected.stages[0] !== 'scout') throw new Error(`The ${selected.id} playbook starts with ${selected.stages[0]}, not Scout; record it with run record.`);
     if (!text(plan)) throw new Error('A scout assessment at start needs plan: one or two sentences on the approach.');
-    const draft = { id, playbook: selected.id, workContractVersion, handoffs: [] };
+    const draft = { id, playbook: selected.id, workContractVersion, contextRetention: retention, handoffs: [] };
     fillDerived(root, draft, 'scout', scout);
     validateAssessment(draft, { stage: 'scout', status: 'passed', assessment: assessmentPaths(root, scout) }, path => readFileSync(projectFile(root, path)));
   }
@@ -1065,16 +1256,18 @@ export function startRun(root, { goal, playbook, criteria, allowedPaths = [], se
     // still prevent completion. Reuse a matching earlier measurement; otherwise measure in the
     // background while the agent does read-only work.
     const wanted = selected.requiresChecks && commands.length && config.baseline && mode !== 'off';
-    const cacheKey = wanted ? digest(`${initialSource.hash}:${JSON.stringify(commands)}`) : null;
-    const cached = wanted ? readBaselineCache(root)[cacheKey] : null;
+    const inputs = wanted ? measurementInputs(root, commands) : null;
+    const cacheKey = wanted ? digest(`${initialSource.hash}:${inputs.key}`) : null;
+    const cached = wanted && inputs.suitable ? readBaselineCache(root)[cacheKey] : null;
     const baseline = !wanted ? null
-      : cached ? { status: 'complete', reused: true, cacheKey, sourceHash: initialSource.hash, checkedAt: cached.checkedAt, results: cached.results }
-      : { status: 'pending', cacheKey, sourceHash: initialSource.hash, requestedAt: new Date().toISOString() };
+      : cached ? { status: 'complete', reused: true, cacheKey, inputs, sourceHash: initialSource.hash, checkedAt: cached.checkedAt, results: cached.results }
+      : { status: 'pending', cacheKey, inputs, sourceHash: initialSource.hash, requestedAt: new Date().toISOString() };
     const state = {
       schemaVersion: 1, engineVersion, id, goal, playbook: selected.id, stages: selected.stages, requiresChecks: selected.requiresChecks,
-      workContractVersion, ...ledger,
-      criteria, inferredCriteria, session: session ?? null, status: 'running', stageIndex: 0, attempt: 1, failures: 0, noProgress: 0,
+      workContractVersion, contextRetention: retention, ...(evidenceVersion === 1 ? { evidenceVersion, reviewPolicy: reviewPolicy ?? 'self-allowed', requirements: { text: requirements, sha256: digest(requirements) }, criteriaHash: digest(JSON.stringify(criteria)) } : {}), ...ledger,
+      criteria, inferredCriteria, session: session ?? null, ...(execution ? { execution } : {}), status: 'running', stageIndex: 0, attempt: 1, failures: 0, noProgress: 0,
       startedAt: new Date().toISOString(), limits: config.limits, commands, ...(declared ? { verificationSource: `declared by ${declared.source}` } : {}),
+      ...(proofCommands ? { proofCommands: structuredClone(proofCommands) } : {}),
       protectedPaths: config.protectedPaths, protectedFiles: protectedSnapshot(root, config.protectedPaths), allowedPaths,
       initialSource, base, ...(capture ? { sourceCapture: capture.metadata } : {}), testProof: null, baseline, acceptedFailures: [], handoffs: [], verification: null, history: []
     };
@@ -1125,7 +1318,15 @@ function stageTemplate(root, state) {
 // reason it is unrelated, or delete the entry and fix the check. The placeholder cannot pass.
 const failureHints = baseline => (baseline?.status === 'complete' ? baseline.results : []).filter(result => !result.passed)
   .map(result => ({ check: result.id, reason: `<why ${result.id}, which already failed on the run-start code, is unrelated to this change; or delete this entry and fix it>` }));
-const finishTemplateContent = (root, state, acceptFailures) => JSON.stringify({ runId: state.id, summary: '<result and limits>', criterionEvidence: Object.fromEntries(state.criteria.map(item => [item.id, '<evidence>'])), assessment: finishAssessmentTemplate(root, state), acceptFailures }, null, 2) + '\n';
+const finishTemplateContent = (root, state, acceptFailures) => {
+  const assessment = finishAssessmentTemplate(root, state);
+  if (state.evidenceVersion === 1) {
+    const scenarioEvidence = assessment.criterionChecks.map(row => ({ ...row, consumers: [] }));
+    delete assessment.criterionChecks; delete assessment.consumerChecks;
+    return JSON.stringify({ runId: state.id, summary: '<result and limits>', scenarioEvidence, assessment, acceptFailures }, null, 2) + '\n';
+  }
+  return JSON.stringify({ runId: state.id, summary: '<result and limits>', criterionEvidence: Object.fromEntries(state.criteria.map(item => [item.id, '<evidence>'])), assessment, acceptFailures }, null, 2) + '\n';
+};
 const finishTemplatePath = state => `.cyc/runs/${state.id}/finish-template.json`;
 
 // The finish input, written once next to the run so the agent copies a file instead of asking
@@ -1137,6 +1338,11 @@ function writeFinishTemplate(root, state) {
     if (!existsSync(file)) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, finishTemplateContent(root, state, failureHints(currentBaseline(root, state)))); }
     return path;
   } catch { return null; }
+}
+function writeHandoffTemplate(root, state) {
+  const stage = current(state), path = `.cyc/runs/${state.id}/handoff-${stage}-${state.attempt}.json`;
+  if (!existsSync(projectFile(root, path))) atomicJSON(projectFile(root, path), { runId: state.id, stage, attempt: state.attempt, status: 'passed | failed | blocked', summary: '<actual stage outcome>', evidence: [{ kind: 'observation', detail: '<what was observed>' }], artifacts: [], assessment: stageTemplate(root, state), criteria: state.criteria.map(c => ({ id: c.id, result: 'unverified', evidence: '<actual result or remaining limit>' })) });
+  return path;
 }
 
 // A background measurement that finds failing checks adds them to the template, but only while
@@ -1162,18 +1368,28 @@ function fillDerived(root, state, stage, assessment) {
   if (!assessment || typeof assessment !== 'object') return assessment;
   const derived = derivedAssessment(state, stage, { contextHistory: hasContextHistory(root, state) });
   for (const [key, value] of Object.entries(derived)) if (!(key in assessment)) assessment[key] = structuredClone(value);
+  if (stage === 'scout' && assessment.context && state.contextRetention) {
+    const declared = assessment.context.retention;
+    if (declared && digest(JSON.stringify(declared.features)) !== digest(JSON.stringify(state.contextRetention.features.map(({ baselineViewHash, ...f }) => f))) && digest(JSON.stringify(declared.features)) !== digest(JSON.stringify(state.contextRetention.features))) throw new Error('Feature context paths differ from the frozen start plan; retain pending scope or start an authorized scoped follow-up.');
+    assessment.context.retention = structuredClone(state.contextRetention);
+  }
   return assessment;
 }
 
 export function nextRun(root, id) {
   const state = readRun(root, id);
   const finishTemplate = finishing(state) && state.status === 'running' ? writeFinishTemplate(root, state) : null;
+  const handoffTemplate = !finishing(state) && current(state) && state.status === 'running' ? writeHandoffTemplate(root, state) : null;
   return {
     runId: state.id, engineVersion: state.engineVersion ?? 'unknown (legacy run)', status: state.status, goal: state.goal, playbook: state.playbook,
+    ...(state.execution ? { execution: state.execution } : {}),
+    ...(retentionOf(state) ? { contextRetention: retentionOf(state), contextPreparation: state.contextPreparation ? { docs: state.contextPreparation.docs, status: state.contextPreparation.status } : null } : {}),
+    nextAction: finishTemplate || handoffTemplate ? { action: finishing(state) ? 'finish' : 'record', runId: state.id, inputTemplate: finishTemplate ?? handoffTemplate, command: finishing(state) ? `run finish --run ${state.id} --file ${finishTemplate}` : `run record --run ${state.id} --file ${handoffTemplate}` } : null,
     stage: current(state), attempt: state.attempt, criteria: state.criteria,
     workContractVersion: state.workContractVersion ?? null, assessmentRequired: Object.keys(stageTemplate(root, state) ?? {}),
+    ...(state.evidenceVersion === 1 ? { evidenceVersion: 1, reviewPolicy: state.reviewPolicy, requirements: state.requirements } : {}),
     assessmentTemplate: stageTemplate(root, state),
-    ...(finishTemplate ? { finishTemplate, finishWith: `Copy ${finishTemplate} to FINISH.json, replace every <...> with what you found, list under acceptFailures only a check that already failed before this run and is unrelated, then: run finish --file FINISH.json` } : {}),
+    ...(finishTemplate ? { finishTemplate, finishWith: `Copy ${finishTemplate} to FINISH.json, replace every <...> with what you found, list under acceptFailures only a check that already failed before this run and is unrelated, then: run finish --file FINISH.json --run ${state.id}` } : {}),
     ...(finishing(state) && !finishTemplate ? { finishWith: `run finish --run ${state.id} --summary "<result and limits>" --assessment <file with the template filled in> --criterion-evidence '${JSON.stringify(Object.fromEntries(state.criteria.map(item => [item.id, '<evidence>'])))}' (records Build if needed, proves new tests, verifies, and lists changed files itself)` } : {}),
     ...(state.verificationSource ? { verificationSource: state.verificationSource } : {}),
     ...(state.commands?.length ? { verificationCommands: state.commands.map(item => `${item.id}: ${[item.command, ...item.args].join(' ')}`) } : {}),
@@ -1243,8 +1459,8 @@ function assertArtifacts(root, artifacts) {
   if (!Array.isArray(artifacts)) throw new Error('artifacts must be an array (empty for no file deliverables).');
   for (const artifact of artifacts) {
     if (!artifact || !/^[a-f0-9]{64}$/.test(artifact.sha256 ?? '')) throw new Error('Each artifact needs its current SHA-256.');
-    const path = projectFile(root, artifact.path);
-    if (digest(readFileSync(path)) !== artifact.sha256) throw new Error(`Artifact changed after review: ${artifact.path}`);
+    projectFile(root, artifact.path);
+    if (artifactFiles(root, [artifact.path])[0].sha256 !== artifact.sha256) throw new Error(`Artifact changed after review: ${artifact.path}`);
   }
 }
 function validatePacket(root, state, packet) {
@@ -1273,11 +1489,62 @@ function validatePacket(root, state, packet) {
   packet.artifacts = [...packet.artifacts, ...assessmentArtifacts.filter(item => !packet.artifacts.some(existing => existing.path === item.path))];
 }
 function requireVerification(root, state) {
+  requireRetention(root, state);
   if (!state.requiresChecks) return;
   if (!state.verification?.passed) throw new Error('Run project verification successfully before passing this stage.');
+  if (state.verification.role !== undefined && state.verification.role !== 'candidate') throw new Error('Only a candidate verification receipt can pass this stage; original/proof roles cannot substitute.');
   const snapshot = cachedSnapshot(root);
   if (snapshot.skipped.length) throw new Error('Executable verification cannot cover symlink dependencies; use a project without linked source.');
   if (snapshot.hash !== state.verification.sourceHash) throw new Error('Source changed after verification; run verification again.');
+  if (state.verification.inputs && measurementInputs(root, state.commands).key !== state.verification.inputs.key) throw new Error('Verification inputs changed after the check; run verification again.');
+}
+
+function requireRetention(root, state) {
+  const checked = checkRetention(root, state, cachedSnapshot(root).files);
+  if (!checked.ok) {
+    const error = new Error(`Feature context is incomplete: ${checked.issues.map(i => `${i.doc ?? ''} ${i.rule}: ${i.message}`).join('; ')}`);
+    error.retention = checked;
+    throw error;
+  }
+  return checked;
+}
+
+export function contextUpdate(root, id, paths, work) {
+  return transact(root, id, state => {
+    requireActive(state);
+    if (!budget(state) || !guard(root, state)) return state;
+    if (state.verification?.passed) throw new Error('Context writes after verification require run retry to Build and fresh verification; a reply packet cannot refresh source evidence.');
+    for (const path of paths) {
+      projectFile(root, path);
+      if (protectedPathMatcher(root, state.protectedPaths)(path) || state.allowedPaths.length && !state.allowedPaths.some(prefix => isWithin(path, prefix))) throw new Error(`Context path outside frozen authorized scope: ${path}. Retain pending context; do not broaden this run.`);
+    }
+    const result = work(state);
+    if (!guard(root, state)) return state;
+    log(state, 'context-update', { paths });
+    return result;
+  });
+}
+
+export function prepareRunContext(root, id, input = {}) {
+  const before = readRun(root, id), raw = retentionOf(before);
+  assertRunOwner(root, before);
+  if (!raw) return { runId: id, ...checkRetention(root, before, cachedSnapshot(root).files) };
+  const plan = before.contextRetention ?? planRetention(root, { goal: before.goal, build: !!before.workContractVersion, allowedPaths: before.allowedPaths, explicit: raw });
+  const paths = plan.disposition === 'required' ? [plan.index, ...plan.features.map(f => f.doc)] : [];
+  return contextUpdate(root, id, paths, state => {
+    if (!state.contextRetention) {
+      for (const f of plan.features) {
+        const original = originalContent(root, state, f.doc);
+        if (original) f.baselineViewHash = digest(parseDoc(original.toString('utf8'), f.doc.split('/').at(-1)).currentView);
+      }
+      state.contextRetention = plan;
+    }
+    const prepared = prepareRetention(root, state, input, cachedSnapshot(root).files, () => {});
+    state.contextPreparation = { ...prepared };
+    const checked = checkRetention(root, state, cachedSnapshot(root).files);
+    Object.assign(state.contextPreparation, { docs: checked.docs, status: checked.status });
+    return { runId: id, status: checked.ok ? 'context-ready' : 'needs-context', ...checked, changed: prepared.paths };
+  });
 }
 
 // Shorthand for the common case: the agent states the outcome in one line and names changed
@@ -1295,7 +1562,7 @@ export function quickHandoff(root, id, { status = 'passed', summary, artifacts =
     runId: id, stage, attempt: state.attempt, status, summary,
     ...(assessment !== undefined ? { assessment: assessmentPaths(root, assessment) } : {}),
     evidence: [{ kind: 'observation', detail: summary }],
-    artifacts: artifacts.map(path => inputPath(root, path)).map(path => ({ path, sha256: digest(readFileSync(projectFile(root, path))) })),
+    artifacts: artifactFiles(root, artifacts.map(path => inputPath(root, path))),
     criteria: state.criteria.map(item => criterionEvidence || text(passedEvidence)
       ? { id: item.id, result: 'passed', evidence: criterionEvidence?.[item.id] ?? passedEvidence }
       : { id: item.id, result: 'unverified', evidence: `Not verified yet; checked at verify.` }),
@@ -1303,7 +1570,7 @@ export function quickHandoff(root, id, { status = 'passed', summary, artifacts =
   };
   // Deliver records which component context docs this change touched, so the context review can
   // tell a run that updated its component's doc from one that should have.
-  if (stage === 'deliver') packet.contextDocs = [...new Set([...packet.artifacts.map(item => item.path), ...(assessment?.learning?.artifacts ?? [])].filter(path => path.startsWith('docs/context/') && path.endsWith('.md') && !path.slice('docs/context/'.length).includes('/')))].sort();
+  if (stage === 'deliver') packet.contextDocs = [...new Set([...packet.artifacts.map(item => item.path), ...(assessment?.learning?.artifacts ?? [])].filter(path => isComponentDoc(path, contextLocation(root).folder)))].sort();
   return recordHandoff(root, packet);
 }
 
@@ -1314,10 +1581,16 @@ export function recordHandoff(root, packet) {
     validatePacket(root, state, packet);
     if (packet.status === 'passed' && ['verify', 'deliver'].includes(current(state))) requireVerification(root, state);
     if (packet.status === 'passed' && current(state) === 'verify' && provable(state)) requireTestProof(root, state, packet.assessment?.testProof);
+    bindEvidence(root, state, packet);
     if (packet.status === 'passed' && current(state) === 'deliver' && state.workContractVersion === 1) {
       const reviewed = state.handoffs.findLast(item => item.stage === 'verify' && item.status === 'passed');
       if (!reviewed?.assessment || reviewed.sourceHash !== cachedSnapshot(root).hash) throw new Error('Semantic review is missing or stale. Retry verify and review the current files before delivery.');
+      if (state.evidenceVersion === 1) {
+        assertArtifacts(root, reviewed.artifacts);
+        for (const artifact of reviewed.artifacts) if (!packet.artifacts.some(a => a.path === artifact.path)) packet.artifacts.push(artifact);
+      }
     }
+    if (packet.stage === 'deliver') packet.contextDocs = retentionOf(state)?.disposition === 'required' ? requireRetention(root, state).docs : [...new Set([...(packet.artifacts ?? []).map(a => a.path), ...(packet.assessment?.learning?.artifacts ?? [])].filter(path => isComponentDoc(path, contextLocation(root).folder)))].sort();
     const entry = { ...packet, recordedAt: new Date().toISOString(), sourceHash: cachedSnapshot(root).hash };
     state.handoffs.push(entry);
     log(state, 'handoff', { stage: packet.stage, status: packet.status, summary: packet.summary });
@@ -1332,14 +1605,23 @@ export function verifyRun(root, id) {
   return transact(root, id, state => {
     requireActive(state);
     if (!budget(state) || !guard(root, state)) return state;
+    const retained = checkRetention(root, state, cachedSnapshot(root).files);
+    if (!retained.ok) { const inputTemplate = writeFinishTemplate(root, state); return { runId: id, passed: false, status: 'needs-context', finished: false, retention: retained, nextAction: { action: 'finish', inputTemplate, command: `run finish --run ${id} --file ${inputTemplate} --wait-ms 30000`, instruction: 'Prepare scoped canonical feature context before verification; do not replace a reply packet.' } }; }
     if (!state.stages.includes('verify')) throw new Error('This playbook has no executable verification stage.');
     if (!['verify', 'deliver'].includes(current(state)) && current(state) !== null) throw new Error('Record prerequisite skill handoffs before running verification.');
     if (!state.commands.length) throw new Error('No project verification commands configured. Add explicit commands before starting a new run; do not invent a passing check.');
     // A stale cached hash here can only make the check look unstable; the full snapshot after it decides.
-    const before = cachedSnapshot(root);
+    const before = sourceSnapshot(root);
+    const inputsBefore = measurementInputs(root, state.commands);
+    if (state.verification?.passed && state.verification.reusable === true && state.verification.role === 'candidate' && before.hash === state.verification.sourceHash && inputsBefore.suitable && state.verification.inputs?.key === inputsBefore.key) {
+      assertArtifacts(root, [{ path: state.verification.receiptPath, sha256: state.verification.receiptHash }]);
+      log(state, 'verification-reused', { receipt: state.verification.receiptPath, sourceHash: before.hash });
+      return { runId: id, status: state.status, ...state.verification, reused: true };
+    }
     if (before.skipped.length) throw new Error('Executable verification cannot cover symlink dependencies; use a project without linked source.');
     const results = runCommands(root, state.commands, () => state.limits.maxDurationMs ? state.limits.maxDurationMs - (Date.now() - Date.parse(state.startedAt)) : Infinity);
     const after = sourceSnapshot(root);
+    const inputsAfter = measurementInputs(root, state.commands);
     // A check that already failed on the run-start code, and was accepted with a reason, does not
     // block completion if it fails exactly as it did then: the same exit code and error, the same
     // output lines (timings and timestamps aside), neither output cut short, and no file this run
@@ -1392,7 +1674,7 @@ export function verifyRun(root, id) {
     const excused = failing.filter(item => !item.changed).map(item => item.id);
     // Something must still be verified: a passing check, or passing tests inside an excused suite.
     const verifiedSomething = results.some(result => result.passed || (excused.includes(result.id) && (testsOf(result)?.passingCount ?? 0) > 0));
-    const passed = results.length === state.commands.length && results.every(result => result.passed || excused.includes(result.id)) && verifiedSomething && before.hash === after.hash && after.skipped.length === 0;
+    const passed = results.length === state.commands.length && results.every(result => result.passed || excused.includes(result.id)) && verifiedSomething && before.hash === after.hash && inputsBefore.key === inputsAfter.key && after.skipped.length === 0;
     const changedPaths = [...new Set([...Object.keys(before.files), ...Object.keys(after.files)])].filter(path => before.files[path] !== after.files[path]);
     // Failing checks that also failed in the run-start measurement and are not accepted yet: the
     // agent decides whether they are unrelated, and says why, instead of retrying unchanged.
@@ -1404,10 +1686,13 @@ export function verifyRun(root, id) {
     const awaitingAcceptance = !passed && !state.awaitedAcceptance && failedAtRunStart.length > 0 && results.every(excusable) && before.hash === after.hash
       && results.some(result => result.passed || (testsOf(result)?.passingCount ?? 0) > 0);
     const receipt = { passed, changedPaths, verificationStatus: passed ? (excused.length ? 'passed-with-accepted-failures' : 'passed') : failing.length ? 'unverified' : 'failed', ...(failedAtRunStart.length ? { failedAtRunStart } : {}), ...(awaitingAcceptance ? { awaitingAcceptance } : {}), sourceHash: after.hash, sourceStable: before.hash === after.hash, checkedAt: new Date().toISOString(), results, acceptedPreexistingFailures: excused, ...(changedFailures.length ? { acceptedFailuresThatChanged: changedFailures.map(item => ({ id: item.id, ...item.changed })) } : {}), skippedSymlinks: after.skipped };
+    Object.assign(receipt, { role: 'candidate', inputs: inputsAfter, inputsStable: inputsBefore.bounded && inputsAfter.bounded ? inputsBefore.key === inputsAfter.key : null, reusable: passed && inputsBefore.suitable && inputsAfter.suitable });
     // Every command reads and writes the run state, so test summaries of long output stay in the receipt file.
     state.verification = { ...receipt, results: results.map(({ tests, ...result }) => result) };
     const receiptPath = `.cyc/runs/${id}/checks/${randomUUID()}.json`;
     atomicJSON(projectFile(root, receiptPath), receipt);
+    state.verification.receiptPath = receiptPath;
+    state.verification.receiptHash = digest(readFileSync(projectFile(root, receiptPath)));
     log(state, 'verification', { passed, receipt: receiptPath, sourceHash: after.hash });
     if (!guard(root, state, after) || !budget(state)) return state;
     if (!passed) {
@@ -1430,6 +1715,7 @@ export function verifyRun(root, id) {
 // shadow a proof control that exists.
 function runStartMeasurement(root, state) {
   const measured = currentBaseline(root, state);
+  if (measured?.status === 'complete' && measured.inputs && (!measured.inputs.bounded || measured.inputs.key !== measurementInputs(root, state.commands).key)) return { status: 'invalid', reason: 'Run-start toolchain/environment/dependency inputs changed or could not be bounded; pre-existing final failures cannot be accepted.' };
   return measured?.status === 'complete' ? measured : proofBaseline(root, state) ?? measured;
 }
 function runStartResults(root, state) {
@@ -1444,7 +1730,7 @@ function proofSkippedControl(root, state) {
   if (!path) return false;
   try {
     const receipt = json(projectFile(root, path));
-    return receipt.originalSourceHash === state.initialSource.hash && receipt.control === null && /^not needed/.test(receipt.controlSource ?? '');
+    return !receipt.focused && receipt.originalSourceHash === state.initialSource.hash && receipt.control === null && /^not needed/.test(receipt.controlSource ?? '');
   } catch { return false; }
 }
 const passedAtRunStart = (root, state, check) => runStartResults(root, state)?.find(result => result.id === check)?.passed ?? (proofSkippedControl(root, state) ? true : null);
@@ -1454,7 +1740,9 @@ function proofBaseline(root, state) {
   if (!path) return null;
   try {
     const receipt = json(projectFile(root, path));
-    return receipt.originalSourceHash === state.initialSource.hash && Array.isArray(receipt.control) ? { status: 'complete', source: 'proof control', results: receipt.control } : null;
+    if (receipt.broadControl && receipt.broadCommandsHash === digest(JSON.stringify(state.commands)) && receipt.broadInputs?.bounded && receipt.broadInputs.key === measurementInputs(root, state.commands).key && receipt.originalSourceHash === state.initialSource.hash) return { status: 'complete', role: 'original-only-broad', source: 'measured broad proof control', results: receipt.broadControl };
+    const compatible = !receipt.focused && (!receipt.commandPlanHash || receipt.commandPlanHash === digest(JSON.stringify(state.commands))) && (!receipt.inputs || receipt.inputs.bounded && receipt.inputs.key === measurementInputs(root, state.commands).key);
+    return compatible && receipt.originalSourceHash === state.initialSource.hash && Array.isArray(receipt.control) ? { status: 'complete', role: 'original-only', source: 'proof control', results: receipt.control } : null;
   } catch { return null; }
 }
 
@@ -1502,6 +1790,17 @@ export function retryRun(root, id, { stage, reason }) {
 }
 
 export function controlRun(root, id, action) {
+  if (action === 'stop') {
+    const state = readRun(root, id); assertRunOwner(root, state);
+    if (terminal.has(state.status)) throw new Error(`Run is terminal: ${state.status}. Start a new run rather than resetting its budget.`);
+    let pending;
+    try { pending = json(progressPath(root, id)); } catch { /* synchronous run */ }
+    if (pending && !pending.result && !pending.error && pending.workerPid !== process.pid && processAlive(pending.workerPid)) {
+      if (!sameLockIdentity(pending)) throw new Error('Operation belongs to another controller context; retain its ownership and recovery handle.');
+      atomicJSON(cancellationPath(root, id, pending.operationId), { operationId: pending.operationId, requestedAt: new Date().toISOString(), ...lockIdentity() });
+      return { runId: id, status: 'stop-requested', operationId: pending.operationId, finished: false, nextAction: { action: 'wait', command: `run wait --run ${id} --operation ${pending.operationId} --wait-ms 30000` } };
+    }
+  }
   return transact(root, id, state => {
     if (terminal.has(state.status)) throw new Error(`Run is terminal: ${state.status}. Start a new run rather than resetting its budget.`);
     if (action === 'pause') { requireActive(state); state.status = 'paused'; }
@@ -1573,12 +1872,82 @@ function proofOutdated(root, state) {
   return changed.some(path => state.testProof.testFiles[path] !== files[path]) || Object.keys(state.testProof.testFiles).some(path => !changed.includes(path));
 }
 
+// One scenario observation can project to multiple exact criterion/consumer views. Its origin
+// remains agent-reported; passing a command never invents a named assertion observation.
+function scenarioViews(state, rows) {
+  const criterionEvidence = Object.fromEntries(state.criteria.map(c => [c.id, rows.filter(row => row.id === c.id).map(row => `${row.clause ? `${row.clause}: ` : ''}${row.scenario}: ${row.evidence}`).join('\n')]));
+  const consumers = state.handoffs.findLast(h => h.stage === 'scout' && h.status === 'passed')?.assessment?.consumers ?? [];
+  const consumerChecks = consumers.map(c => {
+    const matched = rows.filter(row => row.consumers?.includes(c.id));
+    return { id: c.id, result: matched.length && matched.every(r => r.result === 'passed') ? 'passed' : 'unverified', evidence: matched.map(row => `${row.scenario}: ${row.evidence}`).join('\n') || 'No mapped scenario observation is available.' };
+  });
+  return { criterionEvidence, consumerChecks };
+}
+function importReviews(root, state, assessment) {
+  const review = assessment.semanticReview;
+  if (!review) return;
+  if (review.receipts === undefined) review.receipts = (state.reviewReceipts ?? []).filter(r => {
+    if (r.status !== 'recorded') return false;
+    try { checkedReview(root, state, r.id, cachedSnapshot(root).hash); return true; } catch { return false; }
+  }).map(r => r.id);
+  if (review.receipts.length) review.findings ??= [];
+  for (const id of review.receipts) {
+    const receipt = state.reviewReceipts?.find(r => r.id === id);
+    for (const finding of receipt?.findings ?? []) if (!review.findings.some(f => f.reviewId === id && f.id === finding.id)) review.findings.push({ ...finding, reviewId: id });
+  }
+}
+const continuationBinding = (root, state) => digest(JSON.stringify({ run: state.id, source: sourceSnapshot(root).hash, inputs: measurementInputs(root, state.commands).key, proof: state.testProof?.receiptHash, tests: state.testProof?.testFiles }));
+function needsProofReview(root, state, input, steps) {
+  const binding = continuationBinding(root, state);
+  let continuation = state.finishContinuation;
+  if (!continuation || continuation.binding !== binding) {
+    continuation = { token: randomUUID(), binding, attempts: 0 };
+    transact(root, state.id, saved => { saved.finishContinuation = continuation; });
+  }
+  const inputTemplate = `.cyc/runs/${state.id}/finish-proof-${continuation.token}.json`;
+  const failures = state.testProof.failures.map(f => ({ id: f.id, check: f.check, name: f.name, file: f.file, hint: f.hint, error: f.error?.slice(0, 2000) ?? '', boundary: f.boundary ?? null }));
+  atomicJSON(projectFile(root, inputTemplate), { runId: state.id, ...input, continuation: { token: continuation.token, binding }, assessment: { ...input.assessment, proofReview: { receipt: 'current-proof', cases: failures.map(f => ({ id: f.id, category: 'behavioral | new-interface | setup | unclassified', reason: '<why this observed failure establishes that category>', boundary: f.boundary ?? '' })) } } });
+  return { runId: state.id, status: 'needs-proof-review', finished: false, steps, proof: { receiptPath: state.testProof.receiptPath, receiptHash: state.testProof.receiptHash, role: 'original-plus-new-tests', failures }, nextAction: { action: 'finish', inputTemplate, command: `run finish --run ${state.id} --file ${inputTemplate} --wait-ms 30000`, instruction: 'Fill the decisive proof categories/reasons in this file, retaining its bound continuation. Unknown boundaries stay unknown; module-load failures are not behavioral proof.' } };
+}
+
 // From Build or Verify to complete in one call: record Build, prove the new tests, verify, record
 // Verify and Deliver, and complete. Each step is its own transaction, so a failure stops at a
 // defined point: a failed proof or check is reported as such, a failed check is recorded as a
 // normal failed attempt, and a later refusal leaves the run at the stage named in the error.
-export function finishRun(root, id, { summary, artifacts, passedEvidence, criterionEvidence, assessment = {}, acceptFailures = [] }) {
+export function finishRun(root, id, { summary, artifacts, passedEvidence, criterionEvidence, assessment = {}, acceptFailures = [], scenarioEvidence, continuation }) {
   let state = readRun(root, id);
+  assertRunOwner(root, state);
+  if (current(state) === null && ['running', 'complete'].includes(state.status)) {
+    const delivery = state.handoffs.at(-1);
+    if (delivery?.stage !== 'deliver' || delivery.status !== 'passed') throw new Error('No confirmed delivery to resume.');
+    assertArtifacts(root, delivery.artifacts);
+    if (sourceSnapshot(root).hash !== delivery.sourceHash) throw new Error('Source changed after delivery; completed evidence cannot be republished.');
+    requireVerification(root, state);
+    if (state.execution?.mode.startsWith('native-') || !state.execution && /^[a-f0-9]{32}$/.test(state.session ?? '')) {
+      const gate = json(projectFile(root, `.cyc/runtime/${state.session}.state.json`));
+      if (!(Date.parse(delivery.recordedAt) >= Date.parse(gate.updatedAt))) throw new Error('Delivery is outside the current native request window.');
+    }
+    if (state.status === 'running') state = completeRun(root, id);
+    return { runId: id, status: state.status, finished: true, steps: ['resume delivery'], packet: projectDelivery(root, state) };
+  }
+  if (artifacts !== undefined) artifactFiles(root, artifacts.map(path => inputPath(root, path)));
+  if (continuation) {
+    const saved = state.finishContinuation;
+    if (!saved || continuation.token !== saved.token || continuation.binding !== saved.binding || saved.binding !== continuationBinding(root, state)) throw new Error('Finish continuation is stale or foreign; call finish with current evidence to obtain the remaining input.');
+    if (saved.attempts >= state.limits.maxAttempts) throw new Error('Proof judgment continuation limit reached; retain the failed judgments and repair the source/evidence before another finish.');
+    transact(root, id, current => { current.finishContinuation.attempts++; });
+  }
+  if (scenarioEvidence !== undefined) {
+    if (!Array.isArray(scenarioEvidence)) throw new Error('scenarioEvidence needs named criterion/clause observations.');
+    if (assessment.criterionChecks && digest(JSON.stringify(assessment.criterionChecks)) !== digest(JSON.stringify(scenarioEvidence))) throw new Error('Supply one canonical scenarioEvidence record, not conflicting criterionChecks.');
+    assessment.criterionChecks = structuredClone(scenarioEvidence);
+  }
+  if (assessment.criterionChecks) {
+    const views = scenarioViews(state, assessment.criterionChecks);
+    criterionEvidence ??= views.criterionEvidence;
+    assessment.consumerChecks ??= views.consumerChecks;
+  }
+  importReviews(root, state, assessment);
   if (!Array.isArray(acceptFailures) || acceptFailures.some(item => !item || !state.commands.some(command => command.id === item.check) || !text(item.reason))) throw new Error(`acceptFailures lists checks that already failed before this run: [{"check": "${state.commands.map(command => command.id).join('|')}", "reason": "why it is unrelated"}].`);
   let stage = current(state);
   if (!['build', 'verify', 'deliver'].includes(stage)) throw new Error(`Finish starts at build, verify, or deliver; this run is at ${stage ?? 'no remaining stage'}.`);
@@ -1591,7 +1960,7 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
   fillDerived(root, state, 'deliver', assessment);
   const part = name => {
     const keys = assessmentRequirements(state, name);
-    const extra = name === 'verify' && 'testProof' in assessment ? ['testProof'] : [];
+    const extra = name === 'verify' ? ['testProof', 'proofReview'].filter(key => key in assessment) : [];
     return keys.length ? Object.fromEntries([...keys, ...extra].filter(key => key in assessment).map(key => [key, assessment[key]])) : undefined;
   };
   assessmentPaths(root, assessment);
@@ -1601,7 +1970,10 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
   if (!criterionEvidence && state.criteria.length > 1) throw new Error('Multiple criteria need criterionEvidence mapping each criterion ID to its evidence.');
   if (criterionEvidence && (Object.keys(criterionEvidence).length !== state.criteria.length || state.criteria.some(item => !text(criterionEvidence[item.id])))) throw new Error(`Criterion evidence must cover every criterion exactly once: ${state.criteria.map(item => item.id).join(', ')}.`);
   for (const name of ['verify', 'deliver'].filter(name => state.stages.indexOf(name) >= state.stageIndex)) {
-    validateAssessment(state, { stage: name, status: 'passed', assessment: part(name) }, path => generatesLedger && path === state.ledgerPath ? null : readFileSync(projectFile(root, path)));
+    validateAssessment(state, { stage: name, status: 'passed', assessment: part(name) }, path => {
+      const plannedContext = retentionOf(state)?.features?.some(f => f.doc === path);
+      return generatesLedger && path === state.ledgerPath || plannedContext && !existsSync(projectFile(root, path)) ? null : artifactFiles(root, [path])[0];
+    }, { proofPending: true });
   }
   const steps = [];
   const dropped = [];
@@ -1634,15 +2006,30 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
     state = readRun(root, id);
     stage = current(state);
   }
+  if (retentionOf(state)) {
+    let retained = checkRetention(root, state, cachedSnapshot(root).files);
+    if (!retained.ok) {
+      retained = prepareRunContext(root, id, { records: assessment.learning?.context ?? [], summary, reason: assessment.learning?.reason ?? '' });
+      state = readRun(root, id);
+      if (!retained.ok) {
+        const inputTemplate = `.cyc/runs/${id}/finish-context.json`;
+        atomicJSON(projectFile(root, inputTemplate), { runId: id, summary, artifacts, passedEvidence, criterionEvidence, assessment, acceptFailures });
+        return { runId: id, status: 'needs-context', finished: false, steps, retention: retained, nextAction: { action: 'finish', inputTemplate, command: `run finish --run ${id} --file ${inputTemplate} --wait-ms 30000`, instruction: 'Fill or repair the canonical target feature docs and index, or learning.context Current views; preserve restrictions and the frozen plan. Then resume finish. No proof/check has been promoted.' } };
+      }
+      steps.push('prepare context');
+    }
+    const contextArtifacts = [...retained.docs, ...(retentionOf(state).disposition === 'required' ? [retentionOf(state).index] : [])];
+    if (artifacts) artifacts = [...new Set([...artifacts, ...contextArtifacts])];
+  }
   // Listed artifacts win; otherwise the controller names what this run changed.
   artifacts ??= changedArtifacts(root, state);
   if (stage === 'verify') {
     if (provable(state)) {
       const exemption = part('verify')?.testProof;
       // Prove here rather than refuse: a missing or outdated proof is one more step, not a retry.
-      if (exemption === undefined && proofOutdated(root, state)) {
+      if (exemption === undefined && (proofOutdated(root, state) || acceptFailures.length > 0 && runStartMeasurement(root, state)?.status !== 'complete')) {
         let proof;
-        try { proof = proveRun(root, id); }
+        try { proof = proveRun(root, id, { measureOriginal: acceptFailures.length > 0 }); }
         catch (error) { throw new Error(`Finish stopped at prove-red: ${error.message}`); }
         const stop = !proof.passed && stoppedBy('prove-red', proof);
         if (stop) return stop;
@@ -1651,6 +2038,10 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
         state = readRun(root, id);
       }
       requireTestProof(root, state, exemption);
+      if (state.evidenceVersion === 1 && exemption === undefined) {
+        if (!assessment.proofReview) return needsProofReview(root, state, { summary, artifacts, passedEvidence, criterionEvidence, assessment, acceptFailures }, steps);
+        validateProofReview(state, assessment.proofReview);
+      }
     }
     // The proof's control run has now measured the run-start code, so listed pre-existing failures
     // can be checked against it. A check that passed there has nothing to accept: the entry is
@@ -1687,21 +2078,23 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
   const completed = completeRun(root, id);
   steps.push('complete');
   // The run's own record is the review: each criterion's evidence and the files it changed.
-  let packet = null;
-  if (completed.status === 'complete') {
-    try {
-      const recorded = earlier => { try { return readRun(root, earlier.runId).reviewPacket?.digest === runPacketDigest(earlier); } catch { return false; } };
-      packet = writeRunPacket(root, { session: completed.session, runId: id, checks: completed.criteria.map(item => ({ criterion: item.description, result: 'passed', evidence: (criterionEvidence?.[item.id] ?? passedEvidence).trim() })), artifacts, recorded });
-      // The gate accepts the packet only with this record in the run that wrote it.
-      if (packet.written) transact(root, id, state => { state.reviewPacket = { digest: packet.digest, writtenAt: new Date().toISOString() }; log(state, 'review-packet', { digest: packet.digest }); return state; });
-    } catch (error) { packet = { written: false, reason: `Could not write the review packet (${error.message}); write it with cyc packet.` }; }
-  }
+  const packet = completed.status === 'complete' ? projectDelivery(root, completed) : null;
   // What the reply may state: the proof's scope and any pre-existing failure it must disclose.
   return { runId: id, status: completed.status, finished: completed.status === 'complete', steps, reviewPath: reviewPath(completed),
     ...(packet ? { packet } : {}),
     ...(completed.testProof?.claim && testProofStatus(root, completed)?.status === 'proven' ? { proofClaim: completed.testProof.claim } : {}),
     ...(completed.verification?.acceptedPreexistingFailures?.length ? { acceptedPreexistingFailures: (completed.acceptedFailures ?? []).filter(item => completed.verification.acceptedPreexistingFailures.includes(item.id)).map(({ id: check, reason }) => ({ check, reason })) } : {}),
     ...(dropped.length ? { droppedAcceptFailures: dropped } : {}) };
+}
+
+function projectDelivery(root, state) {
+  try {
+    const delivery = state.handoffs.at(-1);
+    const recorded = earlier => { try { return readRun(root, earlier.runId).reviewPacket?.digest === runPacketDigest(earlier); } catch { return false; } };
+    const packet = writeRunPacket(root, { session: state.session, execution: state.execution, evidence: state.evidence, runId: state.id, checks: delivery.criteria.map(item => ({ criterion: state.criteria.find(c => c.id === item.id).description, result: item.result, evidence: item.evidence.trim() })), artifacts: delivery.artifacts.map(a => a.path), recorded });
+    if (packet.written) transact(root, state.id, saved => { saved.reviewPacket = { digest: packet.digest, writtenAt: new Date().toISOString() }; log(saved, 'review-packet', { digest: packet.digest }); });
+    return packet;
+  } catch (error) { return { written: false, reason: `Delivery evidence publication failed (${error.message}); resume finish after repairing the path/context.` }; }
 }
 
 function writeReview(root, state) {
@@ -1713,11 +2106,136 @@ function writeReview(root, state) {
     try { assertArtifacts(root, [artifact]); }
     catch (error) { artifactIssues.push(`${artifact.path}: ${error.message}`); }
   }
-  writeFileSync(temporary, renderReview(state, cachedSnapshot(root).hash, artifactIssues), { mode: 0o600 });
+  const assessment = state.handoffs.findLast(h => h.stage === 'verify' && h.status === 'passed')?.assessment;
+  for (const id of assessment?.semanticReview?.receipts ?? []) {
+    const receipt = state.reviewReceipts?.find(r => r.id === id);
+    try { if (!receipt) throw new Error('Missing registered review receipt.'); assertArtifacts(root, [{ path: receipt.path, sha256: receipt.sha256 }]); }
+    catch (error) { artifactIssues.push(`Review ${id}: ${error.message}`); }
+  }
+  const source = cachedSnapshot(root), contextKey = state.reviewReceipts?.some(r => r.contextMode === 'bounded') ? measurementInputs(root, []).key : undefined;
+  writeFileSync(temporary, renderReview(state, source.hash, artifactIssues, source.files, contextKey), { mode: 0o600 });
   renameSync(temporary, path);
   return reviewPath(state);
 }
 
 export function reviewRun(root, id) {
   return transact(root, id, state => ({ runId: id, status: state.status, reviewPath: reviewPath(state) }));
+}
+
+function reviewContext(root, scope, files, explicit, evidence) {
+  if (explicit === undefined || !scope.length) return { contextMode: 'whole-source', contextPaths: [], contextEvidence: 'Dependency impact not bounded; whole-source freshness required.' };
+  if (!text(evidence) || /^<.*>$/.test(evidence.trim())) throw new Error('contextEvidence needs the actual bounded dependency/contract review, or omit contextPaths for conservative whole-source freshness.');
+  const paths = normalizePaths(root, explicit, 'review context');
+  const covered = path => scope.some(prefix => isWithin(path, prefix));
+  const pending = Object.keys(files).filter(covered), visited = new Set(); let unknown = false;
+  while (pending.length) {
+    const path = pending.pop(); if (visited.has(path)) continue; visited.add(path);
+    if (!/\.[cm]?[jt]sx?$/.test(path)) continue;
+    const body = readFileSync(projectFile(root, path), 'utf8');
+    if (/\b(?:import|require)\s*\(\s*[^'"\s]/.test(body)) unknown = true;
+    const imports = [...body.matchAll(/\b(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1] ?? m[2] ?? m[3]);
+    for (const specifier of imports) {
+      if (specifier.startsWith('node:')) continue;
+      if (specifier.startsWith('.')) {
+        const base = slash(relative(root, resolve(root, dirname(path), specifier)));
+        const target = [base, ...['.mjs', '.js', '.ts', '.tsx', '/index.mjs', '/index.js', '/index.ts', '/index.tsx'].map(ext => base + ext)].find(p => files[p]);
+        if (!target) unknown = true; else { paths.push(target); pending.push(target); }
+      } else if (specifier.startsWith('@/') || specifier.startsWith('#') || !files['package-lock.json']) unknown = true;
+    }
+  }
+  const contextInputs = measurementInputs(root, []);
+  return { contextMode: unknown || !contextInputs.bounded ? 'whole-source' : 'bounded', contextPaths: [...new Set([...paths, 'package.json', 'package-lock.json', 'tsconfig.json', 'jsconfig.json'])], contextEvidence: unknown ? `${evidence} Unresolved dependency impact requires whole-source freshness.` : evidence, contextInputs };
+}
+export function captureReview(root, id, { reviewer, scope = [], contextPaths, contextEvidence } = {}) {
+  return transact(root, id, state => {
+    requireActive(state);
+    if (!['self', 'fresh-context', 'peer'].includes(reviewer)) throw new Error('Review reviewer must be self, fresh-context or peer.');
+    if (!budget(state) || !guard(root, state)) return state;
+    const paths = normalizePaths(root, scope, 'review scope');
+    const source = cachedSnapshot(root);
+    if (source.skipped.length) throw new Error('Review capture cannot cover symlink source dependencies.');
+    for (const path of paths) if (![...Object.keys(source.files), ...Object.keys(state.initialSource.files)].some(file => file === path || file.startsWith(`${path}/`))) throw new Error(`Review scope has no covered source: ${path}.`);
+    const reviewId = randomUUID(), path = `.cyc/runs/${id}/reviews/${reviewId}.json`;
+    const context = reviewContext(root, paths, source.files, contextPaths, contextEvidence);
+    const previous = (state.reviewReceipts ?? []).at(-1);
+    const changedPaths = previous ? [...new Set([...Object.keys(previous.files), ...Object.keys(source.files)])].filter(p => previous.files[p] !== source.files[p]) : Object.keys(source.files).filter(p => state.initialSource.files[p] !== source.files[p]);
+    const followupPath = `.cyc/runs/${id}/reviews/${reviewId}-followup.json`;
+    atomicJSON(projectFile(root, followupPath), { runId: id, changedPaths, contractsChanged: changedPaths.filter(p => (state.reviewReceipts ?? []).some(r => r.contextPaths?.some(prefix => isWithin(p, prefix)))), dependencyImpact: context.contextMode, findings: (state.reviewReceipts ?? []).flatMap(r => (r.findings ?? []).map(f => ({ reviewId: r.id, ...f }))), brief: 'Demonstrate authoritative writer/status/protected read-write transitions and conflicting representations, then async actor/resource send/read identity; retain history continuity and keyboard/return-focus review before cosmetic findings.' });
+    const receipt = { version: 1, runId: id, id: reviewId, status: 'captured', reviewer, identity: null, provenance: 'agent-reported', scope: paths, ...context, sourceHash: source.hash, files: source.files, criteriaHash: digest(JSON.stringify(state.criteria)), capturedAt: new Date().toISOString(), path };
+    atomicJSON(projectFile(root, path), receipt);
+    const recordTemplate = `.cyc/runs/${id}/reviews/${reviewId}-record.json`;
+    atomicJSON(projectFile(root, recordTemplate), { reviewId, identity: null, evidence: '<actual observations from the captured review>', findings: [] });
+    (state.reviewReceipts ??= []).push({ ...receipt, sha256: digest(readFileSync(projectFile(root, path))) });
+    log(state, 'review-captured', { reviewId, sourceHash: source.hash });
+    return { ...receipt, recordTemplate, followupPath, nextAction: { action: 'review-record', runId: id, command: `run review-record --run ${id} --file ${recordTemplate}` } };
+  });
+}
+
+function checkedReview(root, state, id, sourceHash) {
+  const record = state.reviewReceipts?.find(r => r.id === id);
+  if (!record) throw new Error(`Unknown review ${id}.`);
+  assertArtifacts(root, [{ path: record.path, sha256: record.sha256 }]);
+  const source = cachedSnapshot(root);
+  if (!reviewCurrent(record, state, sourceHash, source.files, record.contextMode === 'bounded' ? measurementInputs(root, []).key : undefined)) throw new Error(`Review ${id} is stale: reviewed source, criteria or dependency/contract context changed since capture.`);
+  return record;
+}
+
+export function recordReview(root, id, { reviewId, evidence, identity = null, findings = [] } = {}) {
+  const invalid = !text(evidence) || /^<.*>$/.test(evidence.trim()) ? 'evidence' : identity !== null && (!text(identity) || /^<.*>$/.test(identity.trim())) ? 'identity' : null;
+  if (invalid) { const error = new Error(`Review ${invalid} needs ${invalid === 'identity' ? 'observed text or null' : 'actual non-placeholder evidence'}.`); error.field = invalid; error.repairTemplate = `.cyc/runs/${id}/reviews/${reviewId}-record.json`; throw error; }
+  return transact(root, id, state => {
+    requireActive(state);
+    if (!budget(state) || !guard(root, state)) return state;
+    const record = checkedReview(root, state, reviewId, cachedSnapshot(root).hash);
+    if (!text(evidence) || (identity !== null && !text(identity))) throw new Error('Review needs actual evidence; identity is text or null when unknown.');
+    if (!Array.isArray(findings) || new Set(findings.map(f => f?.id)).size !== findings.length || findings.some(f => !text(f?.id) || !text(f.evidence) || !['resolved', 'dismissed', 'open'].includes(f.status))) throw new Error('Review findings need unique ids, status and evidence.');
+    if (record.status === 'recorded') throw new Error('Review already recorded; capture a new receipt for another review.');
+    const { sha256, ...receipt } = { ...record, status: 'recorded', evidence, identity, findings, recordedAt: new Date().toISOString() };
+    atomicJSON(projectFile(root, record.path), receipt);
+    Object.assign(record, receipt, { sha256: digest(readFileSync(projectFile(root, record.path))) });
+    log(state, 'review-recorded', { reviewId, reviewer: receipt.reviewer });
+    return receipt;
+  });
+}
+
+// Called after machine verification; preflight only checks the assessment's structure.
+function bindEvidence(root, state, packet) {
+  if (state.evidenceVersion !== 1 || packet.stage !== 'verify' || packet.status !== 'passed') return;
+  const a = packet.assessment, snapshot = cachedSnapshot(root), sourceHash = snapshot.hash;
+  const verification = state.verification;
+  if (!verification?.passed || verification.sourceHash !== sourceHash) throw new Error('Scenario evidence needs current passing command verification.');
+  assertArtifacts(root, [{ path: verification.receiptPath, sha256: verification.receiptHash }]);
+  for (const row of a.criterionChecks) {
+    if (!['current-verification', verification.receiptPath].includes(row.receipt)) throw new Error(`Scenario ${row.id} references a stale or foreign verification receipt.`);
+    if (!verification.results.some(r => r.id === row.check && (r.passed || verification.acceptedPreexistingFailures?.includes(r.id)))) throw new Error(`Scenario ${row.id} check did not pass or retain an accepted baseline failure.`);
+    row.receipt = verification.receiptPath;
+  }
+  state.evidence = { version: 1, sourceHash, verification: { path: verification.receiptPath, sha256: verification.receiptHash }, scenarios: structuredClone(a.criterionChecks), criteria: structuredClone(state.criteria), reviews: [...(a.semanticReview.receipts ?? [])], origin: 'agent-reported-observations-with-command-receipts', hookActivation: 'unverified', productReadiness: 'not-certified' };
+  packet.artifacts.push({ path: verification.receiptPath, sha256: verification.receiptHash });
+  const refs = a.semanticReview.receipts ?? [];
+  for (const ref of refs) {
+    const receipt = checkedReview(root, state, ref, sourceHash);
+    if (receipt.status !== 'recorded') throw new Error(`Review ${ref} has no recorded findings/evidence.`);
+    for (const finding of receipt.findings) if (!a.semanticReview.findings.some(f => f.reviewId === receipt.id && f.id === finding.id && f.status !== 'open')) throw new Error(`Review finding ${receipt.id}/${finding.id} needs a receipt-scoped resolved or dismissed disposition.`);
+    packet.artifacts.push({ path: receipt.path, sha256: receipt.sha256 });
+  }
+  for (const finding of a.semanticReview.findings) if (finding.reviewId !== undefined && !refs.includes(finding.reviewId)) throw new Error('Finding disposition references an unknown review receipt.');
+  if (a.semanticReview.reviewer !== 'self' && !refs.some(ref => state.reviewReceipts.find(r => r.id === ref)?.reviewer === a.semanticReview.reviewer)) throw new Error('Claimed reviewer type does not match a recorded review receipt.');
+  if (refs.length || state.reviewPolicy === 'fresh-required') {
+    const changed = [...new Set([...Object.keys(state.initialSource.files), ...Object.keys(snapshot.files)])].filter(path => state.initialSource.files[path] !== snapshot.files[path]);
+    const covered = path => refs.some(id => { const r = state.reviewReceipts.find(x => x.id === id); return !r.scope.length || r.scope.some(p => path === p || path.startsWith(`${p}/`)); });
+    if (changed.some(path => !covered(path))) throw new Error('Review receipts do not cover all changed source; record the missing self/fresh review scope.');
+    if (state.reviewPolicy === 'fresh-required' && (!refs.some(id => state.reviewReceipts.find(r => r.id === id)?.reviewer === 'fresh-context') || changed.some(path => !refs.some(id => { const r = state.reviewReceipts.find(x => x.id === id); return r.reviewer === 'fresh-context' && (!r.scope.length || r.scope.some(p => path === p || path.startsWith(`${p}/`))); })))) throw new Error('fresh-required policy needs current fresh-context receipts covering every changed source path.');
+    if (reviewCoverage(state, a.semanticReview, { ...snapshot, contextKey: state.reviewReceipts.some(r => r.contextMode === 'bounded') ? measurementInputs(root, []).key : undefined }).status === 'stale') throw new Error('Review coverage is stale.');
+  }
+  if (state.testProof && a.testProof?.status !== 'exempt') {
+    assertArtifacts(root, [{ path: state.testProof.receiptPath, sha256: state.testProof.receiptHash }]);
+    packet.artifacts.push({ path: state.testProof.receiptPath, sha256: state.testProof.receiptHash });
+  }
+  if (a.proofReview && a.testProof?.status !== 'exempt') {
+    validateProofReview(state, a.proofReview);
+    a.proofReview.receipt = state.testProof.receiptPath;
+    const names = category => a.proofReview.cases.filter(c => c.category === category).map(c => state.testProof.failures.find(f => f.id === c.id).name);
+    state.testProof.claim = `Reason-reviewed baseline evidence (agent-reported interpretation): behavioral cases [${names('behavioral').join('; ')}]; new-interface cases [${names('new-interface').join('; ')}]. Setup and unclassified failures do not establish the intended behavior defect. This is not a repaired-defect count.`;
+  }
 }

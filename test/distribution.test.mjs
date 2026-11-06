@@ -18,6 +18,7 @@ function fixture(t) {
     rmSync(root, { recursive: true, force: true });
   });
   for (const path of ['package.json','LICENSE','INSTALL.md','CHANGELOG.md','.claude-plugin','.codex-plugin','.cursor-plugin','.agents/plugins','hooks']) cpSync(join(source, path), join(root, path), { recursive: true });
+  for (const path of ['plugin.json', 'package-lock.json']) if (existsSync(join(source, path))) cpSync(join(source, path), join(root, path));
   for (const path of ['bin','skills/cyc','methods','catalog','scripts','docs']) mkdirSync(join(root, path), { recursive: true });
   for (const path of ['scripts/install.mjs','docs/installation.md']) writeFileSync(join(root, path), 'fixture');
   return root;
@@ -88,6 +89,52 @@ test('distribution preflight reports malformed metadata as a failed release', t 
   const report = checkDistribution(root);
   assert.equal(report.ok, false);
   assert.ok(report.issues[0].startsWith('package.json:'));
+});
+
+test('distribution preflight rejects a missing portable plugin entry point', t => {
+  const root = fixture(t);
+  rmSync(join(root, 'plugin.json'), { force: true });
+  const report = checkDistribution(root);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some(issue => issue.includes('plugin.json')));
+});
+
+test('distribution preflight rejects portable plugin identity and overlay drift', t => {
+  const root = fixture(t);
+  const fallback = JSON.parse(readFileSync(join(root, '.codex-plugin/plugin.json')));
+  writeFileSync(join(root, 'plugin.json'), JSON.stringify({ name: 'wrong', version: '0.0.0', extensions: { 'com.openai': { hooks: './hooks/claude.json', interface: fallback.interface } } }));
+  const report = checkDistribution(root);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some(issue => issue.includes('plugin.json: identity')));
+  assert.ok(report.issues.some(issue => issue.includes('plugin.json: OpenAI')));
+});
+
+test('distribution preflight rejects an onboarding skill outside the packaged public entry', t => {
+  const root = fixture(t);
+  writeFileSync(join(root, 'plugin.json'), JSON.stringify({ extensions: { 'com.openai': { onboardingSkill: '../setup/SKILL.md' } } }));
+  const report = checkDistribution(root);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some(issue => issue.includes('onboarding')));
+});
+
+test('distribution preflight rejects stale lockfile identities', t => {
+  const root = fixture(t);
+  edit(root, 'package-lock.json', lock => { lock.version = '0.0.0'; lock.packages[''].version = '0.0.0'; });
+  const report = checkDistribution(root);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some(issue => issue.includes('package-lock.json')));
+});
+
+test('version bump keeps portable, native and npm lockfile identities aligned', t => {
+  const root = fixture(t);
+  cpSync(join(source, 'scripts/bump-version.mjs'), join(root, 'scripts/bump-version.mjs'));
+  const result = spawnSync(process.execPath, [join(root, 'scripts/bump-version.mjs'), '1.2.3'], { encoding: 'utf8', windowsHide: true });
+  assert.equal(result.status, 0, result.stderr);
+  const read = path => JSON.parse(readFileSync(join(root, path)));
+  assert.equal(read('plugin.json').version, '1.2.3');
+  assert.equal(read('package-lock.json').version, '1.2.3');
+  assert.equal(read('package-lock.json').packages[''].version, '1.2.3');
+  assert.deepEqual(checkDistribution(root, { tag: 'v1.2.3' }).issues, []);
 });
 
 test('distribution CLI exits nonzero for a rejected release', () => {

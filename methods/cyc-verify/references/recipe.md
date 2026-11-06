@@ -47,6 +47,8 @@ When applicable checks need discovering, record these steps in run-local notes f
 
 ## Growing it
 
+For protected state, one named scenario invokes the existing writer/status and new protected history/send with conflicting canonical/legacy data, followed by eligible and denied controls. For async UI, check matching read/send responses, mismatched actor/resource with unchanged visible identity, prior operation/context, and an empty poll resolving after a confirmed send. Client context rejection and server authorization/expected-session prevention are separate observations. Store these in existing scenario/consumer fields; unavailable journeys remain unverified. `test/quality-journeys.test.mjs` in the CYC development checkout demonstrates these known contracts, not the frozen application or a new model benchmark.
+
 - **Whenever the user checks something by hand and tells the agent what to fix, add that check to the recipe.** That correction was a missing verification step.
 - **Propose useful scriptable checks as controller commands** in `.cyc/config.json` (`verification.commands`). During an active run, retain the proposal in `.cyc/runs/<runId>/proposed-checks.json`; the controller protects configuration mid-run. Apply authorized proposals as a subsequent scoped change with its own verification. Checks that need judgment or a browser tool stay as recipe steps.
 - Keep each check tied to when it applies (the paths or change type), so a backend fix doesn't trigger a layout trace.

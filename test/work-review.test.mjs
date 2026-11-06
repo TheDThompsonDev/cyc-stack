@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { completeRun, controlRun, nextRun, quickHandoff, readRun, retryRun, reviewRun, sourceSnapshot, startRun, verifyRun } from '../scripts/runtime.mjs';
+import { completeRun, controlRun, nextRun, quickHandoff, readRun, retryRun, reviewRun, sourceSnapshot, startRun, verifyRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 // These tests are not about run-start measurement; a background worker would outlive their temp folders.
 process.env.CYC_BASELINE_MODE = 'off';

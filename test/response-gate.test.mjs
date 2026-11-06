@@ -10,7 +10,7 @@ import { checkReply, checkResponse, digest, hasVisual } from '../scripts/respons
 import { lengthCommand } from '../scripts/response-mode.mjs';
 import { writePacket } from '../scripts/packet.mjs';
 import { changeFingerprint, checkRuns } from '../scripts/run-gate.mjs';
-import { startRun } from '../scripts/runtime.mjs';
+import { startRun } from '../test-support/historical-runtime.test.fixture.mjs';
 // These tests are not about run-start measurement; a background worker would outlive their temp folders.
 process.env.CYC_BASELINE_MODE = 'off';
 
@@ -969,7 +969,7 @@ test('reply checks: cyc packet works without --response for Claude and Codex, an
   assert.equal(JSON.parse(readFileSync(f.packetPath, 'utf8')).response, undefined);
   assert.deepEqual(f.run({ hook_event_name: 'Stop', last_assistant_message: answer }), {});
   assert.throws(() => writePacket(f.root, { session: f.key, passed: ['x :: y'] }), /--reviewed/);
-  assert.throws(() => writePacket(f.root, { session: 'cursor-chat', reviewed: true, passed: ['x :: y'] }), /Cursor needs --response/);
+  assert.throws(() => writePacket(f.root, { executionMode: 'cursor', session: 'cursor-chat', reviewed: true, passed: ['x :: y'] }), /Cursor needs --response/);
 });
 
 test('reply checks: after a rejected Stop, a revised reply needs a review written after the rejection', t => {

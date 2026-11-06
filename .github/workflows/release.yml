@@ -28,11 +28,7 @@ jobs:
           awk -v v="$version" '$0 ~ "^## "v"( |$)" {found=1; next} found && /^## / {exit} found {print}' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no section for $version"; exit 1; fi
       - name: Pack installable archive
-        run: |
-          mkdir release-assets
-          npm pack --ignore-scripts --pack-destination release-assets
-          cd release-assets
-          sha256sum *.tgz > SHA256SUMS
+        run: npm run pack:release
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

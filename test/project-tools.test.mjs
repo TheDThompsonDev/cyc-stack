@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { investigateProject, listRecipes, runRecipe } from '../scripts/project-tools.mjs';
-import { controlRun, nextRun, quickHandoff, readRun, startRun, verifyRun } from '../scripts/runtime.mjs';
+import { controlRun, nextRun, quickHandoff, readRun, startRun, verifyRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { installProject } from '../scripts/install.mjs';
 // These tests are not about run-start measurement; a background worker would outlive their temp folders.
 process.env.CYC_BASELINE_MODE = 'off';

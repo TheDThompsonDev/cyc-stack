@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { acceptFailure, completeRun, controlRun, measureBaseline, nextRun, proveRun, quickHandoff as recordQuick, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun } from '../scripts/runtime.mjs';
+import { acceptFailure, completeRun, controlRun, measureBaseline, nextRun, proveRun, quickHandoff as recordQuick, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun } from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 import { digest } from '../scripts/response-gate.mjs';
 
@@ -362,8 +362,11 @@ test('a baseline check that rewrites files invalidates the baseline instead of b
   assert.throws(() => acceptFailure(root, id, { check: 'formatter', reason: 'x' }), /invalid/);
 });
 
-test('an unchanged project reuses the previous baseline instantly', t => {
+test('an explicitly deterministic unchanged project reuses the previous baseline instantly', t => {
   const root = legacyFixture(t);
+  const path = join(root, '.cyc/config.json'), config = JSON.parse(readFileSync(path, 'utf8'));
+  for (const command of config.verification.commands) command.reuse = { kind: 'local-deterministic', inputs: [] };
+  writeFileSync(path, JSON.stringify(config));
   const first = start(root);
   assert.equal(nextRun(root, first).baselineReused, false);
   const second = start(root);
@@ -379,7 +382,10 @@ test('the default background baseline lets work start immediately and completes 
   let id;
   try { id = start(root); } finally { process.env.CYC_BASELINE_MODE = 'sync'; }
   assert.equal(nextRun(root, id).baseline, 'measuring');
-  assert.throws(() => acceptFailure(root, id, { check: 'legacy', reason: 'x' }), /still measuring/);
+  // Depending on worker scheduling, workspace ownership can reject first. Both
+  // guards must preserve the pending baseline and forbid an acceptance mutation.
+  assert.throws(() => acceptFailure(root, id, { check: 'legacy', reason: 'x' }), /still measuring|another CYC operation \(baseline/);
+  assert.deepEqual(readRun(root, id).acceptedFailures, []);
   for (let i = 0; i < 100 && nextRun(root, id).baseline === 'measuring'; i++) await new Promise(done => setTimeout(done, 100));
   const record = join(root, `.cyc/runs/${id}/baseline.json`);
   assert.equal(nextRun(root, id).baseline, 'complete', existsSync(record) ? readFileSync(record, 'utf8') : 'no baseline.json');
@@ -433,6 +439,7 @@ test('CLI quick flow: separate criteria, several artifacts per flag, and compact
   const started = JSON.parse(cli('run', 'start', '--goal', 'Finish homework', '--playbook', 'feature', '--criterion', 'Finished leaves the active list', '--criterion', 'Survives reload').stdout);
   assert.deepEqual(started.criteria, ['c1', 'c2']);
   const id = started.runId;
+  writeFileSync(join(root, 'feature.txt'), 'still broken');
   const assessmentFile = join(root, '.cyc/runs', id, 'scout.json');
   writeFileSync(assessmentFile, JSON.stringify(fixtureAssessment(readRun(root, id))));
   const scout = cli('run', 'record', '--run', id, '--summary', 'Plan: two files.', '--assessment', assessmentFile);
@@ -442,6 +449,11 @@ test('CLI quick flow: separate criteria, several artifacts per flag, and compact
   assert.ok(built.stdout.length < 3000, 'record output should be a short status, not the whole state file');
   assert.deepEqual(readRun(root, id).handoffs.at(-1).artifacts.map(item => item.path), ['feature.txt', 'second.txt']);
   assert.equal(JSON.parse(built.stdout).stage, 'verify');
+  const contextFile = join(root, '.cyc/runs', id, 'context.json');
+  writeFileSync(contextFile, JSON.stringify({ records: [{ id: 'finish-homework', currentView: 'This isolated fixture owns feature.txt, read by the behavior command to compare its text with working. The current value deliberately remains broken so the CLI diagnostic can retain a measured old failure; this is not an implemented homework feature. Run the configured behavior command to reproduce the failure and inspect its output tail. Controller receipts stay local; no user acceptance or host activation is claimed.' }] }));
+  const prepared = cli('context', 'prepare', '--run', id, '--file', contextFile);
+  assert.equal(prepared.status, 0, prepared.stdout + prepared.stderr);
+  assert.equal(JSON.parse(prepared.stdout).ok, true);
   const verified = JSON.parse(cli('run', 'verify', '--run', id).stdout);
   assert.equal(verified.passed, false);
   assert.ok(verified.results[0].outputTail !== undefined && verified.hint);

@@ -1,67 +1,33 @@
 ---
 name: cyc-scout
-description: "Get from request to a concrete plan in one or two minutes: one parallel batch of searches and reads, then a short plan naming the files to change, the consumers to keep consistent, and the checks to run. Use at the start of any feature, bug fix, refactor, or verification task before editing code."
+description: "Establish affected behavior, consumers, checks and a short implementation plan before editing; for advisory work, establish the explanation/review scope without assuming edit permission."
 ---
 
 # Scout, then build
 
-For a new website, composed interface or visual redesign, use the [frontend design method](../cyc-design/frontend-design/SKILL.md) before choosing structure or acceptance criteria: write `design/decisions.md` (archetype, typeface pair, palette values, signature element, rejection condition) and, for several sites, the set-divergence table. A palette, image presence and readability cannot be the entire visual criterion. Keep this within the user's criterion count; a narrow repair preserves the existing direction.
+Read the target context index and matched records before code, then inspect the actual boundary and dirty diff. Reuse relevant constraints, failed approaches and check recipes; revalidate stale claims. Stop when affected behavior, intended files, consumers and decisive checks are understood. Expand for consequential unknowns, not completeness.
 
-Scouting establishes the affected behavior and the next justified action. For an implementation route, aim for a short plan and a useful first edit; for Investigation, Review, or Verify, establish the explanation or checks without assuming permission to change the product. Expand investigation for consequential uncertainty; verification cannot justify skipping relevant project history or a misunderstood goal.
+For new websites/composed visual work, use the [frontend design method](../cyc-design/frontend-design/SKILL.md) before markup/criteria: design/decisions.md names archetype, typeface pair, palette, signature and rejection condition; multiple sites include set divergence. Keep actual visual quality within the original criterion mapping. Narrow repairs preserve identity.
 
-For user updates, follow the shared [progress standard](../../docs/response-standard.md#progress-updates): explain the observed behavior and the likely or confirmed mechanism in short, readable prose, then the next useful change or unresolved question. File counts alone do not explain a discovery.
+## One focused pass
 
-Build the engineer's picture of the affected system: connect the relevant input, state, and readers; explain how checked project history informs the approach and which trade-off matters. Follow the [engineering understanding standard](../../docs/response-standard.md#engineering-understanding-throughout-the-work). Agreement on scope is not evidence of comprehension; ask only for a consequential missing decision.
+1. Batch independent searches/reads: entrypoint, every reader/writer of affected state, target index/matched history/error ledger, and git status/diff. Use `node <cli> investigate --path <paths>` (or --run ID); inspect returned context/recipes and run only applicable already-authorized investigation checks. Reuse equivalent current evidence, reporting unavailable prerequisites. Missing recipes mean ordinary focused discovery. See [project tools](../../docs/project-tools.md).
+2. Trace authoritative state, permitted writers, ownership, caller invariant and consumers. Choose reuse/extend/repair/create with evidence. Use [architecture questions](../../docs/code-quality.md#choose-a-structure-that-protects-the-contract) when state/interfaces change; compare alternatives only for consequential uncertainty.
+3. Keep the plan short: goal/original criteria and material clauses → approach/reason → context/freshness → files/changes → consumers/contracts → decisive checks → consequential open decisions. Group prose without dropping the original requirement-to-check mapping.
+4. Explain consequential changes as current behavior → proposed change → reason → needed decision. Ask only when missing information changes the solution; otherwise state a supported assumption and continue. Alignment clear follows the request; confirmed needs actual confirmation; unresolved needs-input blocks.
+5. Before Start freezes scope, map each new/meaningfully changed feature and affected shared owner to a canonical target-project context doc, representative paths and index. Supply contextRetention version 1, disposition required, features [{id,doc,paths}]. Reuse focused owners or create distinct identifiable records; inspect automatic inference if omitted. No index means authorized feature work creates a minimal one; context.directory can reuse a real equivalent convention. Restrictions remain pending; never broaden frozen scope later. See [Context](../cyc-context/SKILL.md).
+6. Record Scout once. Scout supplied to run start is already recorded; a second record would land at Build. Otherwise use `run record --run ID --summary TEXT --assessment FILE` with context lookup/freshness, approach, alignment and stable consumer IDs/checks from the [assessment contract](../../docs/work-assessments.md). Keep input JSON in run storage. Advisory routes retain ordinary handoffs and grant no product-edit permission.
 
-## The pass
+## Risk and decisive journeys
 
-After locating the affected paths, run `node <cli> investigate --path <paths>` (or `--run <ID>` with a known scope). Read the returned records and recipe definitions. Run applicable investigation recipes when their prerequisites hold and effects are already authorized; explain unavailable checks. Reuse equivalent current evidence already returned by discovery rather than rerunning solely to create a receipt. Do this without a separate user request, and reuse the result until paths or evidence change. Missing recipes mean ordinary focused discovery, not a new documentation requirement. See [project tools](../../docs/project-tools.md).
+For a new protected consumer, execute the existing authoritative state-changing entrypoint followed by existing status and the new protected reads **and writes**. Name it in scout.consumers using journey:{name,writer,operations}, then map the same scenario in criterionChecks/consumerChecks without losing original criteria/clauses. Reuse the authoritative resolver or explicitly reconcile canonical/legacy conflicts; never invent an independent membership policy.
 
-1. **One parallel batch, not a file-by-file tour.** In a single round of tool calls, run together:
-   - a search for the entry point (the visible string, route, function, or error message)
-   - a search for every reader and writer of the data you'll change (field name, storage key, event name, exported function)
-   - the existing feature map (if any), `docs/context/INDEX.md`, and the selected error ledger for these paths
-   - `git status` / `git diff --stat` when work is already in progress
-2. **Reuse what is established.** Read matching current component context, then inspect the affected functions and integration boundaries. Follow [Context](../cyc-context/SKILL.md) for revision/file-evidence checks; revalidate affected claims when dependencies drift. Reuse still-applicable impact knowledge, failed approaches, and check recipes rather than reconstructing them. Expand for missing consumers or consequential unknowns. State when no history applies. Choose **reuse, extend, repair, or create**, with evidence; use the project's existing capability map. Stop when affected behavior, intended files, consumers, and checks are understood.
-When the change introduces or reshapes state, ownership, or an interface, use the [architecture questions](../../docs/code-quality.md#choose-a-structure-that-protects-the-contract) while choosing the approach. Name the authoritative state, permitted writers, and invariant at the real caller. Compare another shape only if consequential uncertainty remains; a familiar local change does not need a design exercise.
+Known development case: older canonical cancelled RSVP plus newer legacy Going → existing cancellation → existing status → history/send both denied. Include canonical-only, legacy-only, ordinary Going-to-cancelled and eligible/unauthenticated/other-resource controls as applicable. Query-aware isolated adapters execute actual entrypoints, not an invented status flip. Missing journey execution stays unverified; a test/example does not prove unseen model effectiveness.
 
-3. **Write the plan in about ten lines:**
-
-   ```text
-   Goal: one sentence.  Done when: 2-4 checks.
-   Approach: reuse/extend/repair/create → existing capability and reason.
-   Context: relevant history, freshness, known failed approaches (or no match).
-   Change: file → what changes (one line each)
-   Keep consistent: consumer → why it depends on this (from the search)
-   Test: the checks that would show it broken
-   Open: only decisions that change the solution (with your recommendation)
-   ```
-
-4. **Explain consequential changes.** Current behavior → proposed change → reason → decision needed. Ask only when an unresolved answer changes the solution; bundle questions with a recommendation. Otherwise state supported assumptions and continue. Record alignment as clear or actually confirmed; unresolved consequential alignment is blocked, not assumed approved.
-5. **Record and move on.** If `run start` was given `scout`, Scout is already recorded: do not record it again, because a second record lands at Build. Otherwise `cyc run record --run ID --summary "<plan>" --assessment <scout.json>` for new implementation runs. The [assessment](../../docs/work-assessments.md) records context lookup/freshness, approach, alignment, and stable consumer IDs/checks, including directly affected behavior. Keep JSON in the run directory. Advisory routes retain ordinary handoffs.
-
-## Scale by risk, not by habit
-
-- **Normal work:** the pass above. Do not add paperwork or invent alternatives without a real decision to resolve. For visual frontend work, a useful first implementation can resolve the actual composition with meaningful content and assets; source-edit speed is not a reason to settle for a generic scaffold.
-- **High risk** (auth, payments, data migrations, deletes, public interfaces): also run [Challenge](../cyc-challenge/SKILL.md) on the plan before building. It's one focused pass, not a new research phase.
-- **Bugs:** include getting the failure to reproduce in the same batch (run the failing test or request). See the [diagnose branch](../cyc-understand/references/diagnose.md) only if it doesn't reproduce quickly.
-
-The detailed skills ([Understand](../cyc-understand/SKILL.md), [Impact](../cyc-impact/SKILL.md), [Design](../cyc-design/SKILL.md)) are reference material for when something is genuinely unclear. Don't read them by default.
-
-## Done when
-
-The findings name the affected files, consumers supported by inspection, checks to run, and the next stage for the selected route. For implementation, begin a safe, useful test or reversible slice once the plan is ready. For advisory work, pass the supported findings onward without editing the product. If investigation takes longer than expected, identify the unresolved question; surface a real blocker promptly. Never defer a critical permission, data-loss, or interface-contract question on the assumption that verification will catch it.
-
-## Anti-patterns
-
-| Name | The tell | Fix |
-| --- | --- | --- |
-| Serial tour | One file read per step, narrating each | Batch searches and reads in parallel |
-| Reading for completeness | Understanding code paths the change doesn't touch | Stop when every changed file and consumer is named |
-| Paperwork | Tables, evidence rungs, category checklists | Ten-line plan |
-| Pre-verifying | Measuring or testing hypotheticals before any edit | Build, then let the verify loop measure |
-| Re-reading instructions | Opening unrelated methods at every step | Load needed instructions once; preserve required outcomes |
+High risk (auth, payments, migrations, deletes, public interfaces) adds one focused [Challenge](../cyc-challenge/SKILL.md) before Build. Bugs include reproduction in the same pass; use [diagnosis](../cyc-understand/references/diagnose.md) if it does not reproduce quickly. Do not defer a critical permission/data-loss/interface question to verification.
 
 ## Handoff
 
-Pass the findings to the stage returned by `run next`: Build for implementation, Challenge for review, Verify for verification, Explore for experience work, or Deliver for investigation. Advisory Scout establishes an evidence-backed explanation or review scope, not permission to edit. If later work finds a consumer the plan missed, update the plan and relevant retained context before verification.
+Follow run next: Build for implementation, Challenge for review, Verify for verification, Explore for experience work, Deliver for investigation. Start a useful reversible slice once the bounded plan is ready. A newly discovered consumer changes the plan/context before final checks; a late scope gap uses honest recovery/pending. The detailed [Understand](../cyc-understand/SKILL.md), [Impact](../cyc-impact/SKILL.md) and [Design](../cyc-design/SKILL.md) methods are conditional references, not default reading.
+
+Updates follow the [progress/engineering-understanding standard](../../docs/response-standard.md#progress-updates): connect observed behavior, mechanism, consequential choice and evidence in readable prose. File counts, repeated reassurance and agreement alone do not demonstrate understanding. Surface a real blocker and its discriminating next check promptly.
