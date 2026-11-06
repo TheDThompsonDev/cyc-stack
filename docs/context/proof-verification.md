@@ -2,7 +2,7 @@
 
 Covers: scripts/runtime.mjs, scripts/test-output.mjs, test/proof-plan.test.mjs, test/prove-red.test.mjs, test/runtime-adversarial.test.mjs
 
-Last changed by AI: 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · files: scripts/runtime.mjs, test/proof-plan.test.mjs, test/prove-red.test.mjs, test/runtime-adversarial.test.mjs
+Last changed by AI: 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · files: scripts/runtime.mjs
 
 ## Current view
 
@@ -16,6 +16,8 @@ Source swaps publish candidate backups and owner records before changing files. 
 
 Run node --test test/proof-plan.test.mjs test/prove-red.test.mjs test/runtime-adversarial.test.mjs. Use a focused plan at start; final broad verification is still required. The audit observed distinct original/proof/candidate states, not a demonstrated duplicate-final-run bug. No request/time savings or unseen-model improvement has been measured. Local receipts are revision-specific and are not guaranteed to travel with source.
 
+Node file-URL importer diagnostics use fileURLToPath and native realpath before project-relative containment and matching, preserving POSIX roots, escaped characters and Windows 8.3 aliases. Foreign roots reject before lookup; invalid/unavailable identities stay unknown. Actual encoded importer and short-path journeys in test/completion-evidence.test.mjs retain module boundaries, unrelated assertion identity and rejection of module-load failures mislabeled as behavioral proof. Release CI for v0.8.0 exposed a portability gap after local Windows checks passed; the failed tag is preserved. Fresh review independently reproduced an alias gap, without proving it was the exact remote CI cause.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -25,6 +27,12 @@ Run node --test test/proof-plan.test.mjs test/prove-red.test.mjs test/runtime-ad
 - 2026-11-05 · run a81789bf: Keep measured states role-distinct, and bound reuse by actual inputs rather than a successful stage.
 
 ## History
+
+### 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · Preserve POSIX and encoded file URL identities when associating Node load diagnostics with their te…
+**Changed:** Repair Node importer diagnostic identity using fileURLToPath and native canonical paths, preserving containment and truthful module-load judgments. Encoded-path original and real 8.3-alias failures are retained; focused candidate completion checks pass 6/6, with full verification still required.
+**Learned:** Retain actual Linux-only release failure, encoded-path reproduction and standard URL decoding under the existing scoped proof/completion contracts. Shared runtime owners retain their prior policies; local receipts and CI establish specific checks, not unseen model quality or hook activation.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 814322af-3707-43f5-af30-605e6a3d0c96 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:f41c01a0964fff0dadae49f5f12264e989e9e3a129ddbba828143b431ddb4d40
 
 ### 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · Enforce canonical indexed feature context during normal completion and repair current context/histo…
 **Changed:** Require source-bound canonical feature retention before final checks; repair missing A-H feature records/mappings and actual historical evidence without rewriting completed receipts.

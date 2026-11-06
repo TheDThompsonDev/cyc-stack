@@ -1,16 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as runtime from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 import { validateProofReview } from '../scripts/work-review.mjs';
 const put = (root, path, data) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), data); };
-function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'cyc-completion-'));
-  t.after(() => { assert.equal(dirname(root), resolve(tmpdir())); assert(root.startsWith(join(resolve(tmpdir()), 'cyc-completion-'))); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
-  put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'tests', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"] }] } }));
+function fixture(t, { spaces = false, shortPath = false } = {}) {
+  const prefix = spaces ? 'cyc-completion space-' : 'cyc-completion-';
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => { assert.equal(dirname(root), resolve(tmpdir())); assert(root.startsWith(join(resolve(tmpdir()), prefix))); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
+  let checkCwd = '';
+  if (shortPath) {
+    const short = spawnSync('cmd.exe', ['/d', '/c', 'for %I in ("%CYC_TEST_ROOT%") do @echo %~sI'], { encoding: 'utf8', env: { ...process.env, CYC_TEST_ROOT: root }, windowsHide: true, windowsVerbatimArguments: true });
+    assert.equal(short.status, 0, short.error?.message ?? short.stderr);
+    const alias = short.stdout.trim();
+    if (alias === root || !/~\d/.test(alias)) { t.skip('This Windows volume does not expose an 8.3 alias.'); return null; }
+    assert.equal(realpathSync.native(alias), realpathSync.native(root));
+    checkCwd = `process.chdir(${JSON.stringify(alias)});`;
+  }
+  put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'tests', command: process.execPath, args: ['-e', checkCwd + "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"] }] } }));
   put(root, 'feature.mjs', 'export const feature = () => 0;');
   const id = runtime.startRun(root, { goal: 'Feature returns one.', playbook: 'feature', executionMode: 'standalone', evidenceVersion: 1, requirements: 'The existing feature returns one.', criteria: [{ id: 'works', description: 'Feature works', clauses: [{ id: 'endpoint', description: 'Returns one' }] }] }).runId;
   runtime.quickHandoff(root, id, { summary: 'Read the feature boundary.', assessment: fixtureAssessment(runtime.readRun(root, id), 'scout') });
@@ -82,3 +93,25 @@ test('Node missing named exports are observed without inventing behavioral proof
   const state = runtime.readRun(root, id); state.testProof.failures.find(f => f.id === load.id).hint = 'unclassified'; state.testProof.failures.find(f => f.id === load.id).error = 'test failed';
   assert.throws(() => validateProofReview(state, review), /generic test-file failure/);
 });
+
+function namedExportIdentity(t, options) {
+  const selected = fixture(t, options);
+  if (!selected) return;
+  const { root, id, input } = selected;
+  put(root, 'feature.mjs', 'export const feature=()=>1;export const api=()=>1;');
+  put(root, 'test/load.test.mjs', "import test from 'node:test';import {api} from '../feature.mjs';test('new API',()=>api());");
+  const first = runtime.finishRun(root, id, input);
+  const load = first.proof.failures.find(f => f.name.includes('load.test.mjs'));
+  assert.equal(load.hint, 'module-load', JSON.stringify(load));
+  assert.match(load.error, /does not provide an export named 'api'/);
+  assert.match(load.boundary, /feature\.mjs.*api/);
+  const behavior = first.proof.failures.find(f => f.name === 'existing feature returns one');
+  assert.equal(behavior.hint, 'assertion');
+  assert.equal(behavior.boundary, null);
+  const remaining = JSON.parse(readFileSync(join(root, first.nextAction.inputTemplate)));
+  remaining.assessment.proofReview.cases = first.proof.failures.map(f => ({ id: f.id, category: 'behavioral', reason: 'Deliberately reject a missing export mislabeled as behavior.', boundary: 'Existing export contract' }));
+  assert.throws(() => runtime.finishRun(root, id, remaining), /module-load failure/);
+  assert.equal(runtime.readRun(root, id).verification, null);
+}
+test('Node named-export diagnostics retain encoded importer paths', t => namedExportIdentity(t, { spaces: true }));
+test('Node named-export diagnostics reconcile actual Windows short-path aliases', { skip: process.platform !== 'win32' }, t => namedExportIdentity(t, { spaces: true, shortPath: true }));

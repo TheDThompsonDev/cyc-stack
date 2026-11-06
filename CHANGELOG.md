@@ -2,6 +2,10 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.8.1 (2026-11-06)
+
+- Preserve POSIX roots, decoded URLs and real Windows short-path identities when matching Node load diagnostics to their importer. Add actual encoded-path and 8.3-alias journeys that reject missing-export failures mislabeled as behavioral evidence. Remote CI exposed the portability gap after local Windows checks passed; the 0.8.0 tag remains unchanged and was not published to npm.
+
 ## 0.8.0 (2026-11-06)
 
 - Retain new and changed feature context in the target project's indexed `docs/context/` folder. Normal completion prepares the current view and chronological history, checks path ownership and index links, and refuses missing, stale or misleading coverage. Keep legacy stored runs compatible.

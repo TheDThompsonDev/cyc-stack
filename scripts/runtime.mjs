@@ -984,11 +984,19 @@ export function proveRun(root, id, { tests, measureOriginal = false } = {}) {
     // A failure's file as an exact project-relative path. Runners report absolute paths (node --test)
     // or paths relative to the project (tap, jest); a suffix match would let an old failure in
     // legacy/test/x.test.mjs pass for a new test/x.test.mjs. Anything outside the project is null.
-    const realRoot = realpathSync(root);
+    const realRoot = realpathSync.native(root);
     const projectRelative = file => {
       if (!text(file)) return null;
-      const value = file.replace(/^file:\/\/\/?/, '').split(String.fromCharCode(92)).join('/');
-      const path = isAbsolute(value) || /^[A-Za-z]:\//.test(value) ? slash(relative(realRoot, resolve(value))) : value.replace(/^\.\//, '');
+      let value;
+      try { value = (file.startsWith('file:') ? fileURLToPath(file) : file).split(String.fromCharCode(92)).join('/'); }
+      catch { return null; }
+      let path = value.replace(/^\.\//, '');
+      if (isAbsolute(value) || /^[A-Za-z]:\//.test(value)) {
+        // Reject foreign roots before lookup; native realpath expands Windows 8.3 aliases.
+        if (isAbsolute(relative(realRoot, resolve(value)))) return null;
+        try { path = slash(relative(realRoot, realpathSync.native(value))); }
+        catch { return null; }
+      }
       return !path || path === '..' || path.startsWith('../') || isAbsolute(path) ? null : path;
     };
     const failuresInNewTestFiles = results => {

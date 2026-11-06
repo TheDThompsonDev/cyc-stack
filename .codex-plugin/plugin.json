@@ -1,6 +1,6 @@
 {
   "name": "cycstack",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "license": "MIT",
   "description": "Portable AI engineering workflows with shared project context and verifiable changes.",
   "author": {

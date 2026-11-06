@@ -2,7 +2,7 @@
 
 Covers: scripts/context-review.mjs, scripts/project-tools.mjs, scripts/runtime.mjs, scripts/work-review.mjs, bin/cyc.mjs, methods/cyc-context/**, docs/context/INDEX.md, docs/context.md, test/context-review.test.mjs, test-support/historical-runtime.test.fixture.mjs, test-support/historical-baseline.test.fixture.mjs
 
-Last changed by AI: 2026-11-06 · run be9aab3c-87c6-4a15-8df8-4f8fd7ea72c1 · files: scripts/context-review.mjs, test/context-review.test.mjs
+Last changed by AI: 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · files: scripts/runtime.mjs
 
 ## Current view
 
@@ -31,6 +31,12 @@ Run node --test test/context-review.test.mjs, node bin/cyc.mjs context lint and 
 - 2026-11-01 · run 3e945303: docs/context/context-docs.md records the layout rules, how a run becomes a doc entry, the duplicated matcher and the measurement limits; docs/context-tokens-2026-11-01.md records the observed sizes. Lesson from the blocked run: the configured tests check must allow for the whole suite (the h2h fixture test alone took 356 s after the 0.6.0 fixtures), and a timed-out check cannot be accepted as pre…
 
 ## History
+
+### 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · Preserve POSIX and encoded file URL identities when associating Node load diagnostics with their te…
+**Changed:** Repair Node importer diagnostic identity using fileURLToPath and native canonical paths, preserving containment and truthful module-load judgments. Encoded-path original and real 8.3-alias failures are retained; focused candidate completion checks pass 6/6, with full verification still required.
+**Learned:** Retain actual Linux-only release failure, encoded-path reproduction and standard URL decoding under the existing scoped proof/completion contracts. Shared runtime owners retain their prior policies; local receipts and CI establish specific checks, not unseen model quality or hook activation.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 814322af-3707-43f5-af30-605e6a3d0c96 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:f41c01a0964fff0dadae49f5f12264e989e9e3a129ddbba828143b431ddb4d40
 
 ### 2026-11-06 · run be9aab3c-87c6-4a15-8df8-4f8fd7ea72c1 · Reject equivalent global/root catch-all wildcard families in canonical feature retention while pres…
 **Changed:** Reject equivalent global/root catch-all wildcard families while preserving focused patterns and earlier fixture/product repairs.
