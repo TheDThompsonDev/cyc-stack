@@ -3,7 +3,7 @@
 <div align="center">
   <p><strong>CYC Stack</strong></p>
   <h1>Make your AI worth the tokens it uses.</h1>
-  <p>CYC is a portable library of engineering skills and playbooks for Claude Code, Codex and Cursor&mdash;built around <strong>context engineering, token optimization and clear, actionable results.</strong></p>
+  <p>CYC is a portable library of engineering skills and playbooks for Claude Code, Codex and Cursor, built around <strong>context engineering, token optimization and clear, actionable results.</strong></p>
   <p>You spent the tokens getting it right. <strong>The decisions and lessons that got you there shouldn&rsquo;t disappear when the chat ends.</strong></p>
   <p>Give your agent the context that matters. Carry what you learn into the next task. Get answers that show what changed, what was checked and what still needs attention.</p>
   <p><strong>Put it to work on your next task. Make it a shared standard for your team.</strong></p>
