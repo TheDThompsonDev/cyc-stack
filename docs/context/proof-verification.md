@@ -1,8 +1,8 @@
 # Focused proof and broad verification
 
-Covers: scripts/runtime.mjs, scripts/test-output.mjs, test/proof-plan.test.mjs, test/prove-red.test.mjs, test/runtime-adversarial.test.mjs
+Covers: scripts/runtime.mjs, scripts/test-output.mjs, test/proof-plan.test.mjs, test/prove-red.test.mjs, test/runtime-adversarial.test.mjs, test/cost-cuts.test.mjs, test/finish-runners.test.mjs
 
-Last changed by AI: 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · files: scripts/runtime.mjs
+Last changed by AI: 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · files: test/cost-cuts.test.mjs, test/finish-runners.test.mjs, test/proof-plan.test.mjs, test/prove-red.test.mjs
 
 ## Current view
 
@@ -18,6 +18,8 @@ Run node --test test/proof-plan.test.mjs test/prove-red.test.mjs test/runtime-ad
 
 Node file-URL importer diagnostics use fileURLToPath and native realpath before project-relative containment and matching, preserving POSIX roots, escaped characters and Windows 8.3 aliases. Foreign roots reject before lookup; invalid/unavailable identities stay unknown. Actual encoded importer and short-path journeys in test/completion-evidence.test.mjs retain module boundaries, unrelated assertion identity and rejection of module-load failures mislabeled as behavioral proof. Release CI for v0.8.0 exposed a portability gap after local Windows checks passed; the failed tag is preserved. Fresh review independently reproduced an alias gap, without proving it was the exact remote CI cause.
 
+When a Node check needs individual failure identities, declare --test-reporter=tap rather than relying on version-dependent presentation defaults. The proof/completion fixtures explicitly request TAP; their dot-reporter control still rejects unnamed output. Node24 publisher failures were reproduced as fixture protocol setup, with assertion bodies and suite scope unchanged. TAP/Jest/Mocha remain the supported parsed formats; Spec or other unsupported reports remain diagnostic and cannot establish named semantic coverage.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -27,6 +29,12 @@ Node file-URL importer diagnostics use fileURLToPath and native realpath before 
 - 2026-11-05 · run a81789bf: Keep measured states role-distinct, and bound reuse by actual inputs rather than a successful stage.
 
 ## History
+
+### 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · Declare the TAP protocol explicitly in proof fixtures so Node24 presentation defaults cannot invali…
+**Changed:** Declare TAP explicitly in the isolated fixtures that require named proof output. Existing assertion bodies, suite scope, dot-output rejection and Node24 release gate are preserved. OfficialNode24 before failures and focused4/4 after results are retained; broad final verification is pending.
+**Learned:** Retain the explicit TAP protocol prerequisite for named Node evidence, Node24 default presentation mismatch, and unchanged unknown-output boundaries. This is setup verification, not application defect proof or native activation.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 3ce340a0-2f40-4f23-b489-d37968319c71 command receipts separately. Local receipts may not travel with source.
+**Files:** test/cost-cuts.test.mjs@sha256:64c70bc2865060f815df157dbe6febf4bf90b3fbf922d71e00cece4d3cfe018b, test/finish-runners.test.mjs@sha256:6202a1ac7f5dab4531f7b47cf5f50466ab697756eea42b60782469635bf4a594, test/proof-plan.test.mjs@sha256:5e4fafa002ffbc3c51fa524878c26791d52093c2a5b12ea65a6fdd00a69e7842, test/prove-red.test.mjs@sha256:41f61d0276dedfe0fd4c7bcdb4822053e52713b9f5578e360d0b1d5143f0d8af
 
 ### 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · Preserve POSIX and encoded file URL identities when associating Node load diagnostics with their te…
 **Changed:** Repair Node importer diagnostic identity using fileURLToPath and native canonical paths, preserving containment and truthful module-load judgments. Encoded-path original and real 8.3-alias failures are retained; focused candidate completion checks pass 6/6, with full verification still required.

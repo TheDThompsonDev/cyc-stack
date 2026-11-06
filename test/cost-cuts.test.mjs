@@ -34,7 +34,7 @@ function scratch(t, prefix) {
 // Each suite execution appends its working directory to a log outside the project, so a test can
 // count the runs in the project, and confirm that none ran anywhere else (a cyc-baseline- copy).
 function counted(log, { before = '', id = 'unit' } = {}) {
-  return { id, command: process.execPath, timeoutMs: 60000, args: ['-e', `require('fs').appendFileSync(${JSON.stringify(log)}, process.cwd() + '\\n');${before} delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test'], { stdio: 'inherit' }); process.exit(r.status ?? 1);`] };
+  return { id, command: process.execPath, timeoutMs: 60000, args: ['-e', `require('fs').appendFileSync(${JSON.stringify(log)}, process.cwd() + '\\n');${before} delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap'], { stdio: 'inherit' }); process.exit(r.status ?? 1);`] };
 }
 const runsIn = log => {
   const lines = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : [];
@@ -73,7 +73,7 @@ function withMode(t, mode) {
 // ---------- packet: run finish writes the review packet ----------
 
 function hookProject(t, host = 'claude') {
-  const { root } = repo(t, { commands: [{ id: 'unit', command: process.execPath, timeoutMs: 60000, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] });
+  const { root } = repo(t, { commands: [{ id: 'unit', command: process.execPath, timeoutMs: 60000, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] });
   mkdirSync(join(root, 'scripts'));
   for (const file of hookModules) copyFileSync(join(project, 'scripts', file), join(root, 'scripts', file));
   const key = digest(`${host}:test-session`).slice(0, 32);

@@ -11,7 +11,7 @@ import { finishRun, nextRun, readRun, recordHandoff, startRun } from '../test-su
 // runs that halt during finish. The fixtures are those of prove-red.test.mjs; these tests have their
 // own file so the test runner runs them beside it rather than after it.
 process.env.CYC_BASELINE_MODE = 'off';
-const unitCheck = { id: 'unit', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"], timeoutMs: 60000 };
+const unitCheck = { id: 'unit', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"], timeoutMs: 60000 };
 const buggy = 'export const add = (a, b) => a - b;\n';
 const fixed = 'export const add = (a, b) => a + b;\n';
 const smoke = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from '../src/calc.mjs';\ntest('add exists', () => assert.equal(typeof add, 'function'));\n";

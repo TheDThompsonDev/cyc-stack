@@ -2,7 +2,7 @@
 
 Covers: methods/cyc-scout/**, methods/cyc-build/**, methods/cyc-verify/**, methods/cyc-deliver/**, methods/cyc-remember/**, skills/cyc/SKILL.md, docs/work-assessments.md
 
-Last changed by AI: 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · files: docs/work-assessments.md, methods/cyc-build/SKILL.md, methods/cyc-deliver/SKILL.md, methods/cyc-remember/SKILL.md, methods/cyc-scout/SKILL.md, methods/cyc-verify/SKILL.md, skills/cyc/SKILL.md
+Last changed by AI: 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · files: docs/work-assessments.md
 
 ## Current view
 
@@ -15,6 +15,8 @@ Distinct A-H capabilities now have focused records: [execution](execution-owners
 The omitted ed2b9913 History was restored from its actual completed record in this separately scoped repair, not by changing that receipt. INDEX/ledger/recipe files are supporting records. orchestration.evidence.json remains an explicitly historical, drifted byte manifest; it is not current evidence and is not silently refreshed. Current source/command conclusions must be rechecked from Git/diff and executable commands or the current run's local receipts.
 
 Run node bin/cyc.mjs context lint and path-specific investigate, then the project's full configured checks. The fixed index/Covers/History metadata must agree before completion. Supplementary recipes do not replace broad checks. Native activation, human acceptance, semantic understanding and improvements on unseen tasks remain unverified unless independently observed. The source-only handoff must retain rules, decisions, failures, commands and limits without assuming ignored receipts travel with the repository.
+
+When a Node check needs individual failure identities, declare --test-reporter=tap rather than relying on version-dependent presentation defaults. The proof/completion fixtures explicitly request TAP; their dot-reporter control still rejects unnamed output. Node24 publisher failures were reproduced as fixture protocol setup, with assertion bodies and suite scope unchanged. TAP/Jest/Mocha remain the supported parsed formats; Spec or other unsupported reports remain diagnostic and cannot establish named semantic coverage.
 
 ## Lessons
 
@@ -33,6 +35,12 @@ Run node bin/cyc.mjs context lint and path-specific investigate, then the projec
 - 2026-10-23 · run ffd16511: Ledger RESTORE-001: Concurrent edit overwritten during test proof
 
 ## History
+
+### 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · Declare the TAP protocol explicitly in proof fixtures so Node24 presentation defaults cannot invali…
+**Changed:** Declare TAP explicitly in the isolated fixtures that require named proof output. Existing assertion bodies, suite scope, dot-output rejection and Node24 release gate are preserved. OfficialNode24 before failures and focused4/4 after results are retained; broad final verification is pending.
+**Learned:** Retain the explicit TAP protocol prerequisite for named Node evidence, Node24 default presentation mismatch, and unchanged unknown-output boundaries. This is setup verification, not application defect proof or native activation.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 3ce340a0-2f40-4f23-b489-d37968319c71 command receipts separately. Local receipts may not travel with source.
+**Files:** docs/work-assessments.md@sha256:8edb806461be9e6ac54ce0af9b9ba3823941ee85f63213e49f3c73c89a8a54b7
 
 ### 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · Enforce canonical indexed feature context during normal completion and repair current context/histo…
 **Changed:** Require source-bound canonical feature retention before final checks; repair missing A-H feature records/mappings and actual historical evidence without rewriting completed receipts.

@@ -15,7 +15,7 @@ import { fixtureAssessment } from '../test-support/assessments.mjs';
 process.env.CYC_BASELINE_MODE = 'off';
 // The fixture check runs node --test itself. It drops the inherited test-runner context so the
 // nested run exits non-zero on failure instead of reporting to this process.
-const unitCheck = { id: 'unit', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"], timeoutMs: 60000 };
+const unitCheck = { id: 'unit', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"], timeoutMs: 60000 };
 
 const buggy = 'export const add = (a, b) => a - b;\n';
 const fixed = 'export const add = (a, b) => a + b;\n';
@@ -122,7 +122,7 @@ test('when the run-start code already fails the checks, TAP names attribute the 
   // The dot reporter prints no test names, so a check-level proof cannot attribute the failure.
   const dots = repo(t, { source: broken }).root;
   const config = JSON.parse(readFileSync(join(dots, '.cyc/config.json'), 'utf8'));
-  config.verification.commands = [{ ...unitCheck, args: [unitCheck.args[0], unitCheck.args[1].replace("['--test']", "['--test', '--test-reporter=dot']")] }];
+  config.verification.commands = [{ ...unitCheck, args: [unitCheck.args[0], unitCheck.args[1].replace('--test-reporter=tap', '--test-reporter=dot')] }];
   writeFileSync(join(dots, '.cyc/config.json'), JSON.stringify(config));
   const dotId = run(dots, 'bug-fix');
   writeFileSync(join(dots, 'test/add.test.mjs'), catching);
@@ -335,7 +335,7 @@ test('capture-backed proof preserves weak-test failing-control and refactor sema
 test('captured test originals do not become extra executable tests under recursive discovery', t => {
   const { root } = repo(t, { gitMode: 'none' });
   const config = JSON.parse(readFileSync(join(root, '.cyc/config.json'), 'utf8'));
-  const discovery = "delete process.env.NODE_TEST_CONTEXT;const fs=require('fs'),p=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(p.join(d,e.name)):[p.join(d,e.name)]);const tests=walk('.').filter(f=>f.endsWith('.test.mjs'));const r=require('child_process').spawnSync(process.execPath,['--test',...tests],{stdio:'inherit'});process.exit(r.status??1);";
+  const discovery = "delete process.env.NODE_TEST_CONTEXT;const fs=require('fs'),p=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(p.join(d,e.name)):[p.join(d,e.name)]);const tests=walk('.').filter(f=>f.endsWith('.test.mjs'));const r=require('child_process').spawnSync(process.execPath,['--test','--test-reporter=tap',...tests],{stdio:'inherit'});process.exit(r.status??1);";
   config.verification.commands = [{ id: 'recursive', command: process.execPath, args: ['-e', discovery], timeoutMs: 60000 }];
   writeFileSync(join(root, '.cyc/config.json'), JSON.stringify(config));
   const id = run(root, 'bug-fix');
@@ -381,7 +381,7 @@ for (const flag of ['--assume-unchanged', '--skip-worktree']) {
 
 async function interleavedProof(t, { phase = 'treatment', target = 'src/calc.mjs', action = 'edit', otherRun = false, previousProof = false } = {}) {
   const { root } = repo(t, { gitMode: 'none' });
-  const command = `delete process.env.NODE_TEST_CONTEXT;const f=require('fs');const phase=f.existsSync('test/add.test.mjs')?'treatment':'control';const r=require('child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});if(f.existsSync('.cyc/runtime/armed')&&phase===${JSON.stringify(phase)}&&!f.existsSync('.cyc/runtime/other-invocation')){f.writeFileSync('.cyc/runtime/ready','ready');const end=Date.now()+10000;while(!f.existsSync('.cyc/runtime/writer-done')){if(Date.now()>end)process.exit(22);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);}}process.exit(r.status??1);`;
+  const command = `delete process.env.NODE_TEST_CONTEXT;const f=require('fs');const phase=f.existsSync('test/add.test.mjs')?'treatment':'control';const r=require('child_process').spawnSync(process.execPath,['--test','--test-reporter=tap'],{stdio:'inherit'});if(f.existsSync('.cyc/runtime/armed')&&phase===${JSON.stringify(phase)}&&!f.existsSync('.cyc/runtime/other-invocation')){f.writeFileSync('.cyc/runtime/ready','ready');const end=Date.now()+10000;while(!f.existsSync('.cyc/runtime/writer-done')){if(Date.now()>end)process.exit(22);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);}}process.exit(r.status??1);`;
   const config = JSON.parse(readFileSync(join(root, '.cyc/config.json')));
   config.verification.commands = [{ id: 'unit', command: process.execPath, args: ['-e', command], timeoutMs: 20000 }];
   writeFileSync(join(root, '.cyc/config.json'), JSON.stringify(config));

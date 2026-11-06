@@ -43,6 +43,8 @@ Run the applicable real journey/recipe checks, map acceptance criteria and affec
 
 **Test proof.** Normal finish runs the frozen proof plan on originals plus changed tests and restores owned candidate bytes. Bug fixes/features require decisive red; refactors require green characterization. Missing originals remain unavailable. A genuinely non-testable change can use testProof:{status:"exempt",reason:"actual limitation and alternative evidence"}; this never becomes a proof receipt. Changed tests invalidate proof. See [originals/ownership](runtime.md#run-start-originals).
 
+Node checks that need named-case evidence should explicitly request --test-reporter=tap. Presentation defaults vary; unsupported output remains diagnostic, not named semantic coverage.
+
 ```json
 {
   "semanticReview": {

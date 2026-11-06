@@ -2,6 +2,10 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.8.2 (2026-11-06)
+
+- Declare TAP in isolated fixtures that assert named Node proof results, including on Node 24. Keep the original assertions, unnamed-output refusal and Node 24 publishing gate. Document the report-format prerequisite; no application behavior is changed by this fixture correction.
+
 ## 0.8.1 (2026-11-06)
 
 - Preserve POSIX roots, decoded URLs and real Windows short-path identities when matching Node load diagnostics to their importer. Add actual encoded-path and 8.3-alias journeys that reject missing-export failures mislabeled as behavioral evidence. Remote CI exposed the portability gap after local Windows checks passed; the 0.8.0 tag remains unchanged and was not published to npm.

@@ -21,7 +21,7 @@ function fixture(t, { spaces = false, shortPath = false } = {}) {
     assert.equal(realpathSync.native(alias), realpathSync.native(root));
     checkCwd = `process.chdir(${JSON.stringify(alias)});`;
   }
-  put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'tests', command: process.execPath, args: ['-e', checkCwd + "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"] }] } }));
+  put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'tests', command: process.execPath, args: ['-e', checkCwd + "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap'],{stdio:'inherit'});process.exit(r.status??1)"] }] } }));
   put(root, 'feature.mjs', 'export const feature = () => 0;');
   const id = runtime.startRun(root, { goal: 'Feature returns one.', playbook: 'feature', executionMode: 'standalone', evidenceVersion: 1, requirements: 'The existing feature returns one.', criteria: [{ id: 'works', description: 'Feature works', clauses: [{ id: 'endpoint', description: 'Returns one' }] }] }).runId;
   runtime.quickHandoff(root, id, { summary: 'Read the feature boundary.', assessment: fixtureAssessment(runtime.readRun(root, id), 'scout') });

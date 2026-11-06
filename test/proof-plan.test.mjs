@@ -7,7 +7,7 @@ import * as runtime from '../test-support/historical-runtime.test.fixture.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
 const put = (root, path, data) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), data); };
 function folder(t) { const root = mkdtempSync(join(tmpdir(), 'cyc-plan-')); t.after(() => { assert.equal(dirname(root), resolve(tmpdir())); assert(root.startsWith(join(resolve(tmpdir()), 'cyc-plan-'))); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }); return root; }
-const nodeTests = paths => ['-e', `delete process.env.NODE_TEST_CONTEXT; const r=require('node:child_process').spawnSync(process.execPath,${JSON.stringify(['--test', ...paths])},{stdio:'inherit'});process.exit(r.status??1)`];
+const nodeTests = paths => ['-e', `delete process.env.NODE_TEST_CONTEXT; const r=require('node:child_process').spawnSync(process.execPath,${JSON.stringify(['--test', '--test-reporter=tap', ...paths])},{stdio:'inherit'});process.exit(r.status??1)`];
 test('focused proof is frozen and role-distinct; broad original evidence is measured before excusing a broad failure', t => {
   const root = folder(t);
   put(root, 'feature.mjs', 'export const feature=()=>0;');

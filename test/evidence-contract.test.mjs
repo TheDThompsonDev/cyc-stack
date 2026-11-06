@@ -112,7 +112,7 @@ test('mixed baseline proof retains behavioral and missing-interface diagnostics 
   const { root, id } = fixture(t, { playbook: 'bug-fix', setup(root) {
     put(root, 'duration.mjs', 'export const duration = () => 90;');
     put(root, 'test/behavior.test.mjs', "import test from 'node:test'; import assert from 'node:assert/strict'; import {duration} from '../duration.mjs'; test('original duration',()=>assert.equal(duration(),90));");
-    put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', 'test/behavior.test.mjs'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] } }));
+    put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'test/behavior.test.mjs'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] } }));
   } });
   runtime.quickHandoff(root, id, { summary: 'Preserve duration boundary.', assessment: assessment(root, id, 'scout') });
   put(root, 'duration.mjs', 'export const duration = () => 60;');
@@ -180,7 +180,7 @@ test('Deliver and completion retain command/review fingerprints after fast finis
 test('green refactor proof receipt remains bound through Verify Deliver and pre-completion checks', t => {
   const { root, id } = fixture(t, { playbook: 'refactor', setup(root) {
     put(root, 'calc.mjs', 'export const result = () => 2;');
-    put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] } }));
+    put(root, '.cyc/config.json', JSON.stringify({ verification: { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT; const r = require('node:child_process').spawnSync(process.execPath, ['--test', '--test-reporter=tap'], { stdio: 'inherit' }); process.exit(r.status ?? 1);"] }] } }));
   } });
   runtime.quickHandoff(root, id, { summary: 'Characterize existing result.', assessment: assessment(root, id, 'scout') });
   put(root, 'calc.mjs', 'export function result() { return 2; }');
