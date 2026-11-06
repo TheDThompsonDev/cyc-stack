@@ -57,4 +57,4 @@ jobs:
           name: npm-candidate
           path: release-assets/
       - name: Publish through npm OIDC
-        run: npm publish release-assets/*.tgz --access public --tag "$RELEASE_CHANNEL" --ignore-scripts
+        run: npm publish ./release-assets/*.tgz --access public --tag "$RELEASE_CHANNEL" --ignore-scripts

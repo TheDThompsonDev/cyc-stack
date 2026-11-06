@@ -64,6 +64,8 @@ Publication creates an immutable package version; a failed name claim requires a
 
 The publishing workflow requires dispatch on the exact release tag and checks the event reference and checked-out commit before publication, binding provenance to that source. An archive or source checkout is usable before registry publication. Preparing `package.json` or running the builder does not publish anything. The workflow's OIDC exchange still needs a real authorized release trial.
 
+Local archive arguments must start with `./` (or be absolute). In the v0.8.2 publishing job, bare `release-assets/cyc-stack-0.8.2.tgz` was interpreted as a GitHub repository and failed before npm authentication. The corrected workflow uses `./release-assets/*.tgz`; older tags retain their original workflow. The reviewed archive can also be published through the documented local account flow, without claiming OIDC provenance.
+
 ## Qualify plugins
 
 Use each host's supported schema, trust UI and installation surface. Check discovery, project activation, a real prompt/completion cycle, rejection/correction, updates and removal. Record the host and runtime versions used.
