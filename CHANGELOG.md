@@ -2,6 +2,12 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.8.3 (2026-11-06)
+
+- Use an explicit local archive path in the trusted npm publisher, keeping exact tag/source checks and the Node 24 test gate.
+- Include the indexed feature-context and workflow improvements from 0.8.0, portable diagnostic identities from 0.8.1, and explicit TAP fixtures from 0.8.2.
+- Refresh indexed release setup guidance and the shared index-owner history after the observed archive-path failure.
+
 ## 0.8.2 (2026-11-06)
 
 - Declare TAP in isolated fixtures that assert named Node proof results, including on Node 24. Keep the original assertions, unnamed-output refusal and Node 24 publishing gate. Document the report-format prerequisite; no application behavior is changed by this fixture correction.
