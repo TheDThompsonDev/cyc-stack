@@ -2,6 +2,11 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.9.1 (2026-11-08)
+
+- Document recovery from a missing npm trusted-publisher connection, the first-publication validation deadline, and the distinction between a successful GitHub release, registry publication and deployment status.
+- Preserve exact release-tag/source checks and failed deployment history. Package runtime behavior is unchanged; trusted publishing still requires a successful authorized release trial.
+
 ## 0.9.0 (2026-11-08)
 
 - Keep one versioned task context per run. The lead merges worker findings, evidence, conflicts and dispositions into that document and acknowledges its current revision before dependent work.

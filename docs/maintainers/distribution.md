@@ -66,6 +66,16 @@ The publishing workflow requires dispatch on the exact release tag and checks th
 
 Local archive arguments must start with `./` (or be absolute). In the v0.8.2 publishing job, bare `release-assets/cyc-stack-0.8.2.tgz` was interpreted as a GitHub repository and failed before npm authentication. The corrected workflow uses `./release-assets/*.tgz`; older tags retain their original workflow. The reviewed archive can also be published through the documented local account flow, without claiming OIDC provenance.
 
+### Repeated publication failures and the repository sidebar
+
+The [v0.9.0 publication run](https://github.com/TheDThompsonDev/cyc-stack/actions/runs/42449847317) passed tests, packed the candidate and uploaded its artifact, then npm rejected the registry upload with `E404` on November 8, 2026. An authenticated inspection of the package settings showed no configured trusted publisher. The workflow had the required `id-token: write` permission and used npm 11.19.1; changing tests or the GitHub status cannot repair missing registry authorization. An `E404` alone does not identify which authorization field is wrong: inspect the actual package settings.
+
+Add the GitHub Actions connection using the exact owner, repository, workflow filename and environment in step 3 above. Allow direct `npm publish`, since that is the command this workflow runs. Preserve the package's existing authentication requirements. A new connection must complete its first successful trusted publication within two days; a local account publication does not validate that connection. See [npm's configuration and expiry rules](https://docs.npmjs.com/trusted-publishers/).
+
+GitHub release creation, npm publication and the GitHub environment's deployment record are separate results. Version `0.9.0` reached npm under `next` later that day; its archive's SHA-256 matches the GitHub release (`b2a3a3fc21fc1e962990e472eae26a8f551fef3c7595c4574f5e9ead96c821e9`). That does not make the failed Actions attempt successful or establish that trusted publishing works.
+
+Do not retry an upload for a version that already exists, move a release tag, or publish a throwaway package just to test authorization. Validate the connection with the next reviewed, unpublished release: dispatch on its matching tag, require the publish job to succeed, and inspect the registry version, channel and provenance. If a version was deliberately published outside Actions, its deployment record can separately describe verification of the existing publication after comparing the exact archives. Preserve the failed attempt and disclose that reconciliation is not a successful OIDC trial.
+
 ## Qualify plugins
 
 Use each host's supported schema, trust UI and installation surface. Check discovery, project activation, a real prompt/completion cycle, rejection/correction, updates and removal. Record the host and runtime versions used.
