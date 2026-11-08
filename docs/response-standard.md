@@ -52,11 +52,19 @@ Send one of these as a standalone message:
 
 The toggle applies to the current conversation in the current host. It survives subsequent turns and resuming the same session; new conversations start with the limit ON. It does not change other conversations or synchronize between Codex and Claude Code. Both hosts support the same behavior.
 
+For first completion, or concise delivery linking deeper material, offer: **Say `expand` for more detail once, or `limit off` to allow longer replies in this chat. Use `limit on` to bring back short replies.** Send controls as standalone messages. Omit redundant invitations when already expanded/OFF or project-owned presentation applies, and avoid repeating the full footer in progress updates. The ambiguous “turn this off” is not recognized. `responseGuidance` projects observed preferences; unknown state stays unverified.
+
 Standalone "Turn off the thousand character limit" and "Turn on the 1,000-character limit" are also recognized, with optional "please" and trailing punctuation. Mentioning a toggle inside a longer request, quotation, code block, or example does not activate it. Use plain `limit off` and `limit on` to avoid host-specific slash-command routing.
 
 The assistant confirms the setting after a toggle. Turning the limit OFF only lifts the length cap: visuals, acceptance checks, evidence, and honest limitations remain required. OFF permits useful depth without requiring verbosity. Expansion never silently turns an OFF setting back ON. Hook-generated repair continuations retain both the setting and retry budget.
 
 `cyc check-reply` without `--session` is a stateless diagnostic: its default remains capped, and `--expanded` explicitly checks without the cap. With `--session`, and in the hook, the conversation setting applies automatically.
+
+## A first task that explains context
+
+For setup/requested guided work, introduce the purpose once: “Your request tells us what to change. The project's rules and earlier decisions tell us what must keep working.” Use relevant records, recheck consequential claims against code/current authorization and explain the decision affected. No new report, automatic personal tracking or mandatory quiz is required.
+
+Illustrative task: add an Open tasks filter. Before: name the behavior to preserve. During, only if observed: “Imported fields exist outside this screen; the filter will preserve the stored records.” After, only with actual evidence: name the passing/failed checks, limits and saved canonical context. A fresh chat adding a count should find/revalidate that rule; observing its use and a developer's explanation is separate from supplying this copy. Never invent a discovery, failure or usefulness claim to make CYC look helpful.
 
 ## Levels of done
 

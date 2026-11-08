@@ -36,6 +36,8 @@ Detailed/interrupted flows retain record/retry/recover. Failed checks require re
 
 ## Explain progress
 
+For setup or a requested first-task walkthrough, explain the benefit once: the request says what changes; project rules and earlier decisions say what must keep working. Before work name the outcome and preserved behavior; during work connect an actual rule/discovery to a decision and check; after work link actual evidence, limits and saved target context. Introduce capabilities when useful, not as a catalog. Reuse onboard.experience, investigate match/freshness and route/workflowAdvice as leads. They do not certify semantics, authorize new work or waive checks. Unknown first-use history stays unknown; create no personal tracking store.
+
 Use the [shared progress/engineering-understanding standard](../../docs/response-standard.md#progress-updates): readable behavior → mechanism → decision/check, usually one or two paragraphs at meaningful developments and about each minute of long work. Disclose uncertainty; command counts and explanation supplied do not prove understanding. Pass this to an authorized reviewer and consolidate findings.
 
 ## The senior bar
@@ -83,3 +85,7 @@ Use the [project tools](../../docs/project-tools.md) automatically when relevant
 ## Autonomy
 
 Just do: read, search, run tests, edit files in scope, build prototypes. Always ask first: commits and pushes (unless asked), publishing, deleting user data, global installs, sending messages. The delivery gate won't let you finish while your run is still open; a run that ends blocked is reported as blocked, never as done.
+
+## Unified task context and bounded delegation
+
+For available Codex dispatch, freeze delegation {version:1,mode:"auto"} at Start unless the user/project chooses off/recommend or a different host. Follow swarmAction: delegate swarm plans from task/source inventory, decides, runs independent workers concurrently and reviews/merges one task document. Default concurrency is two; preserve explicit limits. Unknown economics favors solo; time routing claims no savings. Inspect conflicts and terminal recovery before dependent work. Manual execute/reconcile remains available. Required review, proof, retention and checks remain mandatory. Usage is reporting only; never stop/refuse work for token counts. See [task context](../../docs/task-context.md); model judgments prove no activation/savings.

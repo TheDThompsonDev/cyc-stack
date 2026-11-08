@@ -30,6 +30,8 @@ Confirm that a fresh real host session loads the intended skill and hooks. Inspe
 
 The current adapters still require qualification for the environments advertised to users, including desktop behavior, host trust, live continuation and marketplace installation. Automated simulated events do not establish those outcomes. [Onboarding and recovery](onboarding-recovery.md) explains the diagnostic states.
 
+The source-only cohort exercise in `evals/cohort-journey/` prepares first/related-task behavior probes and an observation protocol. Its exposed fixtures are known development material; no participant, fresh-chat, recovery, host activation or efficiency result follows from a passing probe. Recruit only with explicit authorization; keep separate evaluator checks outside producer projects and actual unknown measurements null.
+
 ## Product and team acceptance
 
 For user interfaces, inspect current rendered desktop and phone views, exercise the primary action and relevant failure states, and check keyboard use and applicable access requirements. Build success alone cannot establish visual quality. Missing browser evidence remains unverified.

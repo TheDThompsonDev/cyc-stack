@@ -8,6 +8,8 @@ Read docs/context/INDEX.md, then matched records and relevant error history. Rev
 
 Scout/Start plans canonical records and representative entrypoints before scope freezes. Finish prepares/validates authored knowledge, History/source evidence and index before final checks. Missing/stale context returns needs-context with remaining input; fill learning.context or use context prepare --run ID for earlier feedback. Explicit restrictions remain pending without unauthorized writes. See the [Context method](../methods/cyc-context/SKILL.md) for schemas, fixed layout and recovery.
 
+Context-only upkeep can bind unchanged implementation files from its focused owner's Covers. Missing anchors remain pending; self/index hashes and unrelated source cannot substitute. Completion guidance retains the exact remaining input and owned command.
+
 ```text
 node bin/cyc.mjs investigate --path src/orders
 node bin/cyc.mjs context lint
@@ -22,3 +24,7 @@ Installed projects use .cyc/engine/bin/cyc.mjs. Read-only inspection executes no
 Lint validates structure, mapping and supported freshness, not semantic truth or adoption. Optional manifests bind selected bytes, not complete dependencies. Context measure counts unique selected local files, estimates tokens as Unicode characters/4 and cannot see chat usage, billing or savings. Run records are not transcripts and may exist only in ignored local storage.
 
 To evaluate actual reuse, give a fresh chat/teammate a related bounded task without the original conversation; observe discovery, reading, revalidation and successful use with real checks. Record missed/stale guidance. Parser/fixture passes alone do not establish future model quality or measured workflow savings.
+
+## Consolidate delegated findings
+
+[Task context](task-context.md) reconciles read-only worker evidence into one parent document and feeds existing canonical feature owners before checks. It creates no permanent worker context documents and waives no retention, proof or freshness requirement.

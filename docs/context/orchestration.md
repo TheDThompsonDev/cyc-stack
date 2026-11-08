@@ -2,7 +2,7 @@
 
 Covers: methods/cyc-scout/**, methods/cyc-build/**, methods/cyc-verify/**, methods/cyc-deliver/**, methods/cyc-remember/**, skills/cyc/SKILL.md, docs/work-assessments.md
 
-Last changed by AI: 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · files: docs/work-assessments.md
+Last changed by AI: 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · files: skills/cyc/SKILL.md
 
 ## Current view
 
@@ -17,6 +17,16 @@ The omitted ed2b9913 History was restored from its actual completed record in th
 Run node bin/cyc.mjs context lint and path-specific investigate, then the project's full configured checks. The fixed index/Covers/History metadata must agree before completion. Supplementary recipes do not replace broad checks. Native activation, human acceptance, semantic understanding and improvements on unseen tasks remain unverified unless independently observed. The source-only handoff must retain rules, decisions, failures, commands and limits without assuming ignored receipts travel with the repository.
 
 When a Node check needs individual failure identities, declare --test-reporter=tap rather than relying on version-dependent presentation defaults. The proof/completion fixtures explicitly request TAP; their dot-reporter control still rejects unnamed output. Node24 publisher failures were reproduced as fixture protocol setup, with assertion bodies and suite scope unchanged. TAP/Jest/Mocha remain the supported parsed formats; Spec or other unsupported reports remain diagnostic and cannot establish named semantic coverage.
+
+First-task communication now introduces relevant project knowledge through its effect on a decision and check, before/during/after the work. Reuse onboard.experience and investigate match/evidence leads; do not display canned findings or infer human understanding from a template. Surface supported response choices without changing preferences from examples. Existing route advice is conservative and advisory; preserve original criteria, broad checks, proof, high-risk review and current user authorization. Source-only cohort exercises are development preparation, not observed reuse or efficiency.
+
+The optional unified-task-context extension adds parent-owned read/ack and strict contribution reconciliation. Existing source/ownership/retention/proof requirements remain. Runtime binds current context revision/hash into handoffs and verification independently of source hashes; unknown economic advantage selects solo. Read-only host workers cannot complete a parent stage, alter parent limits or create permanent context records per worker. See docs/task-context.md and scripts/task-context.mjs/scripts/delegation.mjs for current contracts and host/usage limitations.
+
+Automatic Codex execution is an additive parent-owned path: atomic assignment claim, correlated terminal cleanup after pause/stop, scoped text input and explicit lead reconciliation. It preserves existing source/proof/retention and dependent-context guards. Runtime diagnosis resolved the earlier live-generation blocker: host-provided CLI succeeds with the same account/model while stale PATH CLI fails. Runtime selection prefers the valid host hint. Actual generated source findings, explicit cancellation and one acknowledged merged context were observed; final source-bound checks are recorded separately.
+
+Delegated token usage is reporting only; it cannot stop workers or refuse assignments. Old active shared views migrate with a new acknowledgment; terminal archives stay immutable. Scope, ownership, terminal cancellation and review/proof remain independently required.
+
+CYC now freezes auto policy for available Codex dispatch unless off/recommend or another host was chosen. Follow early swarmAction for one plan/parallel/review/merge call; explicit one-worker policies stay solo. Inspect conflicts/recovery and the acknowledged shared context before dependent work. Usage stays advisory; models do not waive required source review, proof, retention or checks.
 
 ## Lessons
 
@@ -35,6 +45,42 @@ When a Node check needs individual failure identities, declare --test-reporter=t
 - 2026-10-23 · run ffd16511: Ledger RESTORE-001: Concurrent edit overwritten during test proof
 
 ## History
+
+### 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · Automatically decide whether a swarm is worthwhile, split independent work across agents in paralle…
+**Changed:** Add automatic scoped swarm planning, atomic parallel dispatch and source-bound semantic reconciliation with safe cancellation/recovery.
+**Learned:** Retain automatic decision/parallelism/one-context contracts and actual schema, publication and parent-handoff failures before final checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 318f64bc-134d-46b7-865e-6903d3d71494 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:5c9c7c0bb7998344f6cf09bc2b0c50cfdcfd8d0bb06786adffad6f2d187e02bc
+
+### 2026-11-08 · run 0e6acf48-127d-4257-9352-f3b20fbe1ee8 · Remove token caps from CYC delegation and preserve usage-only reporting, live completion, unified c…
+**Changed:** Remove token-based admission/interruption; preserve usage, cancellation and one safely migrated shared task context.
+**Learned:** User rejects forced token stops. Retain actual regression, migration and live qualification evidence.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 0e6acf48-127d-4257-9352-f3b20fbe1ee8 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:094edb301c690351a38a63a38c99345792fdc3ed6b2e7be5d0008a8531637fcd
+
+### 2026-11-07 · run be41a8ca-77fb-4e6c-8785-780005ec49a2 · Implement automatic bounded Codex worker dispatch, acknowledged cancellation and unified-context in…
+**Changed:** Resolved stale CLI selection and verified actual generated findings, cancellation and one shared context.
+**Learned:** Retain measured runtime diagnosis and real qualification before final source checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run be41a8ca-77fb-4e6c-8785-780005ec49a2 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:14b001b58ae584b393850f494c3ab73828ca32566e14a4d3bbf6264aa145c3ac
+
+### 2026-11-07 · run 10e609d6-1319-41b5-b1a6-53e66bed9656 · Implement unified task context and bounded read-only delegation with parent-owned reconciliation an…
+**Changed:** Implement unified task context and bounded read-only delegation while preserving legacy contracts.
+**Learned:** One shared document per run, explicit reconciliation, conservative budgets, actual parent identity and no automatic model dispatch or measured savings claim.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 10e609d6-1319-41b5-b1a6-53e66bed9656 command receipts separately. Local receipts may not travel with source.
+**Files:** methods/cyc-build/SKILL.md@sha256:24f1ec80c951aff114770ff46102fa42a27a40a517a18694d94781beab80eb13, methods/cyc-deliver/SKILL.md@sha256:de795cbe04a254234a631b37dd7eeea3ae3c69449f8ac5557c01de8afc63b892, skills/cyc/SKILL.md@sha256:50438ee5ecd137bd81f4613ccb3d4223c1fc00b24f594617c4ddfef2c73626d0
+
+### 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · Reconcile omitted canonical context owners and verify the final local adoption implementation witho…
+**Changed:** Reconcile all10 affected canonical owners and index for the reviewed adoption changes; public code/tests remain unchanged.
+**Learned:** Retain current shared contract implications, source bindings and explicit original-run/proof/live-validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:06826cc1aa36588ac5e8756640fb9dcc4cbd7ef826d06f5495c4e9175612a958, methods/cyc-scout/SKILL.md@sha256:8b79d44e7b18702e1ce546a01fd21e7f42628727cacffa4710e3254a2df6926b, methods/cyc-deliver/SKILL.md@sha256:47b100955e235479fb2d189f5637062e4aec5d7ad833ea964a083fcc10e13ca5
+
+### 2026-11-07 · run b70fdf23-cc8b-4028-be98-7e9cad40755d · Implement local CYC adoption, context visibility and proportional guidance; prepare isolated cohort…
+**Changed:** Implement first-task/context/response guidance, bounded context reasons and byte observations, conservative workflow advice and isolated cohort evaluation preparation.
+**Learned:** Preserve backward-compatible shapes, current native gates and actual provenance. Explanations and fixtures do not establish live activation, participant understanding or workflow savings.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run b70fdf23-cc8b-4028-be98-7e9cad40755d command receipts separately. Local receipts may not travel with source.
+**Files:** methods/cyc-deliver/SKILL.md@sha256:47b100955e235479fb2d189f5637062e4aec5d7ad833ea964a083fcc10e13ca5, methods/cyc-scout/SKILL.md@sha256:8b79d44e7b18702e1ce546a01fd21e7f42628727cacffa4710e3254a2df6926b, skills/cyc/SKILL.md@sha256:06826cc1aa36588ac5e8756640fb9dcc4cbd7ef826d06f5495c4e9175612a958
 
 ### 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · Declare the TAP protocol explicitly in proof fixtures so Node24 presentation defaults cannot invali…
 **Changed:** Declare TAP explicitly in the isolated fixtures that require named proof output. Existing assertion bodies, suite scope, dot-output rejection and Node24 release gate are preserved. OfficialNode24 before failures and focused4/4 after results are retained; broad final verification is pending.

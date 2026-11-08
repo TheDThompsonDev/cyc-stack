@@ -12,6 +12,9 @@ import { recoveryGuidance } from './recovery.mjs';
 import { cutOff, outputLimit, stable, summarizeTests, testsOf, failureHint } from './test-output.mjs';
 import { runPacketDigest, writeRunPacket } from './packet.mjs';
 import { artifactFiles, resolveExecution } from './execution.mjs';
+import { strictObject, contextPolicy, initializeContext, contextView, contextHash, contextPath, checkContextSize, checkProjection, publishContext, acknowledgeContext, requireContextReady, reconcileContext, touchContext } from './task-context.mjs';
+import { delegationPolicy, initializeDelegation, decideDelegation, assignWorker, recordWorker, cancelWorker, reconcileWorkers } from './delegation.mjs';
+import {startSwarm,swarmPhase,applySwarmPlan,assignSwarm,commitSwarm,cancelSwarm} from './swarm.mjs';
 import { planRetention, retentionOf, prepareRetention, checkRetention, contextLocation, isComponentDoc, parseDoc } from './context-review.mjs';
 export { sourceSnapshot } from './source-snapshot.mjs';
 
@@ -44,7 +47,14 @@ export function atomicJSON(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   const temp = `${path}.${randomUUID()}.tmp`;
   writeFileSync(temp, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
-  renameSync(temp, path);
+  // Windows readers can briefly hold a replacement target; retry only this rename.
+  for(let attempt=0;;attempt++) {
+    try {renameSync(temp,path);break;}
+    catch(error) {
+      if(process.platform!=='win32'||!['EPERM','EBUSY'].includes(error.code)||attempt>=2)throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,20*(attempt+1));
+    }
+  }
 }
 
 // Resolve an existing ancestor and keep any missing suffix, so prospective files
@@ -390,7 +400,13 @@ function transact(root, id, work) {
       committing = true;
       atomicJSON(path, state);
       committed = true;
+      let contextPublication = null;
+      if (state.taskContext) {
+        try { publishContext(state, taskIO(root, state)); }
+        catch (error) { contextPublication = { status: 'needs-context-sync', error: error.message }; }
+      }
       writeReview(root, state);
+      if (contextPublication) return { ...(result ?? {}), status: 'needs-context-sync', contextPublication };
       return result ?? state;
     } catch (error) {
       if (committing || ownership.inFlightBackup) {
@@ -880,6 +896,8 @@ function originalContent(root, state, path) {
     // Latin-1 preserves every byte; only an exact original hash permits this candidate.
     const crlf = Buffer.from(shown.stdout.toString('latin1').replace(/\r?\n/g, '\r\n'), 'latin1');
     if (digest(crlf) === expected) return crlf;
+    const finalCRLF = Buffer.from(shown.stdout.toString('latin1').replace(/\r?\n$/, '\r\n'), 'latin1');
+    if (digest(finalCRLF) === expected) return finalCRLF;
   }
   throw new Error(`Cannot recover the run-start version of ${path} (untracked when the run started, or changed outside Git). Record a testProof exemption with this reason instead.`);
 }
@@ -1213,11 +1231,13 @@ function declaredChecks(root) {
   return { source: commands.length > 1 ? `${found[0].source}, run as ${commands.map(command => command.id).join(', ')}` : found[0].source, commands };
 }
 
-export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background', evidenceVersion, requirements, reviewPolicy, executionMode, conversationId, proofCommands, contextRetention }) {
+export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background', evidenceVersion, requirements, reviewPolicy, executionMode, conversationId, proofCommands, contextRetention, taskContext: taskPolicy, delegation }) {
   root = realpathSync(root);
   if (!text(goal)) throw new Error('A nonempty goal is required.');
   const selected = getPlaybook(playbook ?? routeTask(goal).playbook);
   const config = configuration(root);
+  const taskContextPolicy = taskPolicy === undefined ? undefined : contextPolicy(taskPolicy);
+  const workerPolicy = delegation === undefined ? undefined : delegationPolicy(delegation);
   const declared = selected.requiresChecks && !config.commands.length ? declaredChecks(root) : null;
   const commands = declared?.commands ?? config.commands;
   if (proofCommands !== undefined) { validateCommands(proofCommands, 'proofCommands'); if (!proofCommands.length || !proofPlaybooks.includes(selected.id)) throw new Error('proofCommands needs a nonempty feature/bug-fix/refactor proof plan frozen at start.'); }
@@ -1272,6 +1292,7 @@ export function startRun(root, { goal, playbook, criteria, allowedPaths = [], se
       : { status: 'pending', cacheKey, inputs, sourceHash: initialSource.hash, requestedAt: new Date().toISOString() };
     const state = {
       schemaVersion: 1, engineVersion, id, goal, playbook: selected.id, stages: selected.stages, requiresChecks: selected.requiresChecks,
+      ...(taskContextPolicy ? { taskContextPolicy } : {}), ...(workerPolicy ? { delegation: initializeDelegation(workerPolicy) } : {}),
       workContractVersion, contextRetention: retention, ...(evidenceVersion === 1 ? { evidenceVersion, reviewPolicy: reviewPolicy ?? 'self-allowed', requirements: { text: requirements, sha256: digest(requirements) }, criteriaHash: digest(JSON.stringify(criteria)) } : {}), ...ledger,
       criteria, inferredCriteria, session: session ?? null, ...(execution ? { execution } : {}), status: 'running', stageIndex: 0, attempt: 1, failures: 0, noProgress: 0,
       startedAt: new Date().toISOString(), limits: config.limits, commands, ...(declared ? { verificationSource: `declared by ${declared.source}` } : {}),
@@ -1388,9 +1409,18 @@ export function nextRun(root, id) {
   const state = readRun(root, id);
   const finishTemplate = finishing(state) && state.status === 'running' ? writeFinishTemplate(root, state) : null;
   const handoffTemplate = !finishing(state) && current(state) && state.status === 'running' ? writeHandoffTemplate(root, state) : null;
+  let swarmAction;
+  if(state.status==='running'&&['scout','understand','impact','build'].includes(current(state))&&state.delegation?.policy.mode==='auto'&&!state.delegation.swarm&&!state.verification?.passed) {
+    const path=`.cyc/runs/${id}/swarm-input.json`,file=projectFile(root,path);
+    if(!existsSync(file))atomicJSON(file,{version:1,objective:'time'});
+    swarmAction={action:'swarm',inputTemplate:path,command:`delegate swarm --run ${id} --file ${path}`,purpose:'Automatically assess independence/economics, execute parallel workers and merge one task context before dependent work.'};
+  }
   return {
     runId: state.id, engineVersion: state.engineVersion ?? 'unknown (legacy run)', status: state.status, goal: state.goal, playbook: state.playbook,
     ...(state.execution ? { execution: state.execution } : {}),
+    ...(state.taskContext ? { taskContext: taskContextStatus(root, state) } : {}),
+    ...(swarmAction?{swarmAction}:{}),
+    ...(state.delegation ? { delegation: { route: state.delegation.decision?.route ?? 'undecided', reason: state.delegation.decision?.reason, assignments: state.delegation.assignments.map(a => ({id:a.id,status:a.status,disposition:a.disposition ?? null})), accountedTokens: state.delegation.accountedTokens, policy: state.delegation.policy, ...(state.delegation.swarm?{swarm:{id:state.delegation.swarm.id,status:state.delegation.swarm.status,phases:Object.fromEntries(Object.entries(state.delegation.swarm.jobs).map(([k,j])=>[k,j.status]))}}:{}) } } : {}),
     ...(retentionOf(state) ? { contextRetention: retentionOf(state), contextPreparation: state.contextPreparation ? { docs: state.contextPreparation.docs, status: state.contextPreparation.status } : null } : {}),
     nextAction: finishTemplate || handoffTemplate ? { action: finishing(state) ? 'finish' : 'record', runId: state.id, inputTemplate: finishTemplate ?? handoffTemplate, command: finishing(state) ? `run finish --run ${state.id} --file ${finishTemplate}` : `run record --run ${state.id} --file ${handoffTemplate}` } : null,
     stage: current(state), attempt: state.attempt, criteria: state.criteria,
@@ -1497,9 +1527,11 @@ function validatePacket(root, state, packet) {
   packet.artifacts = [...packet.artifacts, ...assessmentArtifacts.filter(item => !packet.artifacts.some(existing => existing.path === item.path))];
 }
 function requireVerification(root, state) {
+  requireTaskReady(root, state);
   requireRetention(root, state);
   if (!state.requiresChecks) return;
   if (!state.verification?.passed) throw new Error('Run project verification successfully before passing this stage.');
+  if (state.taskContext && (state.verification.taskContext?.revision !== state.taskContext.revision || state.verification.taskContext?.hash !== contextHash(state))) throw new Error('Task context changed after verification; fresh verification is required.');
   if (state.verification.role !== undefined && state.verification.role !== 'candidate') throw new Error('Only a candidate verification receipt can pass this stage; original/proof roles cannot substitute.');
   const snapshot = cachedSnapshot(root);
   if (snapshot.skipped.length) throw new Error('Executable verification cannot cover symlink dependencies; use a project without linked source.');
@@ -1586,6 +1618,7 @@ export function recordHandoff(root, packet) {
   return transact(root, packet.runId, state => {
     requireActive(state);
     if (!budget(state) || !guard(root, state)) return state;
+    if (packet.status === 'passed') requireTaskReady(root, state);
     validatePacket(root, state, packet);
     if (packet.status === 'passed' && ['verify', 'deliver'].includes(current(state))) requireVerification(root, state);
     if (packet.status === 'passed' && current(state) === 'verify' && provable(state)) requireTestProof(root, state, packet.assessment?.testProof);
@@ -1599,7 +1632,7 @@ export function recordHandoff(root, packet) {
       }
     }
     if (packet.stage === 'deliver') packet.contextDocs = retentionOf(state)?.disposition === 'required' ? requireRetention(root, state).docs : [...new Set([...(packet.artifacts ?? []).map(a => a.path), ...(packet.assessment?.learning?.artifacts ?? [])].filter(path => isComponentDoc(path, contextLocation(root).folder)))].sort();
-    const entry = { ...packet, recordedAt: new Date().toISOString(), sourceHash: cachedSnapshot(root).hash };
+    const entry = { ...packet, ...(state.taskContext ? { taskContext: { revision: state.taskContext.revision, hash: contextHash(state) } } : {}), recordedAt: new Date().toISOString(), sourceHash: cachedSnapshot(root).hash };
     state.handoffs.push(entry);
     log(state, 'handoff', { stage: packet.stage, status: packet.status, summary: packet.summary });
     if (packet.status === 'blocked') { state.status = 'blocked'; log(state, 'blocked', { reason: packet.nextAction ?? packet.summary }); }
@@ -1612,6 +1645,7 @@ export function recordHandoff(root, packet) {
 export function verifyRun(root, id) {
   return transact(root, id, state => {
     requireActive(state);
+    requireTaskReady(root, state);
     if (!budget(state) || !guard(root, state)) return state;
     const retained = checkRetention(root, state, cachedSnapshot(root).files);
     if (!retained.ok) { const inputTemplate = writeFinishTemplate(root, state); return { runId: id, passed: false, status: 'needs-context', finished: false, retention: retained, nextAction: { action: 'finish', inputTemplate, command: `run finish --run ${id} --file ${inputTemplate} --wait-ms 30000`, instruction: 'Prepare scoped canonical feature context before verification; do not replace a reply packet.' } }; }
@@ -1621,7 +1655,7 @@ export function verifyRun(root, id) {
     // A stale cached hash here can only make the check look unstable; the full snapshot after it decides.
     const before = sourceSnapshot(root);
     const inputsBefore = measurementInputs(root, state.commands);
-    if (state.verification?.passed && state.verification.reusable === true && state.verification.role === 'candidate' && before.hash === state.verification.sourceHash && inputsBefore.suitable && state.verification.inputs?.key === inputsBefore.key) {
+    if (state.verification?.passed && (!state.taskContext || state.verification.taskContext?.hash === contextHash(state)) && state.verification.reusable === true && state.verification.role === 'candidate' && before.hash === state.verification.sourceHash && inputsBefore.suitable && state.verification.inputs?.key === inputsBefore.key) {
       assertArtifacts(root, [{ path: state.verification.receiptPath, sha256: state.verification.receiptHash }]);
       log(state, 'verification-reused', { receipt: state.verification.receiptPath, sourceHash: before.hash });
       return { runId: id, status: state.status, ...state.verification, reused: true };
@@ -1694,9 +1728,9 @@ export function verifyRun(root, id) {
     const awaitingAcceptance = !passed && !state.awaitedAcceptance && failedAtRunStart.length > 0 && results.every(excusable) && before.hash === after.hash
       && results.some(result => result.passed || (testsOf(result)?.passingCount ?? 0) > 0);
     const receipt = { passed, changedPaths, verificationStatus: passed ? (excused.length ? 'passed-with-accepted-failures' : 'passed') : failing.length ? 'unverified' : 'failed', ...(failedAtRunStart.length ? { failedAtRunStart } : {}), ...(awaitingAcceptance ? { awaitingAcceptance } : {}), sourceHash: after.hash, sourceStable: before.hash === after.hash, checkedAt: new Date().toISOString(), results, acceptedPreexistingFailures: excused, ...(changedFailures.length ? { acceptedFailuresThatChanged: changedFailures.map(item => ({ id: item.id, ...item.changed })) } : {}), skippedSymlinks: after.skipped };
-    Object.assign(receipt, { role: 'candidate', inputs: inputsAfter, inputsStable: inputsBefore.bounded && inputsAfter.bounded ? inputsBefore.key === inputsAfter.key : null, reusable: passed && inputsBefore.suitable && inputsAfter.suitable });
+    Object.assign(receipt, { ...(state.taskContext ? { taskContext: { revision: state.taskContext.revision, hash: contextHash(state) } } : {}), role: 'candidate', inputs: inputsAfter, inputsStable: inputsBefore.bounded && inputsAfter.bounded ? inputsBefore.key === inputsAfter.key : null, reusable: passed && inputsBefore.suitable && inputsAfter.suitable });
     // Every command reads and writes the run state, so test summaries of long output stay in the receipt file.
-    state.verification = { ...receipt, results: results.map(({ tests, ...result }) => result) };
+    state.verification = { ...receipt, ...(state.taskContext ? { taskContext: { revision: state.taskContext.revision, hash: contextHash(state) } } : {}), results: results.map(({ tests, ...result }) => result) };
     const receiptPath = `.cyc/runs/${id}/checks/${randomUUID()}.json`;
     atomicJSON(projectFile(root, receiptPath), receipt);
     state.verification.receiptPath = receiptPath;
@@ -1925,6 +1959,7 @@ function needsProofReview(root, state, input, steps) {
 export function finishRun(root, id, { summary, artifacts, passedEvidence, criterionEvidence, assessment = {}, acceptFailures = [], scenarioEvidence, continuation }) {
   let state = readRun(root, id);
   assertRunOwner(root, state);
+  requireTaskReady(root, state);
   if (current(state) === null && ['running', 'complete'].includes(state.status)) {
     const delivery = state.handoffs.at(-1);
     if (delivery?.stage !== 'deliver' || delivery.status !== 'passed') throw new Error('No confirmed delivery to resume.');
@@ -2246,4 +2281,132 @@ function bindEvidence(root, state, packet) {
     const names = category => a.proofReview.cases.filter(c => c.category === category).map(c => state.testProof.failures.find(f => f.id === c.id).name);
     state.testProof.claim = `Reason-reviewed baseline evidence (agent-reported interpretation): behavioral cases [${names('behavioral').join('; ')}]; new-interface cases [${names('new-interface').join('; ')}]. Setup and unclassified failures do not establish the intended behavior defect. This is not a repaired-defect count.`;
   }
+}
+
+function taskContextStatus(root, state) {
+  let publication = 'current';
+  try { checkProjection(state, taskIO(root, state)); } catch { publication = 'needs-context-sync'; }
+  return { path: contextPath(state), revision: state.taskContext.revision, publication,
+    needsAcknowledgment: state.taskContext.acknowledgment?.revision !== state.taskContext.revision,
+    nextAction: { command: `context task --run ${state.id}`, instruction: 'Read the current shared view; preserve unexpected edits if synchronization is blocked.' } };
+}
+function taskIO(root, state) {
+  return { file: path => projectFile(root, path), source: () => sourceSnapshot(root).files,
+    normalize: paths => normalizePaths(root, paths, 'assignment paths') };
+}
+function assertTaskOwner(root, state) {
+  assertRunOwner(root, state);
+  const caller = callerSession();
+  if (!caller || !state.session || gateSession(root, caller) !== state.session) throw new Error('Task context belongs to its recorded parent conversation; the current owner is required.');
+}
+function requireTaskReady(root, state, options) {
+  if (!state.taskContext) return;
+  assertTaskOwner(root, state);
+  requireContextReady(state, taskIO(root, state), options);
+}
+export function taskContext(root, id, action, input = {}) {
+  return transact(root, id, state => {
+    assertTaskOwner(root, state);
+    if (action === 'task') {
+      strictObject(input, [], 'task context read');
+      if (!state.taskContext && state.status !== 'running') throw new Error('A terminal run cannot initialize task context.');
+      return contextView(state, taskIO(root, state), callerSession());
+    }
+    requireActive(state);
+    if (!budget(state) || !guard(root, state)) return { runId: id, status: state.status, nextAction: 'Inspect run recover; source/remaining budget prevents context changes.' };
+    if (action !== 'ack') throw new Error('Use context task or context ack.');
+    return acknowledgeContext(state, input, taskIO(root, state), callerSession());
+  });
+}
+export function delegateRun(root, id, action, input) {
+  return transact(root, id, state => {
+    assertTaskOwner(root, state); requireActive(state);
+    if (!budget(state) || !guard(root, state)) return { runId: id, status: state.status, nextAction: 'Inspect run recover; source/remaining budget prevents delegation.' };
+    if (state.verification?.passed) throw new Error('New task context or worker evidence after verification requires retry and fresh verification.');
+    const io = taskIO(root, state);
+    initializeContext(state); checkProjection(state, io, action === 'decide');
+    let result;
+    if (action === 'decide') {
+      const priorHash = contextHash(state);
+      result = decideDelegation(state, input);
+      touchContext(state, priorHash);
+    } else if (action === 'assign') result = assignWorker(state, input, io);
+    else if (action === 'record') {
+      if (state.delegation?.assignments.find(a=>a.id===input.assignmentId)?.host) throw Error('Host-claimed assignments require the correlated host receipt path.');
+      result = recordWorker(state, input, io);
+      if (!result.duplicate && input.status === 'failed') failedAttempt(state, input.summary, digest(JSON.stringify(input.findings)));
+    } else if (action === 'cancel') result = cancelWorker(state, input);
+    else if (action === 'reconcile') {
+      const reconciled = structuredClone(state);
+      reconcileWorkers(reconciled, input, io);
+      result = reconcileContext(state, input, io);
+      if (reconciled.delegation) state.delegation = reconciled.delegation;
+      checkContextSize(state);
+      result.hash = contextHash(state);
+    } else if(action==='swarm-start') result=startSwarm(state,input,io);
+    else if(action==='swarm-plan') result=applySwarmPlan(state,input,io);
+    else if(action==='swarm-batch') result=assignSwarm(state,input,io);
+    else if(action==='swarm-commit') result=commitSwarm(state,input,io);
+    else if(action==='cancel-swarm') result=cancelSwarm(state,input);
+    else if(action==='swarm-error') {
+      strictObject(input,['version','swarmId','reason'],'swarm failure');
+      if(input.version!==1||input.swarmId!==state.delegation?.swarm?.id||!text(input.reason))throw Error('Foreign swarm failure.');
+      state.delegation.swarm.status='needs-reconciliation';state.delegation.swarm.error=input.reason;
+      failedAttempt(state,input.reason,digest(input.reason));result={runId:id,status:state.status};
+    } else throw new Error('Unknown delegation action.');
+    log(state, 'task-' + action, { revision: state.taskContext.revision });
+    return result;
+  });
+}
+
+export function swarmHost(root,id,action,input) {
+  return transact(root,id,state=>{
+    assertTaskOwner(root,state);
+    if(action==='claim') {
+      requireActive(state);checkProjection(state,taskIO(root,state));
+      if(!budget(state)||!guard(root,state))return {runId:id,status:state.status,nextAction:'Inspect run recover; dispatch refused.'};
+      if(state.verification?.passed)throw Error('New swarm evidence requires retry and fresh verification.');
+    }
+    const result=swarmPhase(state,action,input,taskIO(root,state));
+    if(action==='record'&&!result.duplicate&&input.result.status==='failed'&&state.status==='running')failedAttempt(state,input.result.summary,digest(JSON.stringify(input.result)));
+    log(state,'swarm-host-'+action,{swarmId:input.swarmId,phase:input.phase});return result;
+  });
+}
+
+// Owned terminal cleanup survives parent stop without advancing/reopening it.
+export function workerHost(root, id, action, input) {
+  return transact(root, id, state => {
+    assertTaskOwner(root, state);
+    strictObject(input, ['version','assignmentId','hostId','threadId','turnId','terminalStatus','result'], 'host receipt');
+    const a = state.delegation?.assignments.find(a => a.id === input.assignmentId);
+    if (input.version !== 1 || !a || !text(input.hostId)) throw Error('Unknown host assignment.');
+    if (action === 'claim') {
+      requireActive(state);
+      checkProjection(state,taskIO(root,state));
+      if (!budget(state) || !guard(root,state)) return {runId:id,status:state.status,nextAction:'Inspect run recover; dispatch was refused.'};
+      if (state.delegation.policy.mode !== 'auto' || state.delegation.decision?.route !== 'delegate' || a.status !== 'active' || a.host || state.verification?.passed) throw Error('Auto dispatch needs an unclaimed active assignment and current delegation decision.');
+      if (digest(JSON.stringify(Object.fromEntries(Object.entries(sourceSnapshot(root).files).filter(([p])=>a.paths.some(s=>p===s||p.startsWith(s+'/'))).sort(([x],[y])=>x.localeCompare(y))))) !== a.basisHash) throw Error('Assignment source changed before dispatch.');
+      a.host = { id: input.hostId, claimedAt: new Date().toISOString() };
+    } else {
+      if (a.host?.id !== input.hostId) throw Error('Foreign host attempt.');
+      if (action === 'bind') {
+        if (!text(input.threadId) || !text(input.turnId) || a.host.turnId && (a.host.turnId !== input.turnId || a.host.threadId !== input.threadId)) throw Error('Host thread/turn binding mismatch.');
+        Object.assign(a.host,{threadId:input.threadId,turnId:input.turnId});
+      } else if (action === 'record') {
+        const notStarted = input.terminalStatus === 'not-started' && !a.host.turnId && !input.turnId;
+        if (!notStarted && (!a.host.turnId || input.threadId !== a.host.threadId || input.turnId !== a.host.turnId || !['completed','interrupted','failed'].includes(input.terminalStatus))) throw Error('Correlated terminal acknowledgment is required.');
+        const expected = notStarted ? ['failed','cancelled'] : input.terminalStatus === 'completed' ? ['passed','failed'] : [input.terminalStatus === 'interrupted' ? 'cancelled' : 'failed'];
+        if (a.result && a.host.terminalStatus !== input.terminalStatus) throw Error('Terminal envelope replay differs from its recorded status.');
+        if (input.result?.assignmentId !== a.id || !expected.includes(input.result?.status)) throw Error('Terminal result disagrees with host acknowledgment.');
+        const result = recordWorker(state,input.result,taskIO(root,state));
+        if (result.duplicate) return result;
+        Object.assign(a.host,{terminalStatus:input.terminalStatus,stoppedAt:new Date().toISOString()});
+        if (!result.duplicate && input.result.status === 'failed' && state.status === 'running') failedAttempt(state,input.result.summary,digest(JSON.stringify(input.result.findings)));
+        log(state,'worker-terminal',{assignmentId:a.id,hostId:input.hostId,terminalStatus:input.terminalStatus});
+        return result;
+      } else throw Error('Unknown host action.');
+    }
+    log(state,'worker-'+action,{assignmentId:a.id,hostId:input.hostId});
+    return {runId:id,assignment:structuredClone(a)};
+  });
 }

@@ -4,7 +4,8 @@ import { dirname, resolve } from 'node:path';
 import { resolveExecution, artifactFiles } from '../scripts/execution.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { catalog, routeTask } from '../scripts/catalog.mjs';
-import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun, captureReview, recordReview, startOperation, waitOperation, prepareRunContext } from '../scripts/runtime.mjs';
+import { completionGuidance } from '../scripts/recovery.mjs';
+import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun, captureReview, recordReview, startOperation, waitOperation, prepareRunContext, taskContext, delegateRun } from '../scripts/runtime.mjs';
 
 const args = process.argv.slice(2);
 const positionals = [];
@@ -54,6 +55,9 @@ Discover:
       (execute an applicable authorized recipe; retain diagnostic evidence)
 
 Component context docs (docs/context/):
+  cyc context task --run ID
+  cyc context ack --run ID --file ACK.json
+  cyc delegate swarm|decide|assign|execute|record|cancel|cancel-swarm|reconcile --run ID --file INPUT.json
   cyc context prepare --run ID [--file CONTEXT.json]
   cyc context review [--run ID | --since YYYY-MM-DD | --all] [--write --update-run UPDATE_ID] [--new NAME]
       (map completed runs' changed files to component docs and propose the doc entry from each run's
@@ -109,7 +113,7 @@ All commands accept --project PATH. Criteria file: [{"id":"saved","description":
 Store handoff files under .cyc/runs/ID/ to avoid changing the source being verified.
 New implementation runs require Scout, Verify, and Deliver assessments; run next lists required fields.
 See docs/work-assessments.md for the compact JSON contract and knowledge lifecycle.
-The host agent reads and executes the returned skill; CYC does not launch paid model calls.
+The host executes skills; opt-in delegate execute launches Codex model calls.
 Configure verification.commands in .cyc/config.json; without them, executable runs use the project's declared test command or are refused.
 Hook activation/trust must be checked in your host; doctor does not certify it.`);
     process.exit(0);
@@ -138,6 +142,17 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
       result = await tools.runRecipe(root, options.recipe, { run: options.run });
       if (!options.verbose && result.results) result.results = result.results.map(({ id, command, args, passed, exitCode, error, errorCode, stdout, stderr }) => ({ id, command, args, passed, exitCode, error, errorCode, outputTail: `${stdout ?? ''}${stderr ?? ''}`.trim().split('\n').slice(-15).join('\n') }));
     } else throw new Error('Use recipe list or recipe run.');
+  } else if (command === 'delegate') {
+    if (!options.run || !options.file) throw new Error('delegate needs the exact --run ID and --file JSON.');
+    fileOnly(options, ['run','file','project','verbose']);
+    result = action === 'swarm' ? await (await import('../scripts/swarm.mjs')).executeSwarm(root,options.run,readJSON(options.file)) : action === 'execute'
+      ? await (await import('../scripts/codex-host.mjs')).executeCodex(root, options.run, readJSON(options.file))
+      : delegateRun(root, options.run, action, readJSON(options.file));
+  } else if (command === 'context' && ['task','ack'].includes(action)) {
+    if (!options.run) throw new Error('Task context needs the exact --run ID.');
+    fileOnly(options, action === 'ack' ? ['run','file','project','verbose'] : ['run','project','verbose']);
+    if (action === 'ack' && !options.file) throw new Error('context ack needs --file JSON.');
+    result = taskContext(root, options.run, action, action === 'ack' ? readJSON(options.file) : {});
   } else if (command === 'context') {
     const context = await import('../scripts/context-review.mjs');
     if (action === 'review') result = context.reviewContext(root, { run: options.run, since: options.since, all: !!options.all, write: !!options.write, newDoc: options.new, updateRun: options['update-run'] });
@@ -177,14 +192,14 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
   } else if (command === 'playbooks') result = catalog;
   else if (command === 'route') {
     if (!options.goal) throw new Error('--goal is required.');
-    result = routeTask(options.goal);
+    result = routeTask(options.goal,{paths:options.path??[]});
   } else if (command === 'run') {
     switch (action) {
       case 'start': {
         let input;
         if (options.file) {
           fileOnly(options, ['file', 'project', 'verbose']);
-          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan', 'evidenceVersion', 'requirements', 'reviewPolicy', 'executionMode', 'conversationId', 'proofCommands', 'contextRetention']);
+          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan', 'evidenceVersion', 'requirements', 'reviewPolicy', 'executionMode', 'conversationId', 'proofCommands', 'contextRetention', 'taskContext', 'delegation']);
           for (const key of ['goal', 'playbook', 'session', 'plan']) if (input[key] !== undefined && typeof input[key] !== 'string') throw new Error(`${key} must be a string.`);
           if (input.scout !== undefined && !object(input.scout)) throw new Error('scout must be the Scout assessment object (run start without it returns the template).');
           if (input.criteria !== undefined && (!Array.isArray(input.criteria) || !input.criteria.length || input.criteria.some(item => !object(item) || typeof item.id !== 'string' || typeof item.description !== 'string'))) throw new Error('criteria must be a nonempty array of {id, description} string records.');
@@ -252,7 +267,7 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
   } else throw new Error(`Unknown command ${command}. Use cyc help.`);
   if (command === 'run' && !options.verbose) result = compact(action, result, root, options);
   console.log(humanInstallOutput(command) ? formatInstall(result) : JSON.stringify(result, null, 2));
-  if (result?.ok === false || ['halted', 'exhausted', 'blocked'].includes(result?.status) || result?.passed === false || result?.result?.passed === false || ['halted', 'exhausted', 'blocked'].includes(result?.result?.status)) process.exitCode = 1;
+  if (result?.ok === false || result?.status === 'needs-context-sync' || ['halted', 'exhausted', 'blocked'].includes(result?.status) || result?.passed === false || result?.result?.passed === false || ['halted', 'exhausted', 'blocked'].includes(result?.result?.status)) process.exitCode = 1;
 } catch (error) {
   const result = { ok: false, error: error.message, ...(error.setup ? { setup: error.setup } : {}), ...(error.field ? { field: error.field, repairTemplate: error.repairTemplate } : {}) };
   console.error(humanInstallOutput(positionals[0]) ? formatInstall(result) : JSON.stringify(result));
@@ -329,11 +344,15 @@ function preexistingHint(ids) {
 
 function compact(action, result, root, options) {
   if (!result || typeof result !== 'object' || ['status', 'recover'].includes(action)) return result;
-  if (result.operationId) return result;
   const id = result.runId ?? result.id ?? options.run;
+  const guidance = value => completionGuidance(value, { executionMode: (value.result ?? value).packet?.written === false ? readRun(root, id).execution?.mode : undefined });
+  if (result.operationId) return { ...result, guidance: guidance(result) };
   if (['review-capture', 'review-record'].includes(action)) { const { files, ...receipt } = result; return receipt; }
   if (action === 'prove-red') return result;
-  if (action === 'finish') return result.failedAt === 'verify' && 'verificationStatus' in result ? { ...compact('verify', result, root, options), finished: false, failedAt: 'verify' } : result;
+  if (action === 'finish') {
+    const display = result.failedAt === 'verify' && 'verificationStatus' in result ? { ...compact('verify', result, root, options), finished: false, failedAt: 'verify' } : result;
+    return { ...display, guidance: guidance(display) };
+  }
   if (action === 'verify') {
     const recovery = result.passed ? null : recoverRun(root, id);
     return { runId: id, status: result.status, passed: result.passed, sourceStable: result.sourceStable, changedPaths: result.changedPaths, verificationStatus: result.verificationStatus, acceptedPreexistingFailures: result.acceptedPreexistingFailures, ...(result.acceptedFailuresThatChanged ? { acceptedFailuresThatChanged: result.acceptedFailuresThatChanged } : {}), ...(result.failedAtRunStart ? { failedAtRunStart: result.failedAtRunStart } : {}), ...(result.awaitingAcceptance ? { awaitingAcceptance: true } : {}),
@@ -345,6 +364,10 @@ function compact(action, result, root, options) {
   }
   if (!id) return result;
   const next = nextRun(root, id);
+  if(action==='next') {
+    const state=readRun(root,id);
+    next.workflowAdvice=routeTask(state.goal,{paths:state.allowedPaths}).guidance;
+  }
   const { previousHandoff, criteria, limits, assessmentRequired, assessmentTemplate, ...rest } = next;
   // Agents often read only the first lines (| head -40), so what they act on comes first and the
   // long fill-in template last.

@@ -10,3 +10,11 @@ export function lengthCommand(prompt) {
 export function allowsLongResponse(state) {
   return state.characterLimitEnabled === false || state.expanded === true;
 }
+
+// A view of observed preferences, never a writer or a claim of hook activation.
+export function responseGuidance({characterLimitEnabled,expanded=false,presentation}={}) {
+  const mode=presentation==='project'?'project':typeof characterLimitEnabled!=='boolean'?'unverified':!characterLimitEnabled?'unlimited':expanded?'expanded':'concise';
+  return {mode,footer:mode==='concise'?'Say expand for more detail once, or limit off to allow longer replies in this chat. Use limit on to bring back short replies.':null,
+    controls:mode==='project'?null:{expand:'One response; send expand as its own message.',off:'limit off',on:'limit on',status:'limit status'},
+    note:'Length preference only; workflow and evidence requirements remain. Unknown state is not a preference change.'};
+}

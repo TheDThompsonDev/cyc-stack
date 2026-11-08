@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { atomicJSON, configuration, readRun, runCommands, sourceSnapshot } from './runtime.mjs';
 import { runBrowserAudit, validateBrowserPlan } from './browser-audit.mjs';
-import { canonicalPattern, matches, contextLocation } from './context-review.mjs';
+import { canonicalPattern, matches, contextLocation, parseDoc } from './context-review.mjs';
 
 const registryName = 'docs/context/recipes.json';
 const indexName = 'docs/context/INDEX.md';
@@ -46,7 +46,7 @@ function selection(root, { paths = [], goal = '', run } = {}) {
   }
   paths = [...new Set(paths.map(p => canonical(p)))];
   const words = String(goal).toLowerCase().match(/[a-z0-9-]{3,}/g)?.filter(w => !['the', 'and', 'for', 'with', 'this', 'that', 'add', 'fix', 'change'].includes(w)) ?? [];
-  return { paths, goal, relevant: (covers, description) => paths.length ? covers.some(p => paths.some(path => matches(p, path))) : words.some(w => description.toLowerCase().includes(w)) };
+  return { paths, goal, words, relevant: (covers, description) => paths.length ? covers.some(p => paths.some(path => matches(p, path))) : words.some(w => description.toLowerCase().includes(w)) };
 }
 
 function registry(root) {
@@ -118,6 +118,25 @@ export function contextLinks(cell) {
   }).filter(Boolean);
 }
 
+function recordFreshness(root,record,limit) {
+  const base={coverage:'selected-files-only',gitFreshness:'not-inspected',semanticCorrectness:'unverified'};
+  if(!record.exists)return {...base,status:'missing'};
+  try {
+    const path=local(root,record.path);
+    if(!lstatSync(path).isFile())return {...base,status:'invalid',reason:'Context link is not a regular file.'};
+    const parsed=parseDoc(readFileSync(path,'utf8'),path.split(/[\\/]/).at(-1));
+    if(parsed.issues.length)return {...base,status:'unverified',reason:'No valid canonical source binding; inspect this reference against current code.'};
+    const selected=parsed.history[0]?.files??[];
+    if(!selected.length)return {...base,status:'unverified',checkedFiles:0};
+    const files=selected.slice(0,limit).map(item=>{
+      if(!/^sha256:[a-f0-9]{64}$/i.test(item.hash)||item.path.startsWith('.cyc/')||item.path===record.path||!parsed.covers.some(pattern=>matches(pattern,item.path)))return {path:item.path,status:'unverified'};
+      try { const source=local(root,item.path);return {path:item.path,status:!existsSync(source)?'missing':lstatSync(source).isFile()&&hash(readFileSync(source))===item.hash.slice(7)?'matches':'changed'}; }
+      catch {return {path:item.path,status:'unverified'};}
+    });
+    return {...base,status:files.some(f=>['changed','missing'].includes(f.status))?'drifted':selected.length>limit||files.some(f=>f.status==='unverified')?'unverified':'matches',checkedFiles:files.length,totalBindings:selected.length,truncated:selected.length>limit,files};
+  } catch(error){return {...base,status:'unverified',reason:error.message};}
+}
+
 export function investigateProject(target, options = {}) {
   const { index: indexName } = contextLocation(realpathSync(target));
   validateRecipeKind(options.kind);
@@ -141,12 +160,14 @@ export function investigateProject(target, options = {}) {
       try {
         covers.forEach(p => canonical(p === 'all' ? '**' : p, true));
         if (!selected.relevant(covers.map(p => p === 'all' ? '**' : p), cells.join(' '))) continue;
-        found.push({ area: cells[0], covers, records: links(cells[header.indexOf('record') >= 0 ? header.indexOf('record') : header.indexOf('doc')]), evidence: header.includes('evidence') ? links(cells[header.indexOf('evidence')]) : [] });
+        const patterns=covers.map(p=>p==='all'?'**':p);
+        const match={kind:selected.paths.length?'path':'goal',paths:selected.paths.map(path=>({path,patterns:patterns.filter(p=>matches(p,path))})).filter(p=>p.patterns.length),words:selected.paths.length?[]:selected.words.filter(w=>cells.join(' ').toLowerCase().includes(w))};
+        found.push({ area: cells[0], covers, match, records: links(cells[header.indexOf('record') >= 0 ? header.indexOf('record') : header.indexOf('doc')]), evidence: header.includes('evidence') ? links(cells[header.indexOf('evidence')]) : [] });
       } catch (error) { warnings.push(error.message); }
     }
   }
-  const evidenceChecks = new Map();
-  const contexts = found.slice(0, limit).map(entry => ({ ...entry, evidence: entry.evidence.map(e => {
+  const evidenceChecks = new Map(), recordChecks=new Map();
+  const contexts = found.slice(0, limit).map(entry => ({ ...entry, recordEvidence:entry.records.map(record=>{if(!recordChecks.has(record.path))recordChecks.set(record.path,recordFreshness(root,record,limit));return {path:record.path,...recordChecks.get(record.path)};}), evidence: entry.evidence.map(e => {
     if (!e.exists || !e.path.endsWith('.json')) return e;
     if (!evidenceChecks.has(e.path)) {
       const checked = spawnSync(process.execPath, [helper, 'check', '--project', root, '--manifest', e.path], { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024 });

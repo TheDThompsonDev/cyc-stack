@@ -2,7 +2,7 @@
 
 Covers: scripts/context-review.mjs, scripts/project-tools.mjs, scripts/runtime.mjs, scripts/work-review.mjs, bin/cyc.mjs, methods/cyc-context/**, docs/context/INDEX.md, docs/context.md, test/context-review.test.mjs, test-support/historical-runtime.test.fixture.mjs, test-support/historical-baseline.test.fixture.mjs
 
-Last changed by AI: 2026-11-06 · run 377be4c6-68d9-4a22-ab94-77a92707adbe · files: scripts/context-review.mjs
+Last changed by AI: 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · files: bin/cyc.mjs, scripts/runtime.mjs
 
 ## Current view
 
@@ -20,7 +20,25 @@ Run node --test test/context-review.test.mjs, node bin/cyc.mjs context lint and 
 
 INDEX.md is itself covered by this record. Adding or changing a reference row can advance its Git freshness boundary even if the executable feature contract is unchanged. Refresh this owner and index together under a new scoped update, retaining actual maintenance provenance. Reference rows point to supporting guides and do not inflate the component count; immutable release archives remain separate from later source documentation upkeep.
 
+Context/index-only maintenance with supporting-only or empty planned paths now samples existing non-supporting implementation files from the current focused record Covers. It preserves representative paths and source/authorship binding. Missing owner files cannot borrow unrelated source: selected implementation evidence must be nonempty even when an authored current-run History lists other valid hashes. Empty evidence leaves repairable scaffolding rather than invalid last-change/History metadata. test/next-release.test.mjs exercises actual normal finish, unchanged source, repeated preparation, absent anchors, adversarial History and later drift. A noncircular byte binding still does not certify the authored explanation.
+
+Installed-feature completion fixtures use bounded CLI finish/wait envelopes, retain exact run/operation identity, and unwrap only an observed terminal result. Per-process guards allow the requested bounded wait plus startup overhead, and an overall deadline still fails unfinished work. All retained-context, original-proof judgment, portable source-only transfer and actual outcome assertions remain intact. This corrects a harness assumption that a direct finish always returns within 30 seconds; it is not a product behavior repair or a claim that every host is qualified.
+
+The adoption extension preserves the legacy records/evidence discovery shapes and adds row.match plus row.recordEvidence. It explains requested path/Covers pairs or advisory goal terms; canonical newest-History SHA-256 bindings are checked once per record and bounded by the lookup limit. The view reports matches/drift/missing/invalid/unknown, counts and truncation; self, runtime or unrelated-to-Covers bindings cannot establish matching evidence. Git freshness is explicitly not inspected in this bounded projection; context lint remains the supported Git inspection. Every byte result keeps semanticCorrectness unverified and selected-files-only coverage. Current prose may be wrong despite matching bytes. Existing project-tools tests exposed and retained exact records-shape compatibility.
+
+The compact-advice repair limits workflowAdvice to explicit run next; ordinary record status retains its existing3000-character budget. A real CLI regression observed3231 characters before the repair, and both it and the unchanged original runtime quick-flow case pass afterward. Managed red proof24aa360b observed that same behavioral assertion on the run-start bin. This affects presentation only: explicit advice, criteria/artifacts/stages, native gates and evidence contracts remain. The earlier context-only full run had599pass/1fail/2skip and remains halted after a subsequent pre-start test-ordering mistake triggered its source guard. Its failure is not accepted as pre-existing or erased.
+
+The optional unified-task-context extension adds parent-owned read/ack and strict contribution reconciliation. Existing source/ownership/retention/proof requirements remain. Runtime binds current context revision/hash into handoffs and verification independently of source hashes; unknown economic advantage selects solo. Read-only host workers cannot complete a parent stage, reset budgets or create permanent context records per worker. See docs/task-context.md and scripts/task-context.mjs/scripts/delegation.mjs for current contracts and host/usage limitations.
+
+Original-byte recovery additionally checks a Git-derived variant with only the final newline converted to CRLF. It is accepted only when the full SHA-256 equals the frozen initial source hash. This repairs a real mixed-final-newline proof refusal without normalizing equality, editing captures or weakening original-source proof. test/delegation-journey.test.mjs reproduces refusal before repair and verifies candidate-byte restoration after proof.
+
+Automatic Codex execution is an additive parent-owned path: atomic assignment claim, correlated terminal cleanup after pause/stop, scoped text input and explicit lead reconciliation. It preserves existing source/proof/retention and dependent-context guards. Runtime diagnosis resolved the earlier live-generation blocker: host-provided CLI succeeds with the same account/model while stale PATH CLI fails. Runtime selection prefers the valid host hint. Actual generated source findings, explicit cancellation and one acknowledged merged context were observed; final source-bound checks are recorded separately.
+
+Automatic role/worker contributions consolidate in one task document; no project component doc is created per worker. Required canonical project knowledge remains a separate reusable layer. The new source-only reference snapshots retain the full earlier workflow/installation explanations while installed guides preserve anchors, links, diagrams and operational rules under the unchanged release ceiling. Current source bindings and authored views still precede final checks.
+
 ## Lessons
+
+- 2026-11-06 · current maintenance: Context-only plans need implementation evidence from their existing focused owner; supporting files cannot hash themselves into valid History. Missing anchors must preserve repairable metadata.
 
 - 2026-11-06 · run a81789bf: After targeted checks passed, fresh review demonstrated an omitted CSS owner. Known indexed ownership must not depend on source suffixes or test classification; keep novel-entrypoint detection separate. The repair also rejects advisory additions/deletions and requires catch-up provenance plus final checks.
 
@@ -33,6 +51,54 @@ INDEX.md is itself covered by this record. Adding or changing a reference row ca
 - 2026-11-01 · run 3e945303: docs/context/context-docs.md records the layout rules, how a run becomes a doc entry, the duplicated matcher and the measurement limits; docs/context-tokens-2026-11-01.md records the observed sizes. Lesson from the blocked run: the configured tests check must allow for the whole suite (the h2h fixture test alone took 356 s after the 0.6.0 fixtures), and a timed-out check cannot be accepted as pre…
 
 ## History
+
+### 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · Automatically decide whether a swarm is worthwhile, split independent work across agents in paralle…
+**Changed:** Add automatic scoped swarm planning, atomic parallel dispatch and source-bound semantic reconciliation with safe cancellation/recovery.
+**Learned:** Retain automatic decision/parallelism/one-context contracts and actual schema, publication and parent-handoff failures before final checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 318f64bc-134d-46b7-865e-6903d3d71494 command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:43d4ad265cd3c7346caddaf1d49235b9bd0adfb712075912974e85c207393e13, scripts/runtime.mjs@sha256:a734cc7de3c9c2d0fcf36deef0c3a7de3eb6c73b5e07dc6444b30c5db6c0ff84
+
+### 2026-11-07 · run be41a8ca-77fb-4e6c-8785-780005ec49a2 · Implement automatic bounded Codex worker dispatch, acknowledged cancellation and unified-context in…
+**Changed:** Resolved stale CLI selection and verified actual generated findings, cancellation and one shared context.
+**Learned:** Retain measured runtime diagnosis and real qualification before final source checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run be41a8ca-77fb-4e6c-8785-780005ec49a2 command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:05dea3753ed07c773adea19849c2ff1fc10df90f498e657e3f2018aeaddfc120, scripts/runtime.mjs@sha256:ef714a5ffc8866703fcbd23be812053712423e9e3127be729299527cc791b1dd
+
+### 2026-11-07 · run 10e609d6-1319-41b5-b1a6-53e66bed9656 · Implement unified task context and bounded read-only delegation with parent-owned reconciliation an…
+**Changed:** Implement unified task context and bounded read-only delegation while preserving legacy contracts.
+**Learned:** One shared document per run, explicit reconciliation, conservative budgets, actual parent identity and no automatic model dispatch or measured savings claim.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 10e609d6-1319-41b5-b1a6-53e66bed9656 command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:b7c26d67c7317b23b4749b4da6fb679767ba0adc4f2d80f7b721b0cb86700695, docs/context.md@sha256:47af11aa937ef3f814060b8482e74d3215691dc617df8ea2426bb844c3b8199e, scripts/runtime.mjs@sha256:767c933c0579f20912005fb0045281ead3c9c2de1cfed3c7756288baa8c901ae
+
+### 2026-11-07 · run 16b78baa-588b-4340-bd22-3d7e206e451e · Repair introduced CLI record-output bloat while retaining explicit workflow advice.
+**Changed:** Repair introduced record output bloat; keep workflow advice on explicit next and preserve the existing status budget and all artifacts/criteria.
+**Learned:** Retain actual3231-character original failure,2-case targeted pass and managed red proof; preserve earlier halted/stopped outcomes and external validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 16b78baa-588b-4340-bd22-3d7e206e451e command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:0ccd05809766792fe6e836a64811f370dfad41a13eaa291cdbdf4ef303a7a441
+
+### 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · Reconcile omitted canonical context owners and verify the final local adoption implementation witho…
+**Changed:** Reconcile all10 affected canonical owners and index for the reviewed adoption changes; public code/tests remain unchanged.
+**Learned:** Retain current shared contract implications, source bindings and explicit original-run/proof/live-validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/project-tools.mjs@sha256:4771d6f141934691b4e68ddccce1a24aa73db035b4d0358838ea4123dc802cf3
+
+### 2026-11-07 · run b70fdf23-cc8b-4028-be98-7e9cad40755d · Implement local CYC adoption, context visibility and proportional guidance; prepare isolated cohort…
+**Changed:** Implement first-task/context/response guidance, bounded context reasons and byte observations, conservative workflow advice and isolated cohort evaluation preparation.
+**Learned:** Preserve backward-compatible shapes, current native gates and actual provenance. Explanations and fixtures do not establish live activation, participant understanding or workflow savings.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run b70fdf23-cc8b-4028-be98-7e9cad40755d command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:6086fd78f343b2d9157280a603bfffa66245f2c06f079725c8e9c59eaa2b64fc, scripts/project-tools.mjs@sha256:4771d6f141934691b4e68ddccce1a24aa73db035b4d0358838ea4123dc802cf3
+
+### 2026-11-07 · run 5db3edd0-b55f-40eb-8438-8c43a40dcdbe · Correct asynchronous verification fixtures and local full-suite scheduling without changing public…
+**Changed:** Asynchronous verification fixtures follow observed operation completion with bounded waits and all outcome assertions preserved. Complete local test discovery uses four file workers and a 30-minute cap. Prior exhausted/stopped runs and their failures remain preserved; public implementation is unchanged and native activation remains unverified.
+**Learned:** Retain observed asynchronous fixture publication boundaries and local verification setup without promoting old timeouts, missing original bytes or unverified host observations.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 5db3edd0-b55f-40eb-8438-8c43a40dcdbe command receipts separately. Local receipts may not travel with source.
+**Files:** test/context-review.test.mjs@sha256:4f1d6b76c4c9ee1f63b995fe3e2fd185e2d076c99421bf398bd91d9328c2db6b
+
+### 2026-11-07 · run 58050570-ae16-4f59-8075-d78d67e8a764 · Repair context-only completion and make finish, recovery and real-host setup guidance usable withou…
+**Changed:** Context-only completion now retains unchanged focused implementation evidence; finish/recovery/setup expose actionable derived guidance. Changes stay local and uncommitted. Actual current-chat native activation is missing; fresh-host confirmation remains pending and simulated hook tests do not establish it.
+**Learned:** Retain the focused evidence fallback and truthful setup/completion/recovery boundaries before final verification; automated checks do not establish semantic truth or real-host activation.
+**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed; inspect run 58050570-ae16-4f59-8075-d78d67e8a764 command receipts separately. Local receipts may not travel with source.
+**Files:** bin/cyc.mjs@sha256:ee19440c522fc9c1d9df268c3939e7935bd9349d41852898fdea98b9fd7fc16c, docs/context.md@sha256:4b0aa14aa97d5e484219151fd7cd18e3e3bf3eef57944e63154d258b1c4a6ab6, methods/cyc-context/SKILL.md@sha256:1cbd3167ac364225acbab1e3267d2ed20fbb8e144067560919f5f9512f1779ed, scripts/context-review.mjs@sha256:5963771e3d4b72428151a192e7922cb12fafbfb08c77f237bcce089e696d4250
 
 ### 2026-11-06 · run 377be4c6-68d9-4a22-ab94-77a92707adbe · Refresh the canonical index-owner record after adding the publishing setup reference, preserving ac…
 **Changed:** Retain the new release setup reference under its actual index-owner record, refreshing current history/index metadata without changing the published0.8.2 archive.

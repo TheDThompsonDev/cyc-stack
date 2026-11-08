@@ -369,10 +369,14 @@ const support = (path, folder) => path.startsWith('.cyc/') || path === `${folder
 function featureFiles(root, state, feature, files) {
   const folder = retentionOf(state).folder;
   const changed = Object.keys(files).filter(p => files[p] !== state.initialSource.files[p] && !support(p, folder));
-  const paths = feature.paths.length ? feature.paths : changed;
   const recordCovers = existsSync(local(root, feature.doc)) ? parseDoc(read(root, feature.doc), fileName(feature.doc)).covers : [];
+  // Context-only upkeep still describes an implementation. Reuse its focused
+  // owner, never the record/index itself or an unrelated workspace sample.
+  const maintenance = !changed.length && feature.paths.every(p => support(p, folder));
+  const anchors = maintenance ? recordCovers.filter(p => !support(p, folder) && !catchAll(p)) : [];
+  const paths = feature.paths.length ? feature.paths : maintenance ? anchors : changed;
   const selected = changed.filter(p => covered([...paths, ...recordCovers], p));
-  for (const path of paths) {
+  for (const path of [...paths, ...anchors]) {
     const sample = files[path] && !support(path, folder) ? path : selected.find(p => covered([path], p)) ?? Object.keys(files).find(p => covered([path], p) && !support(p, folder));
     if (sample && !selected.includes(sample)) selected.push(sample);
   }
@@ -408,7 +412,7 @@ export function checkRetention(root, state, files) {
     const latest = parsed.history[0];
     if (parsed.history.filter(h => h.run === state.id).length !== 1) issue('feature-history', 'Keep exactly one entry for the current run.', doc);
     if (latest?.run !== state.id) issue('feature-history', 'Current feature work needs its own dated History entry before verification.', doc);
-    if (!latest?.files.length) issue('feature-evidence', 'Current History needs actual selected source evidence.', doc);
+    if (!selected.files.length || !latest?.files.length) issue('feature-evidence', 'Current History needs actual selected source evidence.', doc);
     for (const item of latest?.files ?? []) {
       try {
         const path = canonicalPattern(item.path, { patterns: false });
@@ -447,6 +451,12 @@ export function prepareRetention(root, state, { records = [], summary = '', reas
     const viewHash = sha(parsed.currentView), sourcesHash = sha(JSON.stringify(selected.files));
     const prior = state.contextPreparation?.authored?.[feature.id];
     if (record || viewHash !== (state.contextPreparation?.views?.[feature.id] ?? feature.baselineViewHash) || prior?.viewHash === viewHash && prior.sourcesHash === sourcesHash) authored[feature.id] = { viewHash, sourcesHash };
+    // Keep a repairable scaffold when no implementation anchor exists. Empty
+    // evidence must not overwrite valid metadata with an unreadable History.
+    if (!selected.files.length) {
+      if (!exists || read(root, feature.doc) !== source) writes.push({ path: feature.doc, source });
+      continue;
+    }
     // Replace only this still-active run's preparation, preserving completed history.
     const lines = source.split('\n');
     for (const own of parsed.history.filter(h => h.run === state.id).reverse()) {

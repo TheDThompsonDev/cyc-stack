@@ -2,7 +2,7 @@
 
 Covers: test-support/contract-journeys.mjs, test/quality-journeys.test.mjs, methods/cyc-scout/SKILL.md, methods/cyc-challenge/SKILL.md, methods/cyc-verify/SKILL.md, methods/cyc-verify/references/recipe.md
 
-Last changed by AI: 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · files: methods/cyc-scout/SKILL.md, methods/cyc-verify/SKILL.md, test-support/contract-journeys.mjs, test/quality-journeys.test.mjs, methods/cyc-challenge/SKILL.md, methods/cyc-verify/references/recipe.md
+Last changed by AI: 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · files: methods/cyc-scout/SKILL.md
 
 ## Current view
 
@@ -16,6 +16,8 @@ Server authorization remains server-owned. An expected-actor/session preconditio
 
 Run node --test test/quality-journeys.test.mjs. Scout consumers, consumerChecks and criterionChecks retain the named journey. Unavailable evidence stays unverified; generic prose, a broad passing count or a model score does not become machine-observed semantic coverage. Local model/receipt evidence may be unavailable to a teammate; these deterministic fixtures do not establish human acceptance, live services or future model behavior.
 
+Scout now explains a relevant project rule, its code revalidation and the decision/check it changes. That communication extends, and does not replace, the authoritative writer/status/protected read/write journey or actor/resource response checks. A known cohort filtering fixture is unrelated to live membership authorization; its successes cannot certify application privacy or unseen model behavior. This shared-owner update is recorded separately from the stopped original adoption scope.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -25,6 +27,12 @@ Run node --test test/quality-journeys.test.mjs. Scout consumers, consumerChecks 
 - 2026-11-05 · run a81789bf: Verify an authoritative state transition and its protected consumers together; apply response identity to writes as well as reads.
 
 ## History
+
+### 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · Reconcile omitted canonical context owners and verify the final local adoption implementation witho…
+**Changed:** Reconcile all10 affected canonical owners and index for the reviewed adoption changes; public code/tests remain unchanged.
+**Learned:** Retain current shared contract implications, source bindings and explicit original-run/proof/live-validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 command receipts separately. Local receipts may not travel with source.
+**Files:** methods/cyc-scout/SKILL.md@sha256:8b79d44e7b18702e1ce546a01fd21e7f42628727cacffa4710e3254a2df6926b
 
 ### 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · Enforce canonical indexed feature context during normal completion and repair current context/histo…
 **Changed:** Require source-bound canonical feature retention before final checks; repair missing A-H feature records/mappings and actual historical evidence without rewriting completed receipts.

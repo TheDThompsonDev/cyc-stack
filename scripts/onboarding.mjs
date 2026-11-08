@@ -4,6 +4,7 @@ import { doctorProject } from './install.mjs';
 import { atomicJSON, configuration, projectFile, runCommands, sourceSnapshot } from './runtime.mjs';
 import { digest } from './response-gate.mjs';
 import { inspectHostActivation } from './host-activation.mjs';
+import { responseGuidance } from './response-mode.mjs';
 
 const receiptName = '.cyc/runtime/onboarding-checks.json';
 const configName = '.cyc/config.json';
@@ -59,7 +60,7 @@ function inspectChecks(root, config, verify) {
 
 export function onboardProject(target, { verify = false, host = 'auto', session, token, env = process.env } = {}) {
   const root = resolve(target);
-  const report = { ok: true, projectRoot: root, installation: 'missing', steps: [], evidenceSources: [], commands: [] };
+  const report = { ok: true, projectRoot: root, environment: { node: process.version, platform: process.platform, arch: process.arch }, installation: 'missing', steps: [], evidenceSources: [], commands: [] };
   const add = (id, status, detail, action, extra = {}) => {
     report.steps.push({ id, status, detail, action, ...extra });
     if (['missing', 'failed'].includes(status)) report.ok = false;
@@ -105,6 +106,18 @@ export function onboardProject(target, { verify = false, host = 'auto', session,
     'Use the user’s requested bounded task, or recommend one from inspected project evidence. Explain success criteria and use the normal Scout → Build → Verify → Deliver flow. Ask before selecting unrelated product changes.');
   const next = report.steps.find(step => step.status !== 'passed');
   report.nextAction = { step: next.id, instruction: next.action };
+  report.guidance = { outcome: report.ready ? 'setup-checked' : report.canStartTask ? 'task-can-start' : 'setup-needed',
+    summary: report.ready ? 'Setup has matching local checks and current host observations. Continue the authorized task; its outcome still needs verification.' : report.canStartTask ? 'This prompt hook was observed. Continue the authorized task and observe completion after the turn ends.' : next.detail,
+    nextAction: report.nextAction };
+  report.identity = {engineVersion:JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version,hostVersion:null,hostVersionSource:'Unavailable; a CLI on PATH is not the running host.'};
+  let preference={},presentation;
+  if(activation.canStartTask && activation.evidencePath) try { preference=JSON.parse(readFileSync(projectFile(root,activation.evidencePath),'utf8')); } catch { /* unknown, never synthesize state */ }
+  try { presentation=JSON.parse(readFileSync(projectFile(root,configName),'utf8')).delivery?.presentation; } catch { /* the configuration step already reports the error */ }
+  report.experience={purpose:'Use relevant project knowledge, check the change and retain consequential decisions for the next chat.',
+    before:'Explain the requested outcome and the existing behavior to preserve; continue an authorized task, otherwise suggest one from inspected project evidence.',
+    during:'Connect a discovered rule to the decision it changes and its check. Report actual failures and uncertainty, not routine command counts.',
+    after:'Link actual checks, remaining limits and the target project context saved for the next chat. A stage pass does not prove understanding or usefulness.',understanding:'unverified'};
+  report.responseChoices=responseGuidance({...preference,presentation});
   report.note = 'Inspection is read-only. --verify explicitly executes configured commands, which may have project-defined side effects, and saves a diagnostic receipt. The host agent recommends checks and confirms actual live observations.';
   return report;
 }

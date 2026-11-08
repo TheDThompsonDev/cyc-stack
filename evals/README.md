@@ -7,6 +7,7 @@ These small source-only projects exercise concrete engineering behavior. They ar
 | [Homework](homework/request.md) | Add a completion feature while preserving indirect consumers, storage and old records | `node evals/homework/evaluate.mjs PATH_TO_CANDIDATE` |
 | [Report refactor](report-refactor/request.md) | Consolidate repeated preparation while preserving text, CSV, JSON and downstream consumers | `node evals/report-refactor/evaluate.mjs PATH_TO_CANDIDATE` |
 | [Scheduler review](scheduler-review/request.md) | Review a supplied change without editing product behavior | `node evals/scheduler-review/evaluate.mjs PATH_TO_CANDIDATE PATH_TO_FINDINGS` |
+| Cohort task-board journey (`cohort-journey/`) | Known first/related behavior probes plus an actual-user observation protocol | `node evals/cohort-journey/evaluate.mjs PATH_TO_CANDIDATE first` or `related`; recovery needs separate observations |
 | [Fresh-session handoff](live-session-reuse.md) | Check saved knowledge and verification across real chats | Follow the protocol in the linked guide |
 
 Give a producer the task, public criteria and a disposable candidate copy. Evaluate its current output separately. Preserve rejected cases and failed observations. A semantic review must establish structural or explanation quality where executable checks cannot.

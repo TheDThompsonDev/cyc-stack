@@ -2,6 +2,15 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## 0.9.0 (2026-11-08)
+
+- Keep one versioned task context per run. The lead merges worker findings, evidence, conflicts and dispositions into that document and acknowledges its current revision before dependent work.
+- Add automatic Codex swarm planning, conservative delegation decisions, parallel read-only workers and lead-reviewed merging. Default concurrency is two; unknown cost estimates favor solo execution. Explicit policies, scope, dependencies and cancellation remain enforced.
+- Treat tokens as usage reporting only. Remove token-based admission and interruption, preserve observed/estimated/unknown usage, and safely migrate authentic active legacy context views without changing completed archives.
+- Use the Codex app-provided CLI when available, bind worker and phase results to their actual thread/turn, drain cancellation to matching terminal acknowledgment, and refuse stale results or unsafe redispatch. Retain failed attempts and explicit retry history.
+- Improve first-task guidance, setup/recovery/completion explanations, context discovery and feature-history retention. Add development cohort and end-to-end delegation fixtures; simplify shipped guides and diagrams within the existing archive-size ceiling.
+- Verify live worker dispatch, overlapping execution, cancellation and findings merged into one acknowledged context. The successful live merge required recovery of its final context acknowledgment after a Windows file-lock failure. Automated tests and these live trials do not establish native hook activation, measured savings or effectiveness on unseen tasks.
+
 ## 0.8.3 (2026-11-06)
 
 - Use an explicit local archive path in the trusted npm publisher, keeping exact tag/source checks and the Node 24 test gate.

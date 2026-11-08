@@ -5,6 +5,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
+function compactSvg(svg) {
+  const styles=new Map();
+  const body=svg.replace(/<text\b([^>]*)>/g,(tag,attrs)=>{
+    const pairs=[...attrs.matchAll(/ (font-size|fill|font-weight|text-anchor)="([^"]*)"/g)];
+    if(!pairs.length)return tag;
+    const style=pairs.map(m=>m[1]+':'+m[2]+(m[1]==='font-size'?'px':'')).join(';');
+    if(!styles.has(style))styles.set(style,'t'+styles.size);
+    return '<text'+attrs.replace(/ (font-size|fill|font-weight|text-anchor)="[^"]*"/g,'')+' class="'+styles.get(style)+'">';
+  });
+  let result=styles.size?body.replace(/(<svg\b[^>]*>)/,'$1<style>'+[...styles].map(([s,c])=>'.'+c+'{'+s+'}').join('')+'</style>'):body;
+  const shapes=new Map();
+  result=result.replace(/<(rect|path)\b([^>]*)\/>/g,(tag,name,attrs)=>{
+    const pairs=[...attrs.matchAll(/ (fill|stroke|stroke-width|stroke-dasharray|stroke-linecap|stroke-linejoin|opacity)="([^"]*)"/g)];
+    if(pairs.length<2)return tag;
+    const style=pairs.map(m=>m[1]+':'+m[2]).join(';');if(!shapes.has(style))shapes.set(style,'s'+shapes.size);
+    return '<'+name+attrs.replace(/ (fill|stroke|stroke-width|stroke-dasharray|stroke-linecap|stroke-linejoin|opacity)="[^"]*"/g,'')+' class="'+shapes.get(style)+'"/>';
+  });
+  if(shapes.size)result=result.replace(/(<svg\b[^>]*>)/,'$1<style>'+[...shapes].map(([s,c])=>'.'+c+'{'+s+'}').join('')+'</style>');
+  return result.replace(/(<text\b[^>]*>)<tspan x="[^"]+" dy="0">([^<]*)<\/tspan>/g,'$1$2').replaceAll(';font-weight:400','').replaceAll(';text-anchor:start','').replaceAll(' rx="0"','').replace(/>\s+</g,'><');
+}
+
 const directory = dirname(fileURLToPath(import.meta.url));
 const W = 2020, H = 3440;
 const c = { ink:'#16225a', text:'#334362', teal:'#197f70', tealFill:'#e6f5ef', amber:'#b86b0a', amberFill:'#fff0d6', purple:'#7044b4', purpleFill:'#f5effc', blue:'#2b69b0', blueFill:'#eaf3ff', red:'#b72d4f', redFill:'#ffedf2', line:'#ced9e5' };
@@ -421,12 +442,12 @@ overviewText(48,995,['Run logs stay local by default. Share useful project docs 
 const overviewDefs=Object.entries({forward:c.teal,knowledge:c.purple,retry:c.amber}).map(([kind,color])=>`<marker id="overview-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="${color}"/></marker>`).join('');
 const overviewSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1030" viewBox="0 0 1200 1030" role="img" aria-labelledby="overview-title overview-desc" font-family="Segoe UI, Arial, sans-serif"><title id="overview-title">CYC Stack team workflow</title><desc id="overview-desc">Your AI assistant reuses and revalidates project knowledge, builds a focused change and retains useful findings before final checks, proves applicable tests against original code, runs configured checks and reviews consumers, then delivers evidence and context pointers. The local controller checks records and executes project commands; an active host hook enforces delivery. Failed checks return to repair within the retry budget. Teams share through their existing project review process; run logs are local by default.</desc><defs>${overviewDefs}</defs>${overviewParts.join('\n')}</svg>\n`;
 const overviewPng=await sharp(Buffer.from(overviewSvg),{density:96}).png().toBuffer();
-writeFileSync(join(directory,'cyc-workflow-diagram.svg'),svg);
+writeFileSync(join(directory,'cyc-workflow-diagram.svg'),compactSvg(svg));
 writeFileSync(htmlPath,updatedHtml);
 writeFileSync(join(directory,'cyc-workflow-diagram.png'),png);
-writeFileSync(join(directory,'cyc-method-library.svg'),methodSvg);
+writeFileSync(join(directory,'cyc-method-library.svg'),compactSvg(methodSvg));
 writeFileSync(join(directory,'cyc-method-library.png'),methodPng);
-writeFileSync(join(directory,'cyc-overview.svg'),overviewSvg);
+writeFileSync(join(directory,'cyc-overview.svg'),compactSvg(overviewSvg));
 writeFileSync(join(directory,'cyc-overview.png'),overviewPng);
 if(process.argv.includes('--geometry')) console.log(JSON.stringify(geometry,null,2));
 else console.log('Updated README overview, connected workflow and method library: HTML, SVG and PNG exports.');

@@ -1,5 +1,20 @@
 // Presentation only: the controller owns transitions and completion decisions.
 // Historical observations must never be promoted to current verification here.
+export function completionGuidance(result, { executionMode } = {}) {
+  const report = result.result ?? result, id = result.runId ?? report.runId;
+  const inspect = { action: 'recover', command: `run recover --run ${id}`, instruction: 'Inspect this run before changing files or retrying; preserve its existing evidence and budget.' };
+  if (result.operationId && !result.operationComplete && !result.error) return { outcome: 'in-progress', summary: `The ${result.action ?? 'check'} operation is active at ${result.phase ?? 'its recorded phase'}. Completion has not been established.`, nextAction: result.nextAction };
+  if (result.error) return { outcome: 'blocked', summary: result.error.message, nextAction: inspect };
+  if (['needs-context', 'needs-proof-review'].includes(report.status)) return { outcome: 'needs-input', summary: report.status === 'needs-context' ? 'Your changes remain in place. Finish needs the listed context corrections before checks can establish completion.' : 'Original-source proof ran. Judge the listed failures before finish can continue; no completion is claimed.', nextAction: report.nextAction };
+  if (report.finished === true && report.status === 'complete') {
+    if (report.packet?.written === false && executionMode === 'cursor' && report.packet.reason?.startsWith('Cursor requires the exact reply:')) return { outcome: 'needs-input', summary: 'Work is recorded. Cursor still needs its exact-response delivery packet.', nextAction: { action: 'packet', instruction: report.packet.reason } };
+    if (report.packet?.written === false) return { outcome: 'needs-repair', summary: `Run completion is recorded, but delivery evidence was not published: ${report.packet.reason}`, nextAction: inspect };
+    return { outcome: 'complete', summary: 'Completion is recorded. Use the review and delivery evidence for the checked scope and remaining limits; this does not certify host activation or product readiness.', nextAction: null };
+  }
+  if (report.passed === true) return { outcome: 'in-progress', summary: 'This check passed. The remaining workflow still needs its recorded judgments and completion conditions.', nextAction: report.nextAction ?? { action: 'next', command: `run next --run ${id}` } };
+  return { outcome: ['halted', 'exhausted', 'blocked', 'stopped'].includes(report.status) ? 'blocked' : 'needs-repair', summary: report.reason ?? `The ${report.failedAt ?? result.action ?? 'check'} step did not establish completion. Inspect the recorded result before retrying.`, nextAction: report.recovery?.nextAction ?? report.nextAction ?? inspect };
+}
+
 export function recoveryGuidance(state, { sourceHash, guardIssues, inspectionError, lastCheck, engineVersion, workspaceOperation }) {
   const stage = state.stages[state.stageIndex] ?? null;
   const issues = guardIssues.protectedChanges.length || guardIssues.outOfScope.length;
@@ -48,6 +63,9 @@ export function recoveryGuidance(state, { sourceHash, guardIssues, inspectionErr
   else if (state.requiresChecks && !current && ['verify', 'deliver', null].includes(stage)) action('verify',
     'Current files do not have passing executable evidence. If a Verify handoff already passed, retry the affected stage with a reason first; then run verification and refresh the semantic review. Preserve the existing failure budget.');
   else action('continue', stage ? `Continue the ${stage} stage with the original criteria. Inspect the existing handoff and current diff before editing; a stage result is not task completion.` : 'All stages are recorded. Use run complete to let the controller check freshness and completion conditions.');
+  nextAction.command = nextAction.kind === 'resume' ? `run resume --run ${state.id}` : nextAction.kind === 'continue' || nextAction.kind === 'verify' ? `run next --run ${state.id}` : null;
+  const outcome = nextAction.kind === 'resume' ? 'paused' : nextAction.kind === 'review-complete' ? 'recorded-complete' : nextAction.kind === 'continue' ? 'in-progress' : ['inspect-check', 'inspect-failure', 'verify', 'refresh-review', 'inspect-source-change'].includes(nextAction.kind) ? 'needs-repair' : 'blocked';
+  const summary = outcome === 'recorded-complete' ? 'This run has recorded completion. Recheck its evidence against current files before relying on it.' : `Your changes remain in place. ${outcome === 'paused' ? 'This run is paused; inspect the diff before resuming.' : outcome === 'in-progress' ? 'Continue the recorded stage using the original criteria.' : 'The run needs attention before it can finish.'}`;
   return {
     runId: state.id, status: state.status, goal: state.goal, stage, criteria: state.criteria,
     remainingAttempts: Math.max(0, state.limits.maxAttempts - state.failures),
@@ -61,6 +79,7 @@ export function recoveryGuidance(state, { sourceHash, guardIssues, inspectionErr
     reviewPath: `.cyc/runs/${state.id}/review.md`,
     acceptedFailures: state.acceptedFailures ?? [],
     preservation: 'Recovery inspection changed no source files, run state, receipts or budgets. Existing files remain in place; this is not a backup or a claim that earlier commands had no side effects.',
-    nextAction
+    nextAction, guidance: { outcome, summary, nextAction },
+    effort:{recordedFailures:state.failures,recordedNoProgress:state.noProgress,modelRequests:null,journeyDurationSeconds:null,note:'Failure counts are recorded events, not time or resource savings. Bounded operation views report their own elapsed time.'}
   };
 }

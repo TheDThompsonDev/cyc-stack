@@ -1,202 +1,144 @@
 # Installing CYC in an existing project
 
-CYC's project installer adds skill copies and response-hook configuration to an existing project. It does not change global settings, install a marketplace, rewrite project instructions, edit the application's package.json, or execute the application's scripts. Node.js 20 or later is required on the machine running the AI tool; the target project can use any language.
+CYC installs project-local skills/engine/hooks, preserving application instructions/package.json/dependencies and unrelated hooks. No global changes or application-script execution. The AI host needs Node.js 20+; applications may use any language.
 
-CYC is [published on npm](https://www.npmjs.com/package/cyc-stack). The package and source checkout carry a top-level [INSTALL.md](../INSTALL.md) guide covering installation, AI-chat setup and a first task. A reviewed checkout or archive also works. Downloading the npm package does not activate a project: `init` performs that explicit step, while a complete native plugin uses project activation through its Setup method.
+Follow [INSTALL.md](../INSTALL.md) for the [published npm package](https://www.npmjs.com/package/cyc-stack), route selection and setup request. From the target root:
 
-Run `npx cyc-stack@latest init` from the target project root to install the latest published release. No flags are required. npm may ask before downloading the package. To save a development dependency in `package.json`, run `npm install --save-dev cyc-stack`, then `npx cyc-stack init`. Downloading the package alone does not set up project integration. After installation, reload your AI host and ask `/cyc` to set up the project's checks.
+~~~text
+npx cyc-stack@latest init
+~~~
 
-For a source checkout, use `node bin/cyc.mjs init --project PATH` from the reviewed CYC checkout. Hosts are auto-detected from `CLAUDE.md`/`.claude/`, `AGENTS.md`/`.agents/`/`.codex/`, and `.cursor/`/`.cursorrules`; with no signal, all three are set up. Use `--hosts` to choose explicitly and `--dry-run` to inspect the plan:
+Reload and ask /cyc to configure checks; download alone does not activate CYC. From a reviewed checkout:
 
-```text
+~~~text
 node bin/cyc.mjs init --project "/absolute/path/to/project" --hosts claude,codex,cursor --dry-run
 node bin/cyc.mjs init --project "/absolute/path/to/project"
 node bin/cyc.mjs doctor --project "/absolute/path/to/project"
 node bin/cyc.mjs uninstall --project "/absolute/path/to/project" --dry-run
-```
+~~~
 
-The plugin route is an alternative: install the `cycstack` plugin from the host marketplace (see the README), then run `cyc activate` in a project (`/cyc set up this project` handles this). Activation writes only `.cyc/config.json` and `.cyc/.gitignore`; the plugin supplies skills, hooks, and the engine. Plugin hooks do nothing in projects without `.cyc/config.json` and defer to a project install when one exists. Once installed, the project-local CLI is `.cyc/engine/bin/cyc.mjs`. The underlying supported API is:
+CLI detection uses CLAUDE.md/.claude, AGENTS.md/.agents/.codex and .cursor/.cursorrules; no signals selects all three. --hosts overrides selection. Installed CLI: .cyc/engine/bin/cyc.mjs.
 
-```js
-import { installProject, doctorProject, uninstallProject } from './scripts/install.mjs';
+A complete cycstack plugin supplies engine/skills/hooks. cyc activate or /cyc set up this project writes only .cyc/config.json/.cyc/.gitignore. Hooks ignore unactivated projects and defer to project installs.
 
-installProject('/absolute/path/to/project', {
-  hosts: ['codex', 'claude'],
-  dryRun: true,
-});
-installProject('/absolute/path/to/project', { hosts: ['codex', 'claude'] });
-doctorProject('/absolute/path/to/project');
-uninstallProject('/absolute/path/to/project', { dryRun: true });
-```
-
-These functions return JSON-friendly objects. Inspect `ok` before proceeding. Installation results include planned `changes`, `conflicts`, `warnings`, and an `error` when applicable. A dry run performs validation and reports changes without writing them. Hosts default to both supported integrations. Adding a host preserves previously installed hosts.
+scripts/install.mjs exports installProject(target,{hosts,dryRun}), doctorProject(target), uninstallProject(target,{dryRun}). API hosts default to codex/claude and retain existing hosts. Inspect JSON ok/changes/conflicts/warnings/error. dryRun validates without writes. Source reference: docs/maintainers/installation-reference.md.
 
 ## Optional npm controls
 
-Interactive `init`/`install` output summarizes the outcome, project, hosts and file counts, keeps setup warnings and conflicts visible, and points to the next step in your AI host. A preview says no files changed; an unchanged install says it is up to date. Notes produced while planning are explicitly qualified in previews and failed installs, since a planned migration may not have been applied. Neither installation nor that summary establishes host trust or real-session activation.
-
-Use `--json` for the complete structured installer result. Redirected/piped output remains JSON automatically, preserving existing automation, and `--verbose` retains its existing detailed JSON behavior. Other command output and the installer API are unchanged. For example: `npx cyc-stack@latest init --json`.
-
-These options are for specific needs; the normal install requires none of them.
+Interactive init/install shows outcome, project, hosts, changes, warnings/conflicts and next action. Previews/failed plans qualify unapplied migrations; unchanged installs report up to date. --json/--verbose exposes details; piped output stays JSON. Other commands/API stay unchanged.
 
 | Need | Command |
 | --- | --- |
-| Preview local file changes | `npx cyc-stack@latest init --dry-run` |
-| Install only one host | `npx cyc-stack@latest init --hosts codex` |
-| Select a nested project instead of its CYC-enabled parent | `npx cyc-stack@latest init --project .` |
-| Select an approved published version | `npx cyc-stack@0.6.0 init` |
-| Follow the optional `next` channel | `npx cyc-stack@next init` |
-| Save as a development dependency | `npm install --save-dev cyc-stack`, then `npx cyc-stack init` |
+| Preview | npx cyc-stack@latest init --dry-run |
+| One host | npx cyc-stack@latest init --hosts codex |
+| Exact nested root | npx cyc-stack@latest init --project . |
+| Approved version/channel | npx cyc-stack@0.6.0 init or npx cyc-stack@next init |
+| Dependency | npm install --save-dev cyc-stack; npx cyc-stack init |
 
-`@latest` explicitly selects npm's `latest` tag; it is not a guarantee of production qualification. An unversioned command can use a package already installed in the project. For exact dependency pinning, add `--save-exact` to `npm install`. In automation, npm's `--yes` option goes before the package name to suppress its download prompt. These controls do not replace host reload, trust or project check configuration.
+@latest selects a tag, not qualification. Unversioned commands may use project packages; --save-exact pins. npm --yes precedes the package name. Reload/trust/check setup still apply.
 
 ## Agent-guided installation
 
-Ask your agent to install CYC in the target project from a reviewed checkout, archive or published npm version, preserving existing instructions and hooks. The source/package INSTALL.md gives a pasteable request and route selection; this procedure is also available in a project-installed engine.
+1. Read target instructions; use the requested project/reviewed release. Registry errors authorize no credential, visibility or global changes.
+2. Preview init --dry-run with --project when needed. Explain/proceed within installation authorization; resolve conflicts without deleting or claiming existing files.
+3. Install; follow [project setup](../methods/cyc-setup/SKILL.md). Find meaningful CI/config checks, explain coverage and honor execution authorization. No always-passing substitutes.
+4. Distinguish installed files, configured/executed checks and activation. Use supported trust controls; missing prompt/Stop observations stay unverified. Never simulate callbacks or edit trust/state to claim activation.
 
-For an agent performing this request:
-
-1. Read the target project's instructions. Use the requested project and release, whether a published npm version or a supplied reviewed checkout/archive. Do not treat a registry error as permission to alter credentials, visibility or global settings.
-2. Preview with the selected CLI's `init --dry-run`, using `--project` for a different existing target directory. Explain the proposed changes and continue within the user's installation authorization. Resolve reported conflicts without deleting or taking ownership of existing files.
-3. Complete `init`, then follow [project setup](../methods/cyc-setup/SKILL.md). Find checks in the project's CI and configuration, explain which behavior they exercise, and use the project's authorization rules before running them. Do not invent always-passing checks.
-4. Keep installed files, configured checks, executed checks and real host activation distinct. Missing trust or prompt/Stop observations remain unverified. Use supported host controls; never simulate callbacks or edit trust/state to claim activation.
-
-
-An isolated skill folder does not contain the methods and CLI it references. Use the project installer or a complete qualified native plugin.
+An isolated skill lacks its methods/CLI; use the installer or complete qualified plugin.
 
 ## What is installed
 
-| Project location | Purpose |
+| Location | Purpose |
 | --- | --- |
-| `.cyc/engine/` | A project-local copy of CYC's scripts, CLI, catalog, documentation, original skills, and small homework evaluation fixture, with an ESLint config that ignores it |
-| `.cyc/config.json` | Editable verification configuration and loop limits |
-| `.cyc/install-manifest.json` | Installed version, ownership hashes and exact hook entries used for updates and removal |
-| `.cyc/.gitignore` | Keeps `runtime/` and `runs/` records out of ordinary Git tracking |
-| `.agents/skills/cyc/` | Single orchestrator entry for Codex and Cursor |
-| `.claude/skills/cyc/` | Single orchestrator entry for Claude Code |
-| `.codex/hooks.json` | CYC's entries merged into `UserPromptSubmit` and `Stop` |
-| `.claude/settings.json` | CYC's entries merged into `UserPromptSubmit` and `Stop` |
-| `scripts/claude-hooks/cyc.mjs` | Managed Claude launcher that invokes the copied engine |
-| `.cursor/hooks.json` | CYC's entries merged into `beforeSubmitPrompt`, `afterAgentResponse`, and `stop` (Cursor host) |
-| `.cursor/rules/cyc-delivery.mdc` | Always-applied rule that tells the Cursor agent the gate protocol, because Cursor hooks cannot inject per-request context |
+| .cyc/engine/ | Runtime/CLI, methods/catalog/docs/skills, compact SVGs and ESLint config |
+| .cyc/config.json | Checks/limits |
+| .cyc/install-manifest.json | Version, ownership hashes/exact hooks |
+| .cyc/.gitignore | Excludes runtime/ and runs/ |
+| .agents/skills/cyc/ | Codex/Cursor entry |
+| .claude/skills/cyc/ | Claude entry |
+| .codex/hooks.json | UserPromptSubmit/Stop |
+| .claude/settings.json | UserPromptSubmit/Stop |
+| scripts/claude-hooks/cyc.mjs | Claude launcher |
+| .cursor/hooks.json | beforeSubmitPrompt/afterAgentResponse/stop |
+| .cursor/rules/cyc-delivery.mdc | Cursor protocol |
 
-Only CYC-owned files are updated. Existing instructions, application dependencies, and unrelated hooks remain intact. Installed Markdown skills have relative links to CYC's docs, catalog, scripts, and CLI rewritten to the copied engine. The npm archive and project installer share the explicit release selection in `package.json`: the standard engine, skills/playbooks, operational documentation, engineering examples and compact SVG diagrams. Development tests, evaluation fixtures/results, historical reports, bitmap/HTML exports and release/diagram generators stay in the source checkout. No application code needs to use JavaScript; Node runs CYC's local checks and hooks, while verification invokes your project's own commands.
+package.json selects npm/copied payload; skill links target the engine. Tests/evaluations/reports and bitmap/HTML generators/exports stay source-only. Verification uses project commands.
 
-Updating an older full installation removes obsolete CYC-owned payload only when its bytes still match the recorded ownership hash. Modified obsolete files, project configuration and run records are preserved. Dry-run reports removals and preservation warnings before any change. Preserved customized leftovers can make an existing installation larger than a fresh one; review those files individually.
+Defaults: schema 1, no checks, three failures/two consecutive no-progress attempts, no wall-clock deadline. limits.maxDurationMs opts into time bounds. Configure meaningful checks; installation neither guesses/runs unfamiliar scripts nor guarantees success.
 
-The default project configuration has schema version 1, no verification commands, and limits of three failed attempts and two consecutive attempts without progress. There is no wall-clock deadline by default: long tasks may take as long as they need, and the loop is bounded by failures, not time. Set `limits.maxDurationMs` to opt into one. These are execution bounds, not a guarantee of success. Configure suitable project checks deliberately; the installer never guesses and runs scripts from an unfamiliar repository.
+Scripts carry eslint-disable after shebangs; ESLint 10's nearest engine config ignores the engine. The Claude launcher avoids static imports/import.meta/top-level await; dynamic import needs ES2020. Comments cannot fix parsing. Project ignores may remain necessary for below-ES2020 script parsers, type-aware linting or unused-disable launcher warnings under --max-warnings 0.
 
-CYC's installed files stay out of the project's own lint. ESLint flat config lints dot-folders, so it reaches `.cyc/engine`, and the Claude launcher sits in the project's `scripts/`. Each installed script therefore starts with `/* eslint-disable */` (after any shebang). `.cyc/engine/eslint.config.mjs` ignores the whole engine for ESLint 10, which reads the config nearest each file; that also avoids "unused eslint-disable directive" warnings under `--max-warnings 0`. The launcher uses no import declarations, `import.meta`, or top-level `await`. A linter that parses `.mjs` as a classic script can therefore still parse it at `ecmaVersion` 2020 or later; its dynamic `import()` is ES2020 syntax. No comment can suppress a parse error. ESLint's parser (espree 9.6) was checked at 5, 2015, 2019, 2020 and latest. Some projects may still need `.cyc/` and `scripts/claude-hooks/` in their own ignores:
-- a linter that parses `.mjs` as a script below ES2020;
-- one that needs type information for every file;
-- `--max-warnings 0` where a file's header suppresses nothing. ESLint reports that as an unused directive; ESLint 10's engine config avoids it for `.cyc/engine` but not for the launcher.
-
-Hook commands use `node` on PATH. Claude invokes `node "$CLAUDE_PROJECT_DIR/scripts/claude-hooks/cyc.mjs"` through Bash (Git Bash required on Windows). The launcher resolves the engine relative to its own location, preserving nested-directory and relocated-clone behavior. Codex and Cursor retain an inline bootstrap that locates the copied engine from the host event. No installer-specific Node or project paths are embedded. Host trust/reload is still required. `doctor` reports the installed version and checks installed command definitions and file hashes. Tests exercise simulated events, not live host activation. Claude's shell setting follows the [official hook command contract](https://code.claude.com/docs/en/hooks).
+Hooks need node on PATH. Claude uses node "$CLAUDE_PROJECT_DIR/scripts/claude-hooks/cyc.mjs" through Bash (Git Bash on Windows), then relative engine resolution. Codex/Cursor bootstrap from host events. No machine-specific paths; trust/reload remains required. [Claude hook contract](https://code.claude.com/docs/en/hooks).
 
 ## Updating, conflicts, and removal
 
-Run installation again to update from the current distribution. An unchanged distribution produces no file changes. A skill or engine file edited since installation is a conflict: the installer reports it and writes nothing. Move or merge that customization deliberately before retrying; it will not be silently overwritten. Valid changes to `.cyc/config.json` are preserved.
+Reinstall the selected distribution; unchanged files stay untouched. Modified owned skills/engine files cause a no-write conflict: reconcile deliberately. Valid config stays. Obsolete payload is removed only on matching ownership hashes; modified leftovers/records remain and may exceed fresh-install size.
 
-Installation builds and validates the complete operation plan before writing. Ordinary write failures trigger rollback to the previous file contents. This is an in-process rollback, not a filesystem transaction: abrupt termination or power loss can leave a partial operation. Inspect the manifest and run doctor before retrying; do not erase custom files to force an update.
+Preflight validates the full plan. Ordinary write failures restore prior bytes; abrupt termination/power loss may leave partial work. Inspect manifest/doctor before retrying; rollback is not a filesystem transaction.
 
-Uninstall removes only files whose contents still match their ownership hashes, and only hook entries that still exactly match CYC's entries. Before writing, it checks whether any remaining hook command references `.cyc/engine` or the managed Claude launcher, including customized or duplicated entries. Such a dependency is an atomic conflict: uninstall leaves the entire installation unchanged and reports the affected configuration. Remove or adapt the retained reference deliberately, then retry. Independent customized hooks remain intact.
+Uninstall removes matching owned files/exact hooks only. Retained/custom/duplicate hooks referencing engine/launcher cause an atomic conflict leaving everything unchanged; adapt deliberately. Other customizations/records remain, including .cyc/.gitignore with records. Tracked files/force-adds are outside that protection. Empty directories may remain; later installs treat unmanaged leftovers as collisions.
 
-Modified files, unrelated hook entries, and runtime/run records are preserved and reported. When retained record directories exist, `.cyc/.gitignore` is also kept so those records remain excluded from ordinary Git tracking. Existing tracked files and explicit force-adds are outside that protection. Empty directories may remain. After uninstall, retained files are no longer managed; a later install reports collisions rather than claiming ownership.
-
-Destination symlinks and junctions are refused. The installer also rejects corrupt configuration and unsafe manifest paths before mutating files. Do not run install/update concurrently with another installer or editor changing the same integration files.
+Corrupt config, unsafe manifests and destination symlinks/junctions reject before writes. Avoid concurrent integration-file installers/editors.
 
 ## Activation and diagnosis
 
-`doctorProject` checks the Node runtime, project config, installation manifest, distribution hashes, and the structural presence of both response-hook events for installed hosts. A failing `<host> hooks` check says which repair applies: the entry is missing from an event (rerun init), it was modified by hand (rerun init, or keep the edit and expect the notice), or it is out of date because the engine's entry changed since the install (rerun init). It does not execute project verification commands or prove that the host has loaded or trusted those hooks.
+doctorProject checks Node/config/manifest/hashes/hook structure, not verification or loaded/trusted hooks. Notices distinguish missing, edited and outdated entries; rerun init or retain a deliberate edit with its notice.
 
-Reload the host and use its hook trust/activation flow where required. Validate a real session with a deliberately invalid response, then a valid review-backed response. Hook tests using simulated events do not establish real-session activation. Skill discovery, plugin command prefixes, and host UI behavior must also be checked in the actual supported host version.
+Reload/trust exact definitions. Observe fresh prompt state, invalid-response rejection/correction and valid review-backed Stop in the actual host/version/invocation. Installation, simulated callbacks, manual packets or one acceptance prove no other outcome/host. See [validation](validation.md).
 
-Confirm fresh prompt state and the post-turn Stop decision in the invocation you actually use. Installation or a manually checked packet is insufficient. A successful acceptance does not establish that rejection/correction, interactive trust or another host works. See [validation](validation.md).
+onboard --host codex --session ID --token TOKEN uses the current injected token to distinguish pending prompt from accepted Stop. Missing/stale/mismatched observations stay unready despite passing checks. See [setup diagnostics](onboarding-recovery.md) and [OpenAI hooks guidance](https://learn.chatgpt.com/docs/hooks).
 
-Setup now makes missing hook observations actionable: `onboard --host codex --session ID --token TOKEN` uses the current injected gate token to distinguish a prompt awaiting completion from an accepted Stop. Missing, old or mismatched evidence is not successful setup even when project checks pass. The [setup diagnostic contract](onboarding-recovery.md) explains readiness and the first-task transition. Review/trust the exact definitions through the host UI; the [official OpenAI hooks documentation](https://learn.chatgpt.com/docs/hooks) describes Codex's project and per-definition trust requirements. Installing files does not grant that trust.
+Resources include .claude-plugin, root plugin.json/.codex-plugin compatibility/.agents/plugins/marketplace.json, and .cursor-plugin with host-specific hook events/variables. Files/public visibility/manual distribution prove no activation or directory listing. Full CYC includes hooks; fresh native qualification remains pending. [OpenAI distribution limits](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks) direct directory-excluded hook plugins to manual desktop installation.
 
-Plugin manifests and marketplaces are included for all three hosts: `.claude-plugin/` (Claude Code), root `plugin.json` with `.codex-plugin/` compatibility plus `.agents/plugins/marketplace.json` (Codex), and `.cursor-plugin/` (Cursor). Each points at its own hook file in `hooks/`, because the hosts use different event names and plugin-root variables. File presence is not proof of native-host installation or activation. Repository/manual distribution and official public directory listings have separate requirements; public repository visibility alone does not establish either. OpenAI currently excludes lifecycle-hook plugins from its public directory and directs them to manual installation in Codex desktop. See [OpenAI's hook distribution limits](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks). CYC's current full plugin includes hooks, and fresh real-host qualification remains pending.
+Cursor prompt cannot inject context; stop lacks reply text. afterAgentResponse captures it, and the rule supplies protocol. Each conversation chooses a tag and writes .cyc/runtime/cursor-<tag>.review.json, token cursor. Freshness after request start/exact reply match isolates parallel chats. Claude/Codex third-party hooks stay silent under Cursor.
 
-Cursor differences: its prompt hook cannot inject context and its stop hook does not receive the final text. The Cursor adapter captures the text from `afterAgentResponse`, the rule file supplies the protocol, and each conversation picks its own session tag and writes `.cyc/runtime/cursor-<tag>.review.json` with token `cursor`. The hook finds its packet by freshness (written after the current request began) and an exact match with the captured response, so parallel Cursor chats in one folder never share or overwrite a packet. Claude and Codex hooks detect when Cursor runs them as third-party hooks and stay silent so the Cursor adapter owns the session.
-
-Project-install hooks are portable across clone locations when Node is on PATH. Legacy installations must be updated once to replace absolute commands. A new machine must still trust and load the hooks.
+Relative commands survive relocation with Node on PATH. Update legacy absolute-command installs once; new machines still need trust/loading.
 
 ## Impact investigation for this installer
 
-| Area inspected | Connection and treatment | Verification |
-| --- | --- | --- |
-| Existing `.codex/hooks.json` and `.claude/settings.json` | Both call `scripts/response-hook.mjs` with a host argument; add an explicit target root and merge exact owned entries | Seed unrelated hook entries and confirm install/update/uninstall preservation |
-| `scripts/response-hook.mjs` | Runtime previously derived from its source location; portable copies require root resolution independent of engine location | Root coordinator adapts `--project`; integration tests check copied hooks in a temporary target |
-| Skill discovery folders | Copy the same skills for each host; relative documentation links require adjustment | Check installed copies and link targets; do not claim host discovery from file presence |
-| `.cyc/config.json` and ownership manifest | Durable editable config and installation bookkeeping | Invalid schemas, path traversal, file modification, and idempotence tests |
-| Existing `AGENTS.md`, `CLAUDE.md`, package.json | User-owned instructions and application configuration are outside installation scope | Seed content and confirm unchanged bytes |
-| Target filesystem | Partial writes or symlink traversal could damage unrelated files | Up-front collision checks, rollback, temp project tests, junction refusal |
-
-The investigated source is the working tree used for this implementation. Host activation and compatibility beyond simulated/file-level checks remain external verification gaps. This installer is a distribution mechanism, not an automatic whole-project dependency analyzer.
-
+The source reference holds the full investigation. Temporary-project/simulated tests cover preservation, links, schema/ownership, collision, rollback and linked-path rejection; no live activation/dependency-discovery claim.
 
 ## Existing project conventions
 
-Existing Stop hooks are preserved, with an installation warning to review presentation ownership. Set `delivery.presentation` to `"project"` to delegate reply-format checks to existing project rules while retaining CYC run-completion checks. Set `context.ledgerPath` to reuse an existing ledger. Updates preserve these configuration choices. Do not remove an unrelated hook automatically.
+Keep unrelated Stop hooks. delivery.presentation:"project" delegates formatting but retains completion checks; context.ledgerPath reuses a ledger. Updates preserve valid config, including delivery.defaultCharacterLimitEnabled:false for unlimited new-session replies. Avoid managed-hook edits.
 
-After updating, reload the host so the conversation does not mix previously loaded skills with the new engine. For repeatable trials, pin the selected full Git commit in the GitHub install command and record the installed manifest version. Qualify the exact revision used; an older release tag installs the behavior at that tag.
-
+Reload to avoid mixed old/new code. Pin/record full commit and manifest version; old tags retain old behavior.
 
 ## Private repositories and npm Git fetch failures
 
-GitHub archive fetching through npm may not share the credentials used by Git or the GitHub CLI. A private repository can return HTTP 404, followed by a Git packing error. Do not change repository visibility or clear global caches to work around this.
+npm archive auth can differ from Git/gh and return 404/packing errors. Do not change visibility or clear global caches. In a new authenticated clone, stop on failed commands:
 
-Use an authenticated checkout of the desired commit and invoke its installer directly. This avoids npm's GitFetcher entirely. In a separate tools directory, clone once, check out the exact published commit, and record it:
-
-```text
+~~~text
 gh repo clone TheDThompsonDev/cyc-stack cyc-source
 git -C cyc-source checkout --detach <full-commit-sha>
 git -C cyc-source rev-parse HEAD
-```
+~~~
 
-If any command fails, stop before installing. Use a new clone directory to avoid disturbing existing local work. Then run:
+Use that checkout's CLI init --project <target-project> --dry-run, then init and target doctor. Alternatively npm pack --ignore-scripts once, using the same archive from the target root:
 
-```text
-node <cyc-checkout>/bin/cyc.mjs init --project <target-project> --dry-run
-node <cyc-checkout>/bin/cyc.mjs init --project <target-project>
-node <target-project>/.cyc/engine/bin/cyc.mjs doctor
-```
-
-For an npm-based distribution, pack that authenticated checkout once with `npm pack --ignore-scripts`. Copy the resulting archive to the target machine, then invoke its explicit binary:
-
-```text
+~~~text
 npm exec --offline --yes --package "/absolute/path/cyc-stack-X.Y.Z.tgz" -- cyc init --dry-run
 npm exec --offline --yes --package "/absolute/path/cyc-stack-X.Y.Z.tgz" -- cyc init
-node .cyc/engine/bin/cyc.mjs doctor
-```
+~~~
 
-Run these from the target project root. Both preview and installation use the same archive. There are no runtime npm dependencies. Our packaging regression test uses an empty npm cache and offline installation, checking dry-run, install, bundled methods, and doctor.
-
-Future tagged releases built with the updated release workflow attach this `.tgz` and `SHA256SUMS`. They can be downloaded through authenticated `gh release download <tag> --repo TheDThompsonDev/cyc-stack --pattern "*.tgz" --pattern SHA256SUMS`. Compare the archive's SHA-256 with the downloaded checksum before installation. This is an integrity check, not an independent signature. These assets do not exist until that release workflow runs; no release was published by this repair.
-
-Keep custom preferences in `.cyc/config.json`. For example, `"delivery": { "defaultCharacterLimitEnabled": false }` preserves an unlimited new-session default without editing managed hook files. Back up and reconcile existing managed-file modifications before updating; the installer intentionally refuses to overwrite them.
-
+No runtime npm dependencies. Tagged workflows attach .tgz/SHA256SUMS only after running; fetch with gh release download <tag> --repo TheDThompsonDev/cyc-stack --pattern "*.tgz" --pattern SHA256SUMS. Compare SHA-256: integrity, not independent signature. Reconcile managed customizations before updates.
 
 ## One public entry point
 
-Use `/cyc` with an ordinary task, including setup. Plugin hosts may namespace it as `/cycstack:cyc`. Only the parent lives under `skills/`; supporting instructions live under `methods/`, outside host skill discovery. Project installs copy those methods under `.cyc/engine/methods/` and rewrite parent links to them. The orchestrator loads methods by path when needed; users do not choose a skill.
+Use /cyc (possibly /cycstack:cyc) for tasks/setup. Only the parent skill is discoverable; .cyc/engine/methods loads by path.
 
-An update removes unchanged CYC-owned legacy supporting entries from `.claude/skills` and `.agents/skills`. Customized legacy entries cause an atomic conflict so their changes can be preserved and deliberately migrated; unrelated user skills are untouched. Reload the host after updating to remove previously loaded menu entries. Live menu rendering still requires host verification.
-
+Updates remove unchanged legacy skills. Customized .claude/skills/.agents/skills entries require atomic conflict resolution and deliberate migration; unrelated skills stay. Reload clears old entries; actual menus need host verification.
 
 <a id="npm-publication-preparation"></a>
 
 ## npm publication maintenance
 
-CYC is published on npm. For future releases, the source includes public package metadata, an INSTALL.md entry guide, and an offline release preflight. In the CYC source checkout, run `npm run check:distribution`; add the desired tag to `node scripts/check-distribution.mjs` to check version agreement. This tooling is development-only and does not ship inside the local engine.
+Source-only publishing is not consumer setup. npm run check:distribution validates metadata/optional tag versions. Manual publish-npm.yml uses Node 24, validates tools, tests/packs and npm OIDC. Maintainers authorize ownership, exact trusted-publisher repository/workflow/environment binding and npm-publish reviewers.
 
-The source workflow `.github/workflows/publish-npm.yml` is manually invoked for an existing release tag and defaults to the `next` channel. It uses Node 24, validates publishing-tool versions, runs tests, packs the candidate and uses npm OIDC. Package ownership, the exact npm trusted-publisher repository/workflow/environment binding and any required `npm-publish` environment reviewers must be configured by the maintainer. The repository is public; registry publication still requires an authorized npm account. This preparation does not publish anything. Registry install examples require an actual published release.
+Dispatch with matching existing input tag, event SHA/ref and checkout HEAD:
 
-
-For npm provenance to identify the packaged commit, dispatch the workflow from the same tag supplied in its input. The workflow checks out the immutable event SHA and rejects a different dispatch ref or checkout HEAD. After account configuration and release approval, a maintainer can use:
-
-```sh
+~~~text
 gh workflow run publish-npm.yml --ref v0.6.0 -f tag=v0.6.0 -f channel=next
-```
+~~~
 
-This is a publication action, not an installation command; do not run it as part of consumer setup.
+Default next; authorized npm account/published release required. Preparation publishes nothing.

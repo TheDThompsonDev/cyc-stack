@@ -2,7 +2,7 @@
 
 Covers: scripts/runtime.mjs, scripts/work-review.mjs, scripts/packet.mjs, test/completion-evidence.test.mjs, test/evidence-contract.test.mjs
 
-Last changed by AI: 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · files: test/completion-evidence.test.mjs, test/evidence-contract.test.mjs
+Last changed by AI: 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · files: scripts/runtime.mjs
 
 ## Current view
 
@@ -20,6 +20,12 @@ Node file-URL importer diagnostics use fileURLToPath and native realpath before 
 
 When a Node check needs individual failure identities, declare --test-reporter=tap rather than relying on version-dependent presentation defaults. The proof/completion fixtures explicitly request TAP; their dot-reporter control still rejects unnamed output. Node24 publisher failures were reproduced as fixture protocol setup, with assertion bodies and suite scope unchanged. TAP/Jest/Mocha remain the supported parsed formats; Spec or other unsupported reports remain diagnostic and cannot establish named semantic coverage.
 
+The optional unified-task-context extension adds parent-owned read/ack and strict contribution reconciliation. Existing source/ownership/retention/proof requirements remain. Runtime binds current context revision/hash into handoffs and verification independently of source hashes; unknown economic advantage selects solo. Read-only host workers cannot complete a parent stage, reset budgets or create permanent context records per worker. See docs/task-context.md and scripts/task-context.mjs/scripts/delegation.mjs for current contracts and host/usage limitations.
+
+Automatic Codex execution is an additive parent-owned path: atomic assignment claim, correlated terminal cleanup after pause/stop, scoped text input and explicit lead reconciliation. It preserves existing source/proof/retention and dependent-context guards. Runtime diagnosis resolved the earlier live-generation blocker: host-provided CLI succeeds with the same account/model while stale PATH CLI fails. Runtime selection prefers the valid host hint. Actual generated source findings, explicit cancellation and one acknowledged merged context were observed; final source-bound checks are recorded separately.
+
+Parent readiness now includes active/planned automatic phases before any worker assignment exists. Their model results never pass a parent stage or replace criterion evidence/check receipts. Merge commit records its context hash/revision; failed final acknowledgment reports committed work with pending local read/ack rather than a new failed generation. Nonrunning parent status remains authoritative.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -29,6 +35,24 @@ When a Node check needs individual failure identities, declare --test-reporter=t
 - 2026-11-05 · run a81789bf: Separate missing interfaces, load/setup failures and behavioral assertions; stable process provenance is not product correctness.
 
 ## History
+
+### 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · Automatically decide whether a swarm is worthwhile, split independent work across agents in paralle…
+**Changed:** Add automatic scoped swarm planning, atomic parallel dispatch and source-bound semantic reconciliation with safe cancellation/recovery.
+**Learned:** Retain automatic decision/parallelism/one-context contracts and actual schema, publication and parent-handoff failures before final checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 318f64bc-134d-46b7-865e-6903d3d71494 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:a734cc7de3c9c2d0fcf36deef0c3a7de3eb6c73b5e07dc6444b30c5db6c0ff84
+
+### 2026-11-07 · run be41a8ca-77fb-4e6c-8785-780005ec49a2 · Implement automatic bounded Codex worker dispatch, acknowledged cancellation and unified-context in…
+**Changed:** Resolved stale CLI selection and verified actual generated findings, cancellation and one shared context.
+**Learned:** Retain measured runtime diagnosis and real qualification before final source checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run be41a8ca-77fb-4e6c-8785-780005ec49a2 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:ef714a5ffc8866703fcbd23be812053712423e9e3127be729299527cc791b1dd
+
+### 2026-11-07 · run 10e609d6-1319-41b5-b1a6-53e66bed9656 · Implement unified task context and bounded read-only delegation with parent-owned reconciliation an…
+**Changed:** Implement unified task context and bounded read-only delegation while preserving legacy contracts.
+**Learned:** One shared document per run, explicit reconciliation, conservative budgets, actual parent identity and no automatic model dispatch or measured savings claim.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 10e609d6-1319-41b5-b1a6-53e66bed9656 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:767c933c0579f20912005fb0045281ead3c9c2de1cfed3c7756288baa8c901ae
 
 ### 2026-11-06 · run 3ce340a0-2f40-4f23-b489-d37968319c71 · Declare the TAP protocol explicitly in proof fixtures so Node24 presentation defaults cannot invali…
 **Changed:** Declare TAP explicitly in the isolated fixtures that require named proof output. Existing assertion bodies, suite scope, dot-output rejection and Node24 release gate are preserved. OfficialNode24 before failures and focused4/4 after results are retained; broad final verification is pending.

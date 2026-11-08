@@ -25,6 +25,8 @@ Normal `run finish --run ID --file FINISH.json` prepares missing context before 
 
 Missing/placeholder/stale context returns **needs-context**, incomplete, with exact remaining input. Authored prose is bound to selected source; generated History alone is insufficient. Preparation stages files in run storage, preflights ownership/scope and resumes after a partial write without duplicating History. These are recoverable sequential writes, not an atomic multi-file transaction.
 
+For context/index-only upkeep, use the existing focused owner's implementation Covers as evidence when planned paths are supporting-only or empty. Unchanged implementation bytes are valid inspected evidence, not a behavioral repair claim. Missing anchors stay pending without publishing empty History metadata; unrelated files and self/index hashes cannot substitute.
+
 Finish/Verify validate planned canonical docs, resolving index rows, representative Covers, current History/source evidence and retention disposition. Index, ledger, recipes and receipts support context; they do not count as feature docs. Automatic validation is bounded to planned records plus index consistency. It checks structure/mapping/provenance, **not semantic truth or future model effectiveness**. Meaningful content still needs review. See [learning/file order](../../docs/work-assessments.md#learning-lifecycle-and-final-file-order).
 
 ## Inspect and catch up historical work

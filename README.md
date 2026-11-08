@@ -2,11 +2,8 @@
 
 <div align="center">
   <p><strong>CYC Stack</strong></p>
-  <h1>Make your AI worth the tokens it uses.</h1>
-  <p>CYC is a portable library of engineering skills and playbooks for Claude Code, Codex and Cursor, built around <strong>context engineering, token optimization and clear, actionable results.</strong></p>
-  <p>You spent the tokens getting it right. <strong>The decisions and lessons that got you there shouldn&rsquo;t disappear when the chat ends.</strong></p>
-  <p>Give your agent the context that matters. Carry what you learn into the next task. Get answers that show what changed, what was checked and what still needs attention.</p>
-  <p><strong>Put it to work on your next task. Make it a shared standard for your team.</strong></p>
+  <h1>Give your AI the project knowledge behind the change.</h1>
+  <p>CYC helps your coding assistant find relevant project rules, check its changes and leave useful knowledge for the next chat. Inspect what changed, what was checked and what remains uncertain.</p>
   <p>
     <a href="https://github.com/TheDThompsonDev/cyc-stack/actions/workflows/ci.yml"><img src="https://github.com/TheDThompsonDev/cyc-stack/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
     <a href="https://www.npmjs.com/package/cyc-stack"><img src="https://img.shields.io/npm/v/cyc-stack" alt="Latest cyc-stack version on npm"></a>
@@ -36,34 +33,9 @@ CYC uses project knowledge to guide the task, checks the work, and carries usefu
 
 ## Why CYC?
 
-**Make the next task start with what you already learned.**
+Your request says what to change. Project rules and earlier decisions say what must keep working. CYC guides the assistant to find that knowledge, recheck it, verify the change and leave a useful handoff. The intended payoff is easier review and continuation; speed, token savings and universal reliability require separate evidence.
 
-Your codebase has decisions, constraints and lessons behind it. CYC gives your coding agent a method for finding that knowledge, checking whether it still holds, and using it on the work in front of you.
-
-| Put your effort toward… | How CYC helps |
-| --- | --- |
-| **Context that earns its place** | An index points the agent to relevant project notes, decisions and failure history. |
-| **Corrections that carry forward** | Record what failed, what changed and what the next attempt needs to account for. |
-| **Work you can inspect** | Run your project's checks and retain the results, decisions and remaining limits. |
-| **Answers you can use** | Lead with the result, show the evidence and make unfinished work clear. |
-
-<details>
-<summary><strong>Find your next step</strong></summary>
-
-- [Install CYC and start a task](#installation)
-- [Put context engineering and token optimization to work](#context-engineering-for-enterprise-teams)
-- [Get answers you can use](#get-answers-you-can-use)
-- [Make it a shared standard](#make-it-a-shared-standard)
-- [See how the workflow runs](#how-it-works)
-- [Explore the skills](#skills)
-- [Find a playbook for the work](#playbooks)
-- [Update an existing installation](#updating)
-- [Inspect validation status](#validation-status)
-- [Go deeper in the docs](#documentation)
-- [Contribute](#contribute)
-- [License](#license)
-
-</details>
+Start with a task you know, then observe a fresh chat extending it. Inspect actual decisions, checks, retained context and missed behavior. [How it works](#how-it-works) · [Validation](#validation-status)
 
 <a id="get-started"></a>
 
@@ -128,225 +100,65 @@ and access rules. Export all matching orders, not just the visible page.
 
 Replace the example with your own task. Use `/cyc` in your AI host. If it is unavailable, select the discovered `cyc` skill or say **“Use the cyc skill to…”**
 
-Inspect the change, the checks and the handoff. Look for a useful decision or lesson the next task should be able to find.
+Expect a short explanation before work: the outcome, existing behavior to preserve and the relevant project knowledge. During work, discoveries and failed checks should explain a decision. At delivery, inspect actual checks, limitations and the linked project notes. These explanations are guidance, not automatic proof of quality.
+
+For a first exercise, use a bounded task in a project you know. Illustrative example: add an Open tasks filter while preserving the All tasks view and stored records. A useful discovery might be that imported fields exist outside the screen model; the filter should preserve them. A fresh chat can later add an Open tasks count using the same revalidated rule. Observe whether it actually finds and uses the saved knowledge.
+
+Request → find relevant knowledge → check the change → retain what matters
+
+Say `expand` for more detail once, or `limit off` to allow longer replies in this chat. `limit on` restores short replies. Send commands as their own message; allowing longer answers keeps CYC's workflow and evidence requirements. The ambiguous phrase “turn this off” is not a supported control.
 
 <a id="other-installation-routes"></a>
 
-<details>
-<summary><strong>Choose another installation route</strong></summary>
-
-| Route | Start here |
-| --- | --- |
-| Ask your agent | [Agent-guided installation](docs/installation.md#agent-guided-installation) |
-| Native plugin | [Host installation and activation](INSTALL.md#install-as-a-plugin) |
-| Source checkout or archive | [Installation without npm](INSTALL.md#install-without-npm) |
-| Save a development dependency or pin a version | [Optional npm controls](docs/installation.md#optional-npm-controls) |
-
-Downloading a package and activating it in a project are separate steps. [Versions, archives and removal →](docs/installation.md)
-
-</details>
-
-[Full installation guide →](INSTALL.md)
+[Agent-guided, plugin, archive and pinned installation options](docs/installation.md) · [Full install guide](INSTALL.md). Downloading the package and activating it in the project are separate steps.
 
 <a id="context-engineering-for-enterprise-teams"></a>
 
 ## Context engineering: put your project knowledge to work
 
-**Keep the knowledge that made the change possible.**
+Load the project's index and matching notes, check consequential claims against current code and your request, then apply and retain what matters. The target project's focused records live under docs/context/ with INDEX.md; engine documentation is not application knowledge.
 
-CYC's context method directs the agent to retain decisions, constraints, useful failed approaches and supporting evidence in repository notes. A path-based index connects later tasks to the relevant knowledge. The agent checks consequential claims against current code before relying on them.
-
-```text
-Find relevant knowledge → Check it against the code → Use it → Retain what you learned
-```
+Find → revalidate → apply to a decision → retain → reuse
 
 ### Token optimization: give context a purpose
 
-Load the index and matching notes for the task. Bring forward the decisions, known dead ends and check recipes that matter. Open deeper methods when the work calls for them.
-
-That is CYC's strategy for focused context and useful reuse. Investigation and verification can consume additional tokens upfront. **Speed, token savings and universal reliability are not established.** Reading-size estimates do not establish provider billing or successful reuse.
-
-[Context engineering and measurement limits →](docs/context.md)
+Load deeper methods only when relevant. Reading-size estimates cannot establish billing or useful reuse; investigation can add work upfront. [Context and measurement limits](docs/context.md).
 
 <a id="what-that-means-in-a-real-task"></a>
 
 ### A lesson the next task can use
 
-**Illustrative example: “Add CSV export to the orders dashboard.”**
-
-CYC directs the assistant to investigate pagination, filters and access rules before implementing the download. Verification should exercise all authorized matching records, including results beyond the visible page and rejected access.
-
-The useful lesson is the export contract: which filters apply, how access is enforced, and why the visible page is insufficient. Retain that decision with its evidence. A later task can retrieve it, check whether it still holds, and build on it.
-
-This illustrates the intended workflow. To assess reuse in your project, inspect whether a fresh session actually finds and applies the retained knowledge.
+For the illustrative task-board filter, preserve imported fields even if the screen does not show them. Save the rule and its evidence. A fresh chat adding a count should find/revalidate the same definition of Open tasks. Observe that behavior before claiming successful reuse.
 
 ## Get answers you can use
 
-**The result should be easy to find. The evidence should be easy to inspect.**
-
-CYC's delivery skills ask the assistant to make the handoff useful to the person reading it:
-
-| What you need to know | What the handoff should show |
-| --- | --- |
-| **What happened?** | The result or blocker up front, with links to the work. |
-| **What supports it?** | The checks actually run, their outcomes and a visual that clarifies the result. |
-| **What still needs attention?** | Unchecked behavior, unresolved limits and any decision you need to make. |
-| **What carries forward?** | Useful decisions, lessons and evidence the next task can find. |
-
-Progress updates explain consequential choices while the work is happening. Final summaries stay brief and link to deeper evidence. Use `expand` for more detail once, or `limit off` for longer replies throughout the conversation. [Response controls](docs/response-standard.md#character-limit-toggle)
-
-Delivery hooks check reply structure and recorded readiness where active. The assistant remains responsible for clarity and substance; structural checks alone cannot establish either.
+Delivery leads with the result or blocker, actual checks and limits, one useful visual, and links to retained project knowledge. Progress explains consequential decisions. Response-length choices are shown with the first task above; [the response standard](docs/response-standard.md) explains them. Where active, hooks validate structure and recorded readiness. Clarity, semantics and human understanding still need judgment.
 
 ## Make it a shared standard
 
-**Start with work you know. Share the practices that earn their place.**
-
-For an independent engineer, that starts with a useful task and a later session that can find its lessons. For an engineering manager, it becomes a repeatable way to bring project knowledge, verification and clear handoffs into the team's AI work.
-
-1. **Try a representative task.** Use a fixed release and inspect the implementation, checks and final response.
-2. **Check the handoff.** Ask a fresh session or teammate to use the retained knowledge on related work. Look for missed context, stale guidance and lessons that actually help.
-3. **Share the working practices.** Review the context and check configuration with the code. Pin the release you qualified, and confirm activation in each teammate's AI host.
-
-Your team owns the context, verification commands and review process. Shared knowledge lives in repository documents; detailed run records stay local by default. Existing CI, access rules and merge controls remain yours.
-
-[Engineering standards](docs/code-quality.md) · [Project tools and recipes](docs/project-tools.md) · [Rollout and validation boundaries](#validation-status)
+Try a bounded task on a fixed release, inspect the evidence and observe a fresh chat using its knowledge. Confirm hooks in each actual host before rollout. Teams retain ownership of context, verification commands and merge/access controls. Detailed receipts stay local by default. [Engineering standards](docs/code-quality.md) · [Rollout limits](#validation-status)
 
 ## How it works
 
-**Describe the outcome. Follow a method. Inspect the evidence.**
+Start with [`/cyc`](skills/cyc/SKILL.md). The assistant selects relevant methods and a route. The controller records handoffs, runs configured checks and validates evidence freshness, including applicable original-code proof. Failed checks return to responsible work within recorded budgets.
 
-Start with [`/cyc`](skills/cyc/SKILL.md). The assistant selects a playbook and loads the relevant supporting skills. **Skills guide how to do the work. Playbooks give the task its route and completion criteria.**
-
-CYC also includes a local controller: it records stage handoffs, runs your configured project checks and checks evidence freshness. Applicable new regression tests must fail against the original code before the controller accepts the change.
-
-The common implementation route is:
-
-```text
 Scout → Build → Verify → Deliver
-```
 
-| Stage | What you should get |
-| --- | --- |
-| **Scout** | Relevant history, affected behavior and a plan with checks. |
-| **Build** | Changes that account for the plan, project conventions and affected consumers. |
-| **Verify** | Current check results, applicable original-code test proof, findings and limits. |
-| **Deliver** | A clear result, reviewable evidence and useful knowledge for the next task. |
-
-Failed checks return to the responsible work within a shared retry budget. Other tasks use routes suited to their outcome. The controller bounds its recorded retries; it does not continuously monitor or terminate the host agent.
-
-[See the workflow diagram above](#workflow-diagram) · [Step-by-step walkthrough](docs/cyc-workflow.md)
-
-<p align="right"><a href="#readme-top">Back to top ↑</a></p>
+Recorded stages do not certify comprehension or product correctness. The controller does not continuously monitor the host agent. [Workflow diagram](#workflow-diagram) · [Walkthrough](docs/cyc-workflow.md) · [Runtime](docs/runtime.md)
 
 ## Skills
 
-**Give your agent a method for the work in front of it.**
-
-CYC has **one entry skill, 17 supporting methods, and a frontend design specialization inside Design**. Start with `/cyc`; the assistant loads what the task needs. Your existing AI host performs the skills. Each method is a focused procedure, not automatically a separate agent.
+Use the single `/cyc` entry point and describe the outcome. CYC selects supporting methods; you do not need to choose an internal skill. The [method map](docs/cyc-method-map.md) and [skill index](docs/README.md) describe the library when you need deeper detail.
 
 <a id="start-with-understanding"></a>
-
-<details>
-<summary><strong>Understand the task and the codebase</strong></summary>
-
-| Skill | What it brings to the task |
-| --- | --- |
-| [**Setup**](methods/cyc-setup/SKILL.md) | Find the project's checks, configure verification and report setup and host-activation evidence. |
-| [**Scout**](methods/cyc-scout/SKILL.md) | Bring relevant history, affected files and verification needs into an initial plan. |
-| [**Frame**](methods/cyc-frame/SKILL.md) | Define the outcome, scope and criteria for success. |
-| [**Understand**](methods/cyc-understand/SKILL.md) | Trace behavior or reproduce a failure; separate confirmed causes from hypotheses. |
-| [**Impact**](methods/cyc-impact/SKILL.md) | Find the callers, state, storage and interfaces a change could affect. |
-
-</details>
-
 <a id="choose-and-deliver-the-change"></a>
-
-<details>
-<summary><strong>Choose an approach, build it and check the result</strong></summary>
-
-| Skill | What it brings to the task |
-| --- | --- |
-| [**Explore**](methods/cyc-explore/SKILL.md) | Compare distinct approaches or scoped prototypes before choosing a direction. |
-| [**Design**](methods/cyc-design/SKILL.md) | Define state, interfaces, compatibility and implementation slices. |
-| [**Challenge**](methods/cyc-challenge/SKILL.md) | Test a plan or change against concrete counter-cases and return supported findings. |
-| [**Build**](methods/cyc-build/SKILL.md) | Implement tested slices, review the diff and record consequential decisions. |
-| [**Verify**](methods/cyc-verify/SKILL.md) | Exercise the promised behavior, affected consumers and relevant rejection and recovery paths. |
-| [**Deliver**](methods/cyc-deliver/SKILL.md) | Put the result, evidence, a useful visual and honest limits into a reviewable handoff. |
-
-[**Frontend design**](methods/cyc-design/frontend-design/SKILL.md) adds visual direction, desktop and phone review, and usability and access checks. Design quality still requires review; a passing build cannot establish it.
-
-</details>
-
 <a id="continuity-learning-and-correction"></a>
-
-<details>
-<summary><strong>Carry knowledge forward and learn from corrections</strong></summary>
-
-| Skill | What it brings to the task |
-| --- | --- |
-| [**Context**](methods/cyc-context/SKILL.md) | Retrieve and revalidate component knowledge; retain useful findings in indexed project notes. |
-| [**Remember**](methods/cyc-remember/SKILL.md) | Keep task checkpoints and reconstruct decisions and next steps after interruption. |
-| [**Error Ledger**](methods/cyc-error-ledger/SKILL.md) | Make failed approaches, confirmed causes and regression evidence searchable. |
-| [**Correct**](methods/cyc-correct/SKILL.md) | Turn feedback into a missing criterion, a targeted repair and renewed checks. |
-| [**Reflect**](methods/cyc-reflect/SKILL.md) | Propose improvements to the methods from completed outcomes and evidence. |
-| [**Teach**](methods/cyc-teach/SKILL.md) | Explain a concept through the project's own code, examples and optional practice. |
-
-Context preserves component knowledge. Remember preserves task continuity. Reflect proposes improvements to the working method.
-
-</details>
-
-[Full method map and examples →](docs/cyc-method-map.md)
-
-<a id="example-tasks"></a>
 
 ## Playbooks
 
-**Name the outcome. The assistant selects the route.**
+<a id="example-tasks"></a>
 
-The 15 playbooks cover implementation, investigation, learning and handoffs. Describe your task through `/cyc`; you do not need to memorize the catalog.
-
-| Playbook | Bring it work like this |
-| --- | --- |
-| [**Investigation**](skills/cyc/references/playbooks/investigation.md) | Explain what causes a behavior, with evidence. |
-| [**Explore**](skills/cyc/references/playbooks/explore.md) | Compare approaches before committing to one. |
-| [**Plan**](skills/cyc/references/playbooks/plan.md) | Break a substantial change into verifiable units. |
-| [**Feature**](skills/cyc/references/playbooks/feature.md) | Build changed behavior and check the affected consumers. |
-| [**Bug fix**](skills/cyc/references/playbooks/bug-fix.md) | Reproduce the failure, repair its cause and establish regression evidence. |
-| [**Refactor**](skills/cyc/references/playbooks/refactor.md) | Improve structure and verify preserved behavior. |
-| [**Performance**](skills/cyc/references/playbooks/performance.md) | Measure the baseline, target a bottleneck and check the change. |
-| [**Review**](skills/cyc/references/playbooks/review.md) | Find consequential issues in existing work and explain the evidence. |
-| [**Verify**](skills/cyc/references/playbooks/verify.md) | Check an executable result against explicit criteria. |
-| [**Experience**](skills/cyc/references/playbooks/experience.md) | Improve a complete user journey and check its connected behavior. |
-| [**Teach**](skills/cyc/references/playbooks/teach.md) | Learn through the project's code and worked examples. |
-| [**Handoff**](skills/cyc/references/playbooks/handoff.md) | Leave decisions, evidence and limits someone else can use. |
-| [**Resume**](skills/cyc/references/playbooks/resume.md) | Reconstruct interrupted work and check what has changed. |
-| [**Reflect**](skills/cyc/references/playbooks/reflect.md) | Turn completed outcomes into proposals for better methods. |
-| [**Evaluate**](skills/cyc/references/playbooks/evaluate.md) | Compare a workflow against a baseline with recorded outcomes and limits. |
-
-<details>
-<summary><strong>Inspect the recorded routes</strong></summary>
-
-| Playbook | Recorded stages |
-| --- | --- |
-| `investigation` | Scout → Deliver |
-| `explore` | Frame → Understand → Explore → Challenge → Deliver |
-| `plan` | Frame → Understand → Impact → Design → Challenge → Deliver |
-| `feature` | Scout → Build → Verify → Deliver |
-| `bug-fix` | Scout → Build → Verify → Deliver |
-| `refactor` | Scout → Build → Verify → Deliver |
-| `performance` | Scout → Build → Verify → Deliver |
-| `review` | Scout → Challenge → Verify → Deliver |
-| `verify` | Scout → Verify → Deliver |
-| `experience` | Scout → Explore → Build → Verify → Deliver |
-| `teach` | Frame → Understand → Teach → Deliver |
-| `handoff` | Understand → Verify → Deliver |
-| `resume` | Remember → Understand → Deliver |
-| `reflect` | Remember → Reflect → Deliver |
-| `evaluate` | Frame → Understand → Explore → Verify → Reflect → Deliver |
-
-Routes come from the [playbook catalog](catalog/playbooks.json). A stage may use additional supporting methods. The controller records and validates handoffs; it does not automatically launch skills or establish that the assistant performed them well.
-
-</details>
+Implementation uses Scout → Build → Verify → Deliver. Investigation, planning, review, teaching and recovery have their own recorded routes. The [catalog](catalog/playbooks.json) defines those stages; the [CYC guide](skills/cyc/SKILL.md#playbooks) links each procedure. Routes and stages support the requested outcome; their completion does not establish product correctness or user comprehension.
 
 ### Try a different kind of task
 
@@ -362,58 +174,17 @@ build a usable mobile layout, and check keyboard, validation and recovery states
 
 ## Updating
 
-**Keep the methods current as your project moves forward.**
-
-From your project root, preview the latest release's changes:
-
-```sh
-npx cyc-stack@latest init --dry-run
-```
-
-Then apply the update:
-
-```sh
-npx cyc-stack@latest init
-```
-
-Valid project configuration and local run records are preserved. Updating an npm dependency alone does not refresh the copied engine. **Reload your AI host** after updating and repeat the setup check so the session uses the new skills and hooks. Teams can [pin an approved version](docs/installation.md#optional-npm-controls).
-
-> [!IMPORTANT]
-> If you edited a CYC-managed file, the installer reports a conflict and writes nothing. Back up and merge that customization before retrying. [Update and conflict guidance](docs/installation.md#updating-conflicts-and-removal)
+From the target project, preview with `npx cyc-stack@latest init --dry-run`, then update with `npx cyc-stack@latest init`. Reload the host and repeat setup validation. Project configuration and run records are preserved. Modified managed files cause a conflict with no writes; merge deliberately before retrying. [Updates, version pinning and conflicts](docs/installation.md#updating-conflicts-and-removal).
 
 ## Validation status
 
-**Inspect the evidence before you make it a team standard.**
+CYC is a pilot. Automated tests exercise controller, recovery, context and installation behavior; adapter tests use simulated events. Qualify fresh prompt/Stop, rejection/correction, restart and upgrade in each actual host before making compatibility claims. Inspect configuration, source-bound receipts and retained context on representative work.
 
-CYC combines instructions the assistant follows with code that checks recorded work.
-
-| Area | What is established |
-| --- | --- |
-| **Automated checks** | Exercise controller behavior, original-code test proof, recovery, context and installation. The CI badge links to current results. |
-| **Host adapters** | Hook tests use simulated events. Actual prompt/Stop behavior needs confirmation in a fresh host session. |
-| **Distribution** | Published on [npm](https://www.npmjs.com/package/cyc-stack), with source and archive routes available. Public directory listings and fresh native-host qualification remain separate release steps. |
-
-Inspect the methods, `.cyc/config.json` and local `.cyc/runs/` records. Source hashes and passing commands do not establish that every dependency was found or every check was sufficient. Local hooks are workflow guardrails; they do not provide a security sandbox, tamper-proof attestation or authorization to merge or deploy.
-
-Before a team rollout, use a fixed revision and a representative task. Inspect the work and confirm that a fresh chat or teammate can use the retained knowledge. Speed, token savings and universal reliability are not established.
-
-[Validation details →](docs/validation.md)
+Local hooks are workflow guardrails, not a security sandbox or tamper-proof attestation. Stage/hash/test passes do not certify complete coverage, human comprehension or universal correctness. Speed and token savings remain unestablished. [Evidence and rollout limits](docs/validation.md).
 
 ## Documentation
 
-**Go deeper where your project needs it.**
-
-| I want to… | Guide |
-| --- | --- |
-| Inspect all skills and routes | [Method map](docs/cyc-method-map.md) · [Playbook catalog](catalog/playbooks.json) |
-| Install, update or remove CYC | [Installation](docs/installation.md) |
-| Configure checks or recover interrupted work | [Onboarding and recovery](docs/onboarding-recovery.md) |
-| Share project knowledge and inspect context measurements | [Context engineering](docs/context.md) |
-| Build a usable frontend | [Frontend design](methods/cyc-design/frontend-design/SKILL.md) |
-| Reuse checks and recipes | [Project tools](docs/project-tools.md) |
-| Inspect the controller and contracts | [Runtime](docs/runtime.md) · [Skill contract](docs/skill-contract.md) |
-
-[Browse all documentation →](docs/README.md)
+[Browse the guides](docs/README.md) for installation, context, recovery, recipes, frontend design and controller contracts. Start with [onboarding/recovery](docs/onboarding-recovery.md) for setup or interrupted work, and [project tools](docs/project-tools.md) for existing investigation/check recipes.
 
 ## Contribute
 

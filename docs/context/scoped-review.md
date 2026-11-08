@@ -2,7 +2,7 @@
 
 Covers: scripts/runtime.mjs, scripts/work-review.mjs, skills/cyc/SKILL.md, test/scoped-review.test.mjs
 
-Last changed by AI: 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · files: scripts/runtime.mjs
+Last changed by AI: 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · files: scripts/runtime.mjs, skills/cyc/SKILL.md
 
 ## Current view
 
@@ -16,6 +16,16 @@ Prioritize demonstrated authoritative state transitions, conflicting representat
 
 Run node --test test/scoped-review.test.mjs test/work-review.test.mjs. The cases cover bounded composition, criteria/auth/dependency/file changes, unresolved import fallback and findings. Detailed agent exchanges and controller receipts may exist only in ignored local storage. Matching fingerprints or reviewer agreement do not establish product readiness, host activation or gains on unseen tasks.
 
+First-task and consequence advice remains advisory and cannot waive existing high-risk challenge/fresh review, criteria or receipt freshness. The initial adoption review ef2ee414 found no demonstrated implementation defect in its bound source; source-only context reconciliation afterward is self-reviewed and is not a fresh review of every final byte. Original stopped scope, actual review limitations and unavailable native/user observations remain traceable.
+
+The optional unified-task-context extension adds parent-owned read/ack and strict contribution reconciliation. Existing source/ownership/retention/proof requirements remain. Runtime binds current context revision/hash into handoffs and verification independently of source hashes; unknown economic advantage selects solo. Read-only host workers cannot complete a parent stage, alter parent limits or create permanent context records per worker. See docs/task-context.md and scripts/task-context.mjs/scripts/delegation.mjs for current contracts and host/usage limitations.
+
+Automatic Codex execution is an additive parent-owned path: atomic assignment claim, correlated terminal cleanup after pause/stop, scoped text input and explicit lead reconciliation. It preserves existing source/proof/retention and dependent-context guards. Runtime diagnosis resolved the earlier live-generation blocker: host-provided CLI succeeds with the same account/model while stale PATH CLI fails. Runtime selection prefers the valid host hint. Actual generated source findings, explicit cancellation and one acknowledged merged context were observed; final source-bound checks are recorded separately.
+
+Delegated token usage is reporting only; it cannot stop workers or refuse assignments. Old active shared views migrate with a new acknowledgment; terminal archives stay immutable. Scope, ownership, terminal cancellation and review/proof remain independently required.
+
+Automatic semantic review checks returned worker claims against scoped source and preserves uncertainty as conflicts; it is separate from required fresh source review. Findings retain worker origins/evidence and judgment labels, not independent certification. Prior knowledge and negative evidence cannot be overwritten by a merge proposal. Review/source freshness and receipt-scoped findings continue to apply to this implementation.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -25,6 +35,36 @@ Run node --test test/scoped-review.test.mjs test/work-review.test.mjs. The cases
 - 2026-11-05 · run a81789bf: Unknown dependency impact broadens required review; it never becomes unchanged coverage by ignoring a hash.
 
 ## History
+
+### 2026-11-08 · run 318f64bc-134d-46b7-865e-6903d3d71494 · Automatically decide whether a swarm is worthwhile, split independent work across agents in paralle…
+**Changed:** Add automatic scoped swarm planning, atomic parallel dispatch and source-bound semantic reconciliation with safe cancellation/recovery.
+**Learned:** Retain automatic decision/parallelism/one-context contracts and actual schema, publication and parent-handoff failures before final checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 318f64bc-134d-46b7-865e-6903d3d71494 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:a734cc7de3c9c2d0fcf36deef0c3a7de3eb6c73b5e07dc6444b30c5db6c0ff84, skills/cyc/SKILL.md@sha256:5c9c7c0bb7998344f6cf09bc2b0c50cfdcfd8d0bb06786adffad6f2d187e02bc
+
+### 2026-11-08 · run 0e6acf48-127d-4257-9352-f3b20fbe1ee8 · Remove token caps from CYC delegation and preserve usage-only reporting, live completion, unified c…
+**Changed:** Remove token-based admission/interruption; preserve usage, cancellation and one safely migrated shared task context.
+**Learned:** User rejects forced token stops. Retain actual regression, migration and live qualification evidence.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 0e6acf48-127d-4257-9352-f3b20fbe1ee8 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:094edb301c690351a38a63a38c99345792fdc3ed6b2e7be5d0008a8531637fcd
+
+### 2026-11-07 · run be41a8ca-77fb-4e6c-8785-780005ec49a2 · Implement automatic bounded Codex worker dispatch, acknowledged cancellation and unified-context in…
+**Changed:** Resolved stale CLI selection and verified actual generated findings, cancellation and one shared context.
+**Learned:** Retain measured runtime diagnosis and real qualification before final source checks.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run be41a8ca-77fb-4e6c-8785-780005ec49a2 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:ef714a5ffc8866703fcbd23be812053712423e9e3127be729299527cc791b1dd, skills/cyc/SKILL.md@sha256:14b001b58ae584b393850f494c3ab73828ca32566e14a4d3bbf6264aa145c3ac
+
+### 2026-11-07 · run 10e609d6-1319-41b5-b1a6-53e66bed9656 · Implement unified task context and bounded read-only delegation with parent-owned reconciliation an…
+**Changed:** Implement unified task context and bounded read-only delegation while preserving legacy contracts.
+**Learned:** One shared document per run, explicit reconciliation, conservative budgets, actual parent identity and no automatic model dispatch or measured savings claim.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 10e609d6-1319-41b5-b1a6-53e66bed9656 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/runtime.mjs@sha256:767c933c0579f20912005fb0045281ead3c9c2de1cfed3c7756288baa8c901ae, skills/cyc/SKILL.md@sha256:50438ee5ecd137bd81f4613ccb3d4223c1fc00b24f594617c4ddfef2c73626d0
+
+### 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · Reconcile omitted canonical context owners and verify the final local adoption implementation witho…
+**Changed:** Reconcile all10 affected canonical owners and index for the reviewed adoption changes; public code/tests remain unchanged.
+**Learned:** Retain current shared contract implications, source bindings and explicit original-run/proof/live-validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 command receipts separately. Local receipts may not travel with source.
+**Files:** skills/cyc/SKILL.md@sha256:06826cc1aa36588ac5e8756640fb9dcc4cbd7ef826d06f5495c4e9175612a958
 
 ### 2026-11-06 · run 814322af-3707-43f5-af30-605e6a3d0c96 · Preserve POSIX and encoded file URL identities when associating Node load diagnostics with their te…
 **Changed:** Repair Node importer diagnostic identity using fileURLToPath and native canonical paths, preserving containment and truthful module-load judgments. Encoded-path original and real 8.3-alias failures are retained; focused candidate completion checks pass 6/6, with full verification still required.

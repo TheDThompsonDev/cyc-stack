@@ -5,7 +5,7 @@ description: "Establish affected behavior, consumers, checks and a short impleme
 
 # Scout, then build
 
-Read the target context index and matched records before code, then inspect the actual boundary and dirty diff. Reuse relevant constraints, failed approaches and check recipes; revalidate stale claims. Stop when affected behavior, intended files, consumers and decisive checks are understood. Expand for consequential unknowns, not completeness.
+Read the target context index and matched records before code, then inspect the actual boundary and dirty diff. Reuse relevant constraints, failed approaches and check recipes; revalidate stale claims. Explain why selected context matters: identify the matched path/rule, check its consequential claim against code and the current request, and connect it to a decision/check in the existing Scout fields. investigate reports bounded byte evidence, not semantic truth. Route/workflowAdvice is advisory: confirm actual impact and preserve required checks/review, especially for unknown indirect consumers. Stop when affected behavior, intended files, consumers and decisive checks are understood. Expand for consequential unknowns, not completeness.
 
 For new websites/composed visual work, use the [frontend design method](../cyc-design/frontend-design/SKILL.md) before markup/criteria: design/decisions.md names archetype, typeface pair, palette, signature and rejection condition; multiple sites include set divergence. Keep actual visual quality within the original criterion mapping. Narrow repairs preserve identity.
 

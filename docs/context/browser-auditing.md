@@ -2,7 +2,7 @@
 
 Covers: scripts/browser-audit.mjs, scripts/project-tools.mjs, docs/project-tools.md, test/browser-recipe.test.mjs
 
-Last changed by AI: 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · files: docs/project-tools.md, scripts/project-tools.mjs, scripts/browser-audit.mjs, test/browser-recipe.test.mjs
+Last changed by AI: 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · files: scripts/project-tools.mjs, docs/project-tools.md
 
 ## Current view
 
@@ -14,6 +14,8 @@ Coverage is proportional: desktop/phone, keyboard and return focus, overflow, me
 
 Run node --test test/browser-recipe.test.mjs; in CYC development, its actual Playwright/axe harness lives under ignored .cyc/runtime/quality-efficiency/browser-harness and needs a usable local browser. It detects seeded missing button-name/return-focus defects in a disposable preview and checks their repair without changing prerequisite bytes. Missing harness dependencies skip or limit that local evidence; no production page, native host browser activation or human acceptance is inferred. Browser recipe discovery remains separate from canonical feature-context discovery.
 
+The adoption extension adds path/goal match reasons and bounded recordEvidence beside unchanged records. This does not change browser recipe selection/execution, scanner prerequisites or required-check boundaries. Canonical byte freshness remains separate from semantic/browser evidence; context lint supplies Git inspection. The first frozen adoption scope omitted this shared owner; it remains stopped and this actual follow-up retains the reconciliation.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
@@ -23,6 +25,12 @@ Run node --test test/browser-recipe.test.mjs; in CYC development, its actual Pla
 - 2026-11-05 · run a81789bf: A recipe is repeatable check machinery; it does not replace feature ownership, decisions or constraints.
 
 ## History
+
+### 2026-11-07 · run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 · Reconcile omitted canonical context owners and verify the final local adoption implementation witho…
+**Changed:** Reconcile all10 affected canonical owners and index for the reviewed adoption changes; public code/tests remain unchanged.
+**Learned:** Retain current shared contract implications, source bindings and explicit original-run/proof/live-validation limits.
+**Decisive check:** Planned commands: node --test --test-concurrency=4. Final outcomes are not yet claimed; inspect run 6938497e-dc8b-4f49-8c6c-e6fdb3a6ab42 command receipts separately. Local receipts may not travel with source.
+**Files:** scripts/project-tools.mjs@sha256:4771d6f141934691b4e68ddccce1a24aa73db035b4d0358838ea4123dc802cf3, docs/project-tools.md@sha256:dd8af59fc0fe183feecfcb6db1ee6b4fdc83fb84e7e4b2fb76bf9de90fcf2efd
 
 ### 2026-11-06 · run a81789bf-63d2-4f61-8849-6395cd2c791c · Enforce canonical indexed feature context during normal completion and repair current context/histo…
 **Changed:** Require source-bound canonical feature retention before final checks; repair missing A-H feature records/mappings and actual historical evidence without rewriting completed receipts.

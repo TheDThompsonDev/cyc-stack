@@ -6,9 +6,10 @@
         "id": "tests",
         "command": "node",
         "args": [
-          "--test"
+          "--test",
+          "--test-concurrency=4"
         ],
-        "timeoutMs": 900000
+        "timeoutMs": 1800000
       }
     ]
   },

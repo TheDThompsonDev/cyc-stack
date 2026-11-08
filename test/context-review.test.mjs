@@ -677,7 +677,20 @@ test('retention: installed fresh feature finishes through context and proof cont
   installedConfig.verification = { commands: [{ id: 'behavior', command: process.execPath, args: ['-e', "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"] }] };
   put(root, '.cyc/config.json', JSON.stringify(installedConfig));
   const installedCli = join(root, '.cyc/engine/bin/cyc.mjs');
-  function installed(args) { const r = spawnSync(process.execPath, [installedCli, ...args], { cwd: root, encoding: 'utf8', timeout: 30000 }); assert.equal(r.status, 0, r.stderr || r.stdout); return JSON.parse(r.stdout); }
+  function installed(args) {
+    const invoke = command => {
+      const r = spawnSync(process.execPath, [installedCli, ...command], { cwd: root, encoding: 'utf8', timeout: 65000, windowsHide: true });
+      assert.equal(r.status, 0, r.error?.message || r.stderr || r.stdout);
+      return JSON.parse(r.stdout);
+    };
+    let result = invoke(args[0] === 'run' && args[1] === 'finish' ? [...args, '--wait-ms', '30000'] : args);
+    if (!result.operationId) return result;
+    const deadline = Date.now() + 120000;
+    while (!result.operationComplete && Date.now() < deadline) result = invoke(['run', 'wait', '--run', result.runId, '--operation', result.operationId, '--wait-ms', '30000']);
+    assert.equal(result.operationComplete, true, JSON.stringify(result));
+    assert.equal(result.error, undefined, JSON.stringify(result));
+    return result.result;
+  }
   const doc = 'docs/context/greeting.md';
   const start = { goal: 'Add a local greeting capability.', playbook: 'feature', executionMode: 'standalone', session: 'fresh-installed', evidenceVersion: 1, requirements: 'A pure greet(name) returns Hello plus that name; retained target knowledge remains discoverable.', criteria: [{ id: 'greeting', description: 'greet returns the expected string.' }], allowedPaths: ['src', 'test'], contextRetention: { disposition: 'required', features: [{ id: 'greeting', doc, paths: ['src/greet.mjs', 'test/greet.test.mjs'] }] } };
   put(root, '.cyc/runtime/start.json', JSON.stringify(start)); const began = installed(['run', 'start', '--file', '.cyc/runtime/start.json']); const id = began.runId;
