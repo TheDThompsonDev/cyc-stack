@@ -24,7 +24,7 @@ Verify/Deliver needs criterion evidence: --criteria-passed for one or --criterio
 
 ## Context and delegation
 
-Plan focused feature/shared records and index before Build. Author learning.context or planned docs through context prepare/finish before checks. Missing/restricted/stale knowledge stays needs-context; generated History/support files do not substitute. Completed catch-up needs a new scoped update/checks. [Context](context.md) defines retention.
+Plan focused feature/shared records and index before Build. Author learning.context or planned docs through context prepare/finish before checks. Missing/restricted/stale knowledge stays needs-context; support files do not substitute. Completion publishes the run's change record, which is history and not verified source. [Context](context.md) defines retention.
 
 Optional [task context/delegation](task-context.md) provides one parent document and read-only assignments. Auto swarm plans, decides, fans out concurrently and reviews/merges via parent transactions; solo and unresolved conflicts remain explicit. Manual execute/reconcile stays available. Handoffs/checks bind revision/hash separately from source. Token usage is reporting only.
 

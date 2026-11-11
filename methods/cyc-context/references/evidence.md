@@ -1,6 +1,6 @@
 # Checking selected context evidence
 
-Use the bundled Node helper when a component record needs repeatable file-byte checks, particularly for uncommitted work. Existing records without manifests keep their Git/diff freshness procedure. Optional manifests supplement the required current-run History source hashes. They do not replace feature retention, authored context or final verification. Preserve historical manifests; new claims need separately identified current evidence.
+Use the bundled Node helper when a component record needs repeatable file-byte checks, particularly for uncommitted work. Existing records without manifests keep their Git/diff freshness procedure. Optional manifests supplement the file hashes in change records. They do not replace feature retention, authored context or final verification. Preserve historical manifests; new claims need separately identified current evidence.
 
 Pass the absolute project and the helper in the loaded Context method:
 

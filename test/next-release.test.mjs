@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as runtime from '../scripts/runtime.mjs';
-import { parseDoc, checkRetention, applyEntry } from '../scripts/context-review.mjs';
+import { parseDoc, checkRetention, readChanges } from '../scripts/context-review.mjs';
 import { onboardProject } from '../scripts/onboarding.mjs';
 import * as recovery from '../scripts/recovery.mjs';
 import { fixtureAssessment } from '../test-support/assessments.mjs';
@@ -15,6 +15,8 @@ process.env.CYC_BASELINE_MODE = 'off';
 const cli = resolve('bin/cyc.mjs');
 const view = 'The order module owns the persisted fixture value in src/orders.mjs. Context maintenance updates the index and retained explanation while leaving that implementation unchanged. The configured check reads the implementation directly. Source hashes identify the inspected bytes; they do not establish semantic truth or native host activation.';
 const put = (root, name, source) => { mkdirSync(dirname(join(root, name)), { recursive: true }); writeFileSync(join(root, name), source); };
+// These fixtures keep the earlier doc and index layout on purpose: a project that has not migrated
+// must still finish, and gains no new History entry.
 const doc = covers => `# Order persistence\n\nCovers: ${covers}\n\nLast changed by AI: none recorded\n\n## Current view\n\n${view}\n\n## Lessons\n\n## History\n`;
 function fixture(t, { covers = 'src/orders.mjs, docs/context/INDEX.md' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'cyc-next-release-'));
@@ -46,11 +48,14 @@ test('index-only maintenance finishes using unchanged focused implementation evi
   assert.equal(result.finished, true, JSON.stringify(result));
   assert.deepEqual(readFileSync(join(root, 'src/orders.mjs')), original);
   const record = parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md');
-  assert.deepEqual(record.history[0].files.map(f => f.path), ['src/orders.mjs']);
-  assert.equal(record.history[0].files[0].hash.replace(/^sha256:/, ''), createHash('sha256').update(original).digest('hex'));
-  assert.equal(record.history.filter(h => h.run === id).length, 1);
-  assert.equal(runtime.finishRun(root, id, input).finished, true, 'resuming delivery preserves the single current History entry');
-  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.length, 1);
+  assert.deepEqual([record.layout, record.issues, record.history, record.lastChange], ['earlier', [], [], 'none recorded'], 'a doc of the earlier layout finishes and gains no History entry');
+  assert.doesNotMatch(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), /Last AI change|Lessons/, 'the index loses its per-run columns the first time a run rebuilds it');
+  const [entry, ...others] = readChanges(root).entries;
+  assert.deepEqual(others, []);
+  assert.equal(entry.run, id);
+  assert.deepEqual(entry.files, [{ path: 'src/orders.mjs', hash: `sha256:${createHash('sha256').update(original).digest('hex')}` }], 'the unchanged focused owner is the recorded evidence');
+  assert.equal(runtime.finishRun(root, id, input).finished, true, 'resuming delivery keeps the single record');
+  assert.equal(readChanges(root).entries.length, 1);
 });
 
 test('context-only maintenance without explicit entrypoints derives its focused owner', t => {
@@ -151,14 +156,16 @@ test('context-only evidence remains scoped and a supporting-only record remains 
   assert.equal(result.finished, false);
   assert.equal(runtime.readRun(root, id).verification, null);
   assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.length, 0);
+  assert.deepEqual(readChanges(root).files, [], 'an incomplete run publishes no record');
 });
 
-test('a current-run History cannot substitute unrelated hashes for a missing focused owner', t => {
+test('a hand-written change record cannot substitute unrelated hashes for a missing focused owner', t => {
   const root = fixture(t, { covers: 'src/missing.mjs, docs/context/INDEX.md' }), { id, input } = maintenance(root);
   const hash = createHash('sha256').update(readFileSync(join(root, 'src/unrelated.mjs'))).digest('hex');
   const date = new Date().toISOString().slice(0, 10);
-  const name = 'docs/context/orders.md';
-  put(root, name, applyEntry(readFileSync(join(root, name), 'utf8'), { entry: `### ${date} · run ${id} · Adversarial isolated History\n**Changed:** Context fixture only.\n**Learned:** An unrelated valid hash cannot establish feature ownership.\n**Decisive check:** Isolated refusal assertion.\n**Files:** src/unrelated.mjs@sha256:${hash}`, lessons: [], lastChange: `Last changed by AI: ${date} · run ${id} · files: src/unrelated.mjs` }));
+  const forged = `docs/context/changes/${date}-${id.slice(0, 8)}.md`;
+  put(root, forged, `# ${date} · run ${id} · Adversarial isolated record\n\nResult: passed · written by hand\nProof: Isolated refusal assertion.\nChanged: Context fixture only.\nLearned: An unrelated valid hash cannot establish feature ownership.\n\nComponents:\n- docs/context/orders.md: forged\n\nFiles:\n- src/unrelated.mjs@sha256:${hash}\n`);
+  assert.deepEqual(readChanges(root).issues, [], 'the forged record is well formed');
   const result = runtime.finishRun(root, id, input);
   assert.equal(result.finished, false, 'valid bytes outside the focused owner cannot replace a missing anchor');
   assert.equal(result.status, 'needs-context');

@@ -3,14 +3,13 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readRun, contextUpdate } from './runtime.mjs';
+import { readRun } from './runtime.mjs';
 import { contextLinks } from './project-tools.mjs';
+import { changeFile } from './source-snapshot.mjs';
 
-// Component context docs under docs/context/ and their quality check. A doc is for one component,
-// in a fixed AI-readable layout, and the index (the table of contents) carries enough per component
-// that a task can read the index plus the matched docs instead of every doc. `review` proposes
-// doc updates from completed controller runs and `--write` applies them; `lint` checks the rules
-// below and the index's freshness against Git; `measure` counts what the index path costs to read.
+// Project context under docs/context/. A component doc says what is true now (Covers, Current view,
+// Lessons); the index is its table of contents; a change record says what one completed run did
+// and how its checks ended, published after verification and so never verified source.
 
 export const contextFolder = 'docs/context';
 export const indexName = `${contextFolder}/INDEX.md`;
@@ -21,32 +20,39 @@ const runIdText = /[A-Za-z0-9][A-Za-z0-9._-]{3,}/;
 const hashText = /(?:sha256:)?[0-9a-f]{7,64}/;
 const lastChangeLine = new RegExp(`^Last changed by AI: (?:none recorded|(${dateText.source}) · run (${runIdText.source}) · files: (.+))$`);
 const historyHeading = new RegExp(`^### (${dateText.source}) · run (${runIdText.source})(?: · (.*))?$`);
+const changeHeading = new RegExp(`^# (${dateText.source}) · run (${runIdText.source})(?: · (.*))?$`);
 const lessonLine = new RegExp(`^- (${dateText.source}) · ([^:]+): (.+)$`);
 const fileItem = new RegExp(`^\`?([^\`@\\s]+)\`?@(${hashText.source})$`);
-const sectionOrder = ['Current view', 'Lessons', 'History'];
+const conflictMarker = /^(?:<{7} |={7}$|>{7} |\|{7} )/;
+const recordItem = new RegExp(`^(.+)@(${hashText.source}|deleted)$`);
+const newestFirst = (a, b) => { const when = entry => entry.fields.completed ?? entry.date; return when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : a.run < b.run ? -1 : 1; };
+const noNote = 'no component note recorded';
+const sectionOrder = ['Current view', 'Lessons'];
 export const maxDocLines = 300;
 
-// Each rule is named in a lint issue so the fix is clear. They are structure rules only: a doc can
-// pass every one and still be wrong about the component.
+// Each rule is named in a lint issue so the fix is clear. Structure only: a doc can pass every one
+// and still be wrong. "Earlier layout" still has a Last-changed line and History; migrate converts it.
 export const rules = {
   name: `The file name is kebab-case (${docFileName.source}); INDEX.md, error-ledger.md and verify-recipe.md are not component docs.`,
   title: 'The first non-empty line is the only H1, naming the one component the doc covers.',
   covers: 'A "Covers:" line lists one or more project-relative path patterns (comma-separated, forward slashes, no parent segments).',
-  'last-change': 'A "Last changed by AI:" line reads "none recorded" or "<YYYY-MM-DD> · run <id> · files: <paths>".',
-  sections: `The H2 sections are exactly ${sectionOrder.map(name => `"## ${name}"`).join(', ')}, once each, in that order.`,
+  sections: 'The H2 sections are exactly "## Current view" then "## Lessons"; the earlier layout ends with "## History".',
   'current-view': 'Current view has prose and no <placeholder> left from the template.',
   'lesson-dated': 'Every line under Lessons is a bullet "- <YYYY-MM-DD> · <source>: <lesson>".',
-  'history-entry': 'Every History entry heads with "### <YYYY-MM-DD> · run <id>", newest first, and nothing but entries appears under History.',
-  evidence: 'Every History entry has a "**Files:**" line listing each file as path@<sha256 or commit>.',
-  'last-change-current': 'The "Last changed by AI" line names the newest History entry.',
-  size: `The doc has at most ${maxDocLines} lines; consolidate older entries past that.`,
-  'toc-columns': 'The index table has Component (or Area), Covers, Doc (or Record), Last AI change and Lessons columns.',
+  size: `The doc has at most ${maxDocLines} lines.`,
+  'last-change': 'Earlier layout: the "Last changed by AI:" line reads "none recorded" or "<YYYY-MM-DD> · run <id> · files: <paths>".',
+  'history-entry': 'Earlier layout: every History entry heads with "### <YYYY-MM-DD> · run <id>", newest first, and nothing else appears under History.',
+  evidence: 'Earlier layout: every History entry has a "**Files:**" line listing each file as path@<sha256 or commit>.',
+  'last-change-current': 'Earlier layout: the "Last changed by AI" line names the newest History entry.',
+  'toc-columns': 'The index table has Component (or Area), Covers and Doc (or Record) columns, and no per-run columns (Last AI change, Lessons).',
   'toc-link': 'Every index Doc link resolves to an existing file.',
   'toc-unindexed': 'Every component doc in docs/context/ has exactly one index row.',
   'toc-covers': 'An index row\'s Covers equals its doc\'s Covers line.',
-  'toc-last-change': 'An index row\'s Last AI change starts with the doc\'s last-change date and run.',
-  'toc-lessons': 'An index row\'s Lessons cell starts with the doc\'s lesson count.',
-  'stale-against-git': 'A covered path was committed after the doc\'s last commit, so the doc may describe code that has changed.'
+  'toc-conflict': 'The index has no merge conflict markers; cyc context index --write keeps both sides\' rows.',
+  'stale-against-git': 'A covered path was committed after the doc and the change records that name it, so the doc may describe code that has changed.',
+  'change-name': 'The changes folder holds only records named <YYYY-MM-DD>-<run>.md and digests named <YYYY-MM>.md.',
+  'change-entry': 'A change entry heads with "# <YYYY-MM-DD> · run <id> · <goal>", has a "Result:" line and lists files as "- path@<hash>"; a record holds the one entry its name gives, a digest its month\'s.',
+  'change-duplicate': 'A run has one change entry.'
 };
 
 const text = value => typeof value === 'string' && value.trim().length > 0;
@@ -138,18 +144,20 @@ export function parseDoc(source, name = 'doc.md') {
     } catch (error) { issue('covers', error.message, coversIndex); covers = []; }
   }
   const lastIndex = lines.findIndex(line => /^Last changed by AI:/.test(line));
+  // The earlier layout kept its history in the doc; it still parses, and migrate converts it.
+  const legacy = lastIndex !== -1 || lines.includes('## History');
   let lastChange = null;
-  if (lastIndex === -1) issue('last-change', 'Missing "Last changed by AI:" line.');
-  else {
+  if (legacy && lastIndex === -1) issue('last-change', 'Missing "Last changed by AI:" line.');
+  else if (legacy) {
     const match = lines[lastIndex].match(lastChangeLine);
     if (!match) issue('last-change', `Unreadable line: ${lines[lastIndex]}`, lastIndex);
     else lastChange = match[1] ? { date: match[1], run: match[2], files: match[3].split(',').map(p => p.trim().replaceAll('`', '')).filter(Boolean) } : 'none recorded';
   }
   const h2 = lines.map((line, index) => [line, index]).filter(([line]) => /^## /.test(line));
-  const names = h2.map(([line]) => line.slice(3).trim());
-  if (names.join('\n') !== sectionOrder.join('\n')) issue('sections', `Found sections: ${names.map(n => `"## ${n}"`).join(', ') || 'none'}.`);
+  const names = h2.map(([line]) => line.slice(3));
+  if (names.join('\n') !== [...sectionOrder, ...(legacy ? ['History'] : [])].join('\n')) issue('sections', `Found sections: ${names.map(n => `"## ${n}"`).join(', ') || 'none'}.`);
   const section = name => {
-    const at = h2.findIndex(([line]) => line.slice(3).trim() === name);
+    const at = h2.findIndex(([line]) => line.slice(3) === name);
     if (at === -1) return null;
     const start = h2[at][1] + 1, end = at + 1 < h2.length ? h2[at + 1][1] : lines.length;
     return { start, lines: lines.slice(start, end) };
@@ -182,6 +190,9 @@ export function parseDoc(source, name = 'doc.md') {
         continue;
       }
       if (!entry) { if (line.trim()) issue('history-entry', 'Text under History outside an entry.', at); continue; }
+      const field = line.match(/^\*\*(Changed|Learned|Decisive check):\*\*\s*(.*)$/);
+      if (field) entry[field[1] === 'Decisive check' ? 'proof' : field[1].toLowerCase()] = field[2];
+      if (!field && line.trim() && !/^\*\*Files:\*\*/.test(line)) (entry.extra ??= []).push(line.trim());
       if (/^\*\*Files:\*\*/.test(line)) {
         entry.hasFiles = true;
         for (const item of line.slice('**Files:**'.length).split(',').map(s => s.trim()).filter(Boolean)) {
@@ -199,7 +210,7 @@ export function parseDoc(source, name = 'doc.md') {
     } else if (lastChange && lastChange !== 'none recorded') issue('last-change-current', 'Last changed names a run with no History entry.', lastIndex);
   }
   if (lines.length > maxDocLines) issue('size', `${lines.length} lines.`);
-  return { name, title, covers, lastChange, lessons, history, currentView: view?.lines.join('\n').trim() ?? '', lines: lines.length, issues };
+  return { name, title, covers, layout: legacy ? 'earlier' : 'current', lastChange, lessons, history, currentView: view?.lines.join('\n').trim() ?? '', lines: lines.length, issues };
 }
 
 export function listDocs(root) {
@@ -220,22 +231,37 @@ const columnAliases = { component: ['component', 'area'], covers: ['covers'], do
 
 export function parseIndex(source) {
   const lines = source.replace(/^﻿/, '').replaceAll('\r\n', '\n').split('\n');
-  const table = { header: null, headerLine: -1, separatorLine: -1, columns: {}, rows: [], lines };
+  const table = { header: null, headerLine: -1, separatorLine: -1, columns: {}, rows: [], markers: [], lines };
+  let side = null, base = false;
   for (const [index, line] of lines.entries()) {
+    // Conflict markers inside the table are not rows: both sides' rows are read, and a side with its
+    // own header (the earlier five-column index) is read by column name. A conflict that opens on
+    // anything but a table row belongs to the prose below the table.
+    if (table.header && conflictMarker.test(line)) {
+      if (line[0] === '<' && !/^\s*\|/.test(lines[index + 1] ?? '')) break;
+      // In a three-way conflict the rows between "|||||||" and "=======" are the base, not a side.
+      base = line[0] === '|';
+      if (line[0] === '>') side = null;
+      table.markers.push(index); continue;
+    }
     if (!/^\s*\|/.test(line)) { if (table.header && (table.rows.length || table.separatorLine >= 0)) break; table.header = null; continue; }
-    const cells = line.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim().replaceAll('\\|', '|'));
+    let cells = line.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim().replaceAll('\\|', '|'));
     if (!table.header) {
       if (!cells.some(c => c.toLowerCase() === 'covers')) continue;
       table.header = cells; table.headerLine = index;
       for (const [key, aliases] of Object.entries(columnAliases)) table.columns[key] = cells.findIndex(c => aliases.includes(c.toLowerCase()));
       continue;
     }
-    if (cells.every(c => /^:?-+:?$/.test(c))) { table.separatorLine = index; continue; }
+    if (cells.every(c => /^:?-+:?$/.test(c))) { if (table.separatorLine < 0) { table.separatorLine = index; table.separator = cells; } continue; }
+    if (base) continue;
+    // A header inside the table is the other side of a conflict only when its separator row follows.
+    if (cells.some(c => c.toLowerCase() === 'covers') && /^\s*\|[\s:|-]+\|\s*$/.test(lines[index + 1] ?? '')) { side = cells.map(c => c.toLowerCase()); continue; }
+    if (side) cells = table.header.map(name => cells[side.indexOf(name.toLowerCase())] ?? '');
     if (cells.length !== table.header.length) { table.rows.push({ line: index, malformed: true, cells }); continue; }
     const cell = key => table.columns[key] >= 0 ? cells[table.columns[key]] : '';
     const links = contextLinks(cell('doc'));
     const link = cell('doc').match(/\[[^\]]+\]\(([^)#]+)[^)]*\)/);
-    table.rows.push({ line: index, cells, component: cell('component'), covers: cell('covers').replaceAll('`', '').split(',').map(p => p.trim()).filter(Boolean), docText: cell('doc'), links, link: link ? decodeURIComponent(link[1]) : null, lastChange: cell('lastChange'), lessons: cell('lessons') });
+    table.rows.push({ line: index, cells, component: cell('component'), covers: cell('covers').replaceAll('`', '').split(',').map(p => p.trim()).filter(Boolean), docText: cell('doc'), links, link: link ? decodeURIComponent(link[1]) : null });
   }
   return table;
 }
@@ -254,10 +280,12 @@ function gitAvailable(root) {
 }
 const pathspec = pattern => pattern === 'all' ? '.' : /[?*]/.test(pattern) ? `:(glob)${pattern}` : pattern;
 
-// Freshness against Git: the doc's last commit against the last commit that touched a covered path.
-// Same commit, or the doc committed later, is fresh. Uncommitted edits to covered paths are reported
-// as dirty, never as stale: they have no commit yet, and the doc may be edited in the same change.
-export function docFreshness(root, docPath, covers) {
+// Freshness against Git: the doc's last commit against the last commit touching a covered path.
+// A run that revalidates a doc without rewording it leaves the bytes it verified in its change
+// record, so a later covered commit makes the doc stale unless every covered file it moved is, as
+// committed, what a record made after the doc's last commit verified. `records` are the committed
+// entries naming the doc. Uncommitted covered edits are dirty, never stale: they have no commit yet.
+export function docFreshness(root, docPath, covers, records = []) {
   if (!gitAvailable(root)) return { status: 'unknown', reason: 'Not a Git checkout; freshness was not compared.' };
   const last = args => { const r = git(root, ['log', '-1', '--format=%H%x09%cI%x09%s', ...args]); if (r.status !== 0) throw Error(r.stderr.trim() || 'git log failed'); const [commit, date, subject] = r.stdout.trim().split('\t'); return commit ? { commit, date, subject } : null; };
   let doc, coveredCommit;
@@ -272,7 +300,13 @@ export function docFreshness(root, docPath, covers) {
   // The doc's commit being an ancestor of the covered commit is decisive; dates only break a tie
   // across branches, and two commits in the same second compare equal by date.
   const later = coveredCommit.commit !== doc.commit && (git(root, ['merge-base', '--is-ancestor', doc.commit, coveredCommit.commit]).status === 0 || coveredCommit.date > doc.date);
-  if (later) return { status: 'stale', docCommit: doc, coveredCommit, dirtyPaths };
+  if (later) {
+    const bound = new Map();
+    for (const entry of records) if (Date.parse(entry.fields.completed ?? `${entry.date}T23:59:59Z`) >= Date.parse(doc.date)) for (const file of entry.files) if (!bound.has(file.path)) bound.set(file.path, file.hash);
+    const committed = path => { const shown = spawnSync('git', ['-C', root, 'show', `${coveredCommit.commit}:./${path}`], { windowsHide: true, timeout: 5000, maxBuffer: 64 * 1024 * 1024 }); return shown.status === 0 ? `sha256:${sha(shown.stdout)}` : 'deleted'; };
+    const moved = git(root, ['diff', '--relative', '--name-only', '-z', doc.commit, coveredCommit.commit, '--', ...covers.map(pathspec)]);
+    if (moved.status !== 0 || moved.stdout.split('\0').filter(Boolean).some(path => bound.get(path) !== committed(path))) return { status: 'stale', docCommit: doc, coveredCommit, dirtyPaths };
+  }
   return { status: dirtyPaths.length ? 'dirty' : 'fresh', docCommit: doc, coveredCommit, dirtyPaths };
 }
 
@@ -289,7 +323,15 @@ export function lintIndex(root, { git: checkGit = true, docs: selectedDocs } = {
   }
   const table = parseIndex(read(root, indexName));
   if (!table.header) { issue('toc-columns', 'No table with a Covers column.'); return { path: indexName, exists, ok: false, rows: [], issues, freshness }; }
-  for (const [key, index] of Object.entries(table.columns)) if (index === -1) issue('toc-columns', `Missing column ${columnAliases[key].join(' or ')}.`, table.headerLine);
+  for (const key of ['component', 'covers', 'doc']) if (table.columns[key] === -1) issue('toc-columns', `Missing column ${columnAliases[key].join(' or ')}.`, table.headerLine);
+  if (table.columns.lastChange >= 0 || table.columns.lessons >= 0) issue('toc-columns', 'Per-run columns (Last AI change, Lessons) are no longer kept; cyc context index --write drops them.', table.headerLine);
+  if (table.lines.some(line => conflictMarker.test(line))) issue('toc-conflict', 'Merge conflict markers remain; cyc context index --write keeps both sides\' rows.');
+  // Only committed records can vouch for a doc against Git; one written or edited since is not history yet.
+  const named = new Map();
+  if (checkGit) {
+    const changes = readChanges(root), loose = new Set(git(root, ['ls-files', '-z', '-m', '-o', '--', changes.folder]).stdout?.split('\0'));
+    for (const entry of changes.entries) if (!loose.has(entry.file)) for (const { doc } of entry.components) named.set(doc, [...(named.get(doc) ?? []), entry]);
+  }
   const seen = new Map();
   const rows = [];
   for (const row of table.rows) {
@@ -307,12 +349,8 @@ export function lintIndex(root, { git: checkGit = true, docs: selectedDocs } = {
     const parsed = lintDoc(root, docPath);
     entry.docIssues = parsed.issues.length;
     if ([...parsed.covers].sort().join(',') !== [...row.covers].sort().join(',')) issue('toc-covers', `Row covers [${row.covers.join(', ')}] but ${docPath} covers [${parsed.covers.join(', ')}].`, row.line);
-    const expectLast = parsed.lastChange && parsed.lastChange !== 'none recorded' ? `${parsed.lastChange.date} · run ${shortRun(parsed.lastChange.run)}` : 'none recorded';
-    if (table.columns.lastChange >= 0 && !row.lastChange.startsWith(expectLast)) issue('toc-last-change', `Row says "${oneLine(row.lastChange, 60)}", the doc says "${expectLast}".`, row.line);
-    const expectLessons = parsed.lessons.length ? String(parsed.lessons.length) : 'none';
-    if (table.columns.lessons >= 0 && !(row.lessons === expectLessons || row.lessons.startsWith(`${expectLessons} `))) issue('toc-lessons', `Row says "${oneLine(row.lessons, 60)}", the doc has ${parsed.lessons.length} lesson(s).`, row.line);
     if (checkGit) {
-      const fresh = docFreshness(root, docPath, parsed.covers);
+      const fresh = docFreshness(root, docPath, parsed.covers, named.get(docPath));
       freshness.push({ doc: docPath, ...fresh });
       if (fresh.status === 'stale') issue('stale-against-git', `${docPath}: ${fresh.coveredCommit.commit.slice(0, 7)} (${day(fresh.coveredCommit.date)}, ${oneLine(fresh.coveredCommit.subject, 60)}) touched covered paths after the doc's last commit ${fresh.docCommit.commit.slice(0, 7)} (${day(fresh.docCommit.date)}).`, row.line);
     }
@@ -321,7 +359,7 @@ export function lintIndex(root, { git: checkGit = true, docs: selectedDocs } = {
   return { path: indexName, exists, ok: !issues.length, rows, issues, freshness };
 }
 
-const docSummary = result => ({ path: result.path, ok: result.ok, issues: result.issues, lines: result.lines, lessons: result.lessons.length, history: result.history.length });
+const docSummary = result => ({ path: result.path, ok: result.ok, layout: result.layout, issues: result.issues, lines: result.lines, lessons: result.lessons.length, history: result.history.length });
 
 export function lintContext(root, { doc, git: checkGit = true } = {}) {
   root = realpathSync(root);
@@ -331,8 +369,8 @@ export function lintContext(root, { doc, git: checkGit = true } = {}) {
     return { ok: result.ok, docs: [docSummary(result)], rules, note: 'Structure rules only: a passing doc can still be wrong about its component.' };
   }
   const docs = listDocs(root).map(name => docSummary(lintDoc(root, `${contextFolder}/${name}`)));
-  const index = lintIndex(root, { git: checkGit });
-  return { ok: docs.every(d => d.ok) && index.ok, index: { path: index.path, exists: index.exists, ok: index.ok, issues: index.issues, freshness: index.freshness }, docs, rules, note: 'Structure and freshness rules only: a passing doc can still be wrong about its component, and a fresh doc is one whose covered paths have no later commit, not one that is correct.' };
+  const index = lintIndex(root, { git: checkGit }), changes = readChanges(root);
+  return { ok: docs.every(d => d.ok) && index.ok && !changes.issues.length, index: { path: index.path, exists: index.exists, ok: index.ok, issues: index.issues, freshness: index.freshness }, docs, changes: { path: changes.folder, entries: changes.entries.length, issues: changes.issues }, rules, note: 'Structure and freshness rules only: a passing doc can still be wrong about its component, and a fresh doc is one whose covered paths have no later commit, not one that is correct.' };
 }
 
 // A current start plans records before scope freezes. Old stored runs without this
@@ -397,7 +435,7 @@ export function checkRetention(root, state, files) {
   }
   const index = lintIndex(root, { git: false, docs: plan.features.map(f => f.doc) });
   if (!index.exists) issue('toc-link', `Missing target index ${plan.index}.`);
-  issues.push(...index.issues);
+  issues.push(...index.issues, ...readChanges(root).issues);
   for (const feature of plan.features) {
     const doc = feature.doc;
     if (!existsSync(local(root, doc))) { issue('feature-doc', `Missing canonical record for ${feature.id}.`, doc); continue; }
@@ -409,19 +447,10 @@ export function checkRetention(root, state, files) {
     if (!selected.paths.length || selected.paths.some(path => !covered(parsed.covers, path))) issue('feature-coverage', `Covers must resolve representative feature paths: ${selected.paths.join(', ') || 'none planned'}.`, doc);
     const rows = index.rows.filter(row => row.componentDoc && row.doc === doc);
     if (rows.length !== 1 || selected.paths.some(path => !covered(rows[0]?.covers ?? [], path))) issue('feature-index', 'A canonical resolving index row must map the feature entrypoints.', doc);
-    const latest = parsed.history[0];
-    if (parsed.history.filter(h => h.run === state.id).length !== 1) issue('feature-history', 'Keep exactly one entry for the current run.', doc);
-    if (latest?.run !== state.id) issue('feature-history', 'Current feature work needs its own dated History entry before verification.', doc);
-    if (!selected.files.length || !latest?.files.length) issue('feature-evidence', 'Current History needs actual selected source evidence.', doc);
-    for (const item of latest?.files ?? []) {
-      try {
-        const path = canonicalPattern(item.path, { patterns: false });
-        if (support(path, plan.folder) || !files[path] || !files[path].startsWith(item.hash.replace(/^sha256:/, ''))) issue('feature-evidence', `Missing/stale current source evidence: ${path}.`, doc);
-      } catch (error) { issue('feature-evidence', error.message, doc); }
-    }
-    for (const item of selected.files) if (!latest?.files.some(f => f.path === item.path)) issue('feature-evidence', `No current source evidence for ${item.path}.`, doc);
+    // The run state, not a doc entry, binds the authored view to the bytes it was written against.
+    if (!selected.files.length) issue('feature-evidence', 'The record needs actual selected implementation source; supporting files and unrelated hashes cannot stand in.', doc);
     const authored = state.contextPreparation?.authored?.[feature.id];
-    if (!authored || authored.viewHash !== sha(parsed.currentView) || authored.sourcesHash !== sha(JSON.stringify(selected.files))) issue('feature-authoring', 'Author or revalidate the focused Current view against this source; generated History alone is not retained feature knowledge.', doc);
+    if (!authored || authored.viewHash !== sha(parsed.currentView) || authored.sourcesHash !== sha(JSON.stringify(selected.files))) issue('feature-authoring', 'Author or revalidate the focused Current view against this source; a scaffold or an unchanged view after a source change is not retained feature knowledge.', doc);
     if (!files[doc] || !files[plan.index]) issue('feature-source', 'Canonical context/index must be included in verified source, not ignored runtime data.', doc);
     docs.push(doc);
   }
@@ -432,48 +461,42 @@ export function checkRetention(root, state, files) {
   return { ok: !issues.length, status: issues.length ? 'pending' : 'retained', docs, issues, note: 'Layout, mapping, provenance and source checks only; authored semantic truth and user acceptance are not certified.' };
 }
 
-// Only the caller's active, scoped runtime transaction may invoke this writer.
-// It uses observations available now; final receipts stay outside covered source.
-export function prepareRetention(root, state, { records = [], summary = '', reason = '' } = {}, files, permit) {
+// Only the caller's active, scoped runtime transaction may invoke this writer. It writes what is
+// true now: the authored Current view and an optional lesson. What the run did is its change record.
+const filled = value => text(value) && !/^<[\s\S]*>$/.test(value.trim());
+export function prepareRetention(root, state, { records = [] } = {}, files, permit) {
   const plan = retentionOf(state);
   if (!plan || plan.disposition !== 'required') return { paths: [], authored: {} };
-  if (!Array.isArray(records) || new Set(records.map(r => r?.id)).size !== records.length || records.some(r => !plan.features.some(f => f.id === r?.id) || !text(r.currentView) || /<(?:write|describe|fill|actual|placeholder|todo)\b/i.test(r.currentView))) throw Error('learning.context needs unique planned ids and actual nonplaceholder currentView text.');
-  const writes = [], authored = {};
+  if (!Array.isArray(records) || new Set(records.map(r => r?.id)).size !== records.length || records.some(r => !plan.features.some(f => f.id === r?.id) || !text(r.currentView) || /<(?:write|describe|fill|actual|placeholder|todo)\b/i.test(r.currentView) || ['changed', 'lesson'].some(key => r[key] !== undefined && !filled(r[key])))) throw Error('learning.context needs unique planned ids and actual nonplaceholder currentView text (and changed/lesson when given).');
+  const writes = [], authored = {}, notes = { ...state.contextPreparation?.notes };
   const date = state.contextPreparation?.date ?? new Date().toISOString().slice(0, 10);
   for (const feature of plan.features) {
     const exists = existsSync(local(root, feature.doc)), selected = featureFiles(root, state, feature, files);
     let source = exists ? read(root, feature.doc) : newDocSource(feature.id.replaceAll('-', ' '), selected.files.length ? selected.files.map(f => f.path) : selected.paths);
-    let parsed = parseDoc(source, fileName(feature.doc));
-    if (parsed.issues.some(i => ['sections', 'title', 'last-change'].includes(i.rule)) || parsed.issues.some(i => i.rule === 'last-change-current') && parsed.lastChange?.run !== state.id) throw Error(`Repair existing context metadata/history first: ${feature.doc}. Do not invent an older run entry.`);
+    if (parseDoc(source, fileName(feature.doc)).issues.some(i => ['sections', 'title', 'last-change', 'last-change-current'].includes(i.rule))) throw Error(`Repair existing context metadata/history first: ${feature.doc}. Do not invent an older run entry.`);
     const record = records.find(r => r.id === feature.id);
-    if (record) source = source.replace(/(## Current view\n)[\s\S]*?(?=\n## Lessons)/, (_, heading) => `${heading}\n${record.currentView.trim()}\n`);
-    parsed = parseDoc(source, fileName(feature.doc));
-    const viewHash = sha(parsed.currentView), sourcesHash = sha(JSON.stringify(selected.files));
+    if (record) {
+      source = source.replace(/(## Current view\n)[\s\S]*?(?=\n## Lessons)/, (_, heading) => `${heading}\n${record.currentView.trim()}\n`);
+      if (record.changed) notes[feature.id] = oneLine(record.changed, 300);
+      // One lesson per run and component: a repeated preparation replaces it, never adds a second.
+      if (record.lesson) {
+        const lines = source.split('\n'), at = lines.indexOf('## Lessons'), end = lines.indexOf('## History');
+        const kept = lines.filter((line, i) => !(i > at && (end < 0 || i < end) && line.includes(` · run ${shortRun(state.id)}: `)));
+        kept.splice(at + 1, 0, '', `- ${date} · run ${shortRun(state.id)}: ${oneLine(record.lesson, 400)}`, '');
+        source = `${kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n*$/, '')}\n`;
+      }
+    }
+    const viewHash = sha(parseDoc(source, fileName(feature.doc)).currentView), sourcesHash = sha(JSON.stringify(selected.files));
     const prior = state.contextPreparation?.authored?.[feature.id];
     if (record || viewHash !== (state.contextPreparation?.views?.[feature.id] ?? feature.baselineViewHash) || prior?.viewHash === viewHash && prior.sourcesHash === sourcesHash) authored[feature.id] = { viewHash, sourcesHash };
-    // Keep a repairable scaffold when no implementation anchor exists. Empty
-    // evidence must not overwrite valid metadata with an unreadable History.
-    if (!selected.files.length) {
-      if (!exists || read(root, feature.doc) !== source) writes.push({ path: feature.doc, source });
-      continue;
-    }
-    // Replace only this still-active run's preparation, preserving completed history.
-    const lines = source.split('\n');
-    for (const own of parsed.history.filter(h => h.run === state.id).reverse()) {
-      const next = parsed.history.find(h => h.line > own.line);
-      lines.splice(own.line - 1, (next ? next.line - 1 : source.split('\n').length) - (own.line - 1));
-    }
-    source = lines.join('\n');
-    const entry = [`### ${date} · run ${state.id} · ${oneLine(state.goal, 100)}`, `**Changed:** ${oneLine(summary || state.goal, 400)}`, `**Learned:** ${oneLine(reason || 'See the authored Current view; no user acceptance is inferred.', 400)}`, `**Decisive check:** Planned commands: ${state.commands.map(c => [c.command, ...c.args].join(' ')).join('; ') || 'none'}. Final outcomes are not yet claimed; inspect run ${state.id} command receipts separately. Local receipts may not travel with source.`, `**Files:** ${selected.files.map(f => `${f.path}@sha256:${f.sha256}`).join(', ')}`].join('\n');
-    source = applyEntry(source, { entry, lessons: [], lastChange: `Last changed by AI: ${date} · run ${state.id} · files: ${selected.files.map(f => f.path).join(', ')}` });
     if (!exists || read(root, feature.doc) !== source) writes.push({ path: feature.doc, source });
   }
   for (const path of [...writes.map(w => w.path), plan.index]) { local(root, path); permit(path); }
   const staging = local(root, `.cyc/runs/${state.id}/context-staging`);
   for (const w of writes) { mkdirSync(dirname(local(root, w.path)), { recursive: true }); atomicWrite(local(root, w.path), w.source, staging); }
-  if (!existsSync(local(root, plan.index))) { mkdirSync(dirname(local(root, plan.index)), { recursive: true }); atomicWrite(local(root, plan.index), '# Feature context\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n', staging); }
+  if (!existsSync(local(root, plan.index))) { mkdirSync(dirname(local(root, plan.index)), { recursive: true }); atomicWrite(local(root, plan.index), newIndexSource, staging); }
   refreshIndex(root, { staging, docs: plan.features.map(f => f.doc) });
-  return { paths: writes.map(w => w.path), date, authored, views: Object.fromEntries(plan.features.map(f => [f.id, sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView)])) };
+  return { paths: writes.map(w => w.path), date, authored, notes, views: Object.fromEntries(plan.features.map(f => [f.id, sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView)])) };
 }
 
 // ---------------------------------------------------------------- run records
@@ -502,8 +525,8 @@ function ledgerEntriesFor(root, state) {
   return entries.filter(e => e.mentions).map(({ id, title, path }) => ({ id, title, path }));
 }
 
-// What a component doc entry needs, read from the run's own record: nothing here is invented, and
-// a field the run did not record is said to be missing.
+// What a change record needs, read from the run's own state: nothing here is invented, and a field
+// the run did not record is said to be missing.
 export function runRecord(root, state) {
   const { folder: contextFolder } = contextLocation(root);
   const passed = stage => state.handoffs.findLast(h => h.stage === stage && h.status === 'passed');
@@ -516,7 +539,6 @@ export function runRecord(root, state) {
   const files = (final?.artifacts ?? []).map(({ path, sha256 }) => ({ path, sha256 }));
   const learning = deliver?.assessment?.learning, errors = deliver?.assessment?.errorHistory;
   const retries = state.history.filter(h => h.type === 'retry' && text(h.reason)).map(h => h.reason);
-  const failed = state.handoffs.filter(h => h.status === 'failed').map(h => h.summary);
   const proof = state.testProof;
   const exemption = verify?.assessment?.testProof;
   const checks = (state.verification?.results ?? []).map(r => `${r.id} ${r.passed ? 'passed' : 'failed'} (exit ${r.exitCode})`);
@@ -531,26 +553,104 @@ export function runRecord(root, state) {
   for (const reason of retries) lessons.push(`Retry: ${oneLine(reason, 400)}`);
   for (const entry of ledger) lessons.push(`Ledger ${entry.id}: ${entry.title}`);
   const contextDocs = (deliver?.contextDocs ?? files.map(f => f.path)).filter(p => isComponentDoc(p, contextFolder));
-  return { runId: state.id, date, completedAt, goal: state.goal, playbook: state.playbook, status: state.status, session: state.session ?? null, files,
-    changed: build.map(h => oneLine(h.summary.replace(/^Built: /, ''), 400)),
-    learning: learning ? { status: learning.status, reason: oneLine(learning.reason, 400), artifacts: learning.artifacts ?? [] } : null,
-    errorHistory: errors ? { status: errors.status, reason: oneLine(errors.reason, 400), artifacts: errors.artifacts ?? [] } : null,
-    retries, failedHandoffs: failed, failures: state.failures ?? 0, ledgerEntries: ledger, decisiveCheck, checks, lessons: [...new Set(lessons)], contextDocs };
+  return { runId: state.id, date, completedAt, goal: state.goal, playbook: state.playbook, files, changed: build.map(h => oneLine(h.summary.replace(/^Built: /, ''), 400)), decisiveCheck, checks, lessons: [...new Set(lessons)], contextDocs };
 }
 
-function entryMarkdown(record, files) {
-  const learned = record.lessons.length ? record.lessons.join(' ') : 'No reusable learning recorded for this run.';
-  return [
-    `### ${record.date} · run ${record.runId} · ${oneLine(record.goal, 100)}`,
-    `**Changed:** ${record.changed.join(' ') || 'No Build summary recorded.'}`,
-    `**Learned:** ${learned}`,
-    `**Decisive check:** ${record.decisiveCheck}${record.checks.length ? ` Checks: ${record.checks.join(', ')}.` : ''}`,
-    `**Files:** ${files.map(f => `${f.path}@sha256:${f.sha256.slice(0, 12)}`).join(', ')}`
-  ].join('\n');
-}
-const lessonBullets = record => record.lessons.map(lesson => `- ${record.date} · run ${shortRun(record.runId)}: ${lesson}`);
+// ---------------------------------------------------------------- change records
 
-// ---------------------------------------------------------------- review: propose and write
+// <context folder>/changes holds one record per completed run, <date>-<run>.md, and monthly digests,
+// <YYYY-MM>.md. Both are entries in one format, so a digest is its records joined.
+function changeSource({ date, run, goal, result, completed, proof, changed, learned, components, files, full = false }) {
+  // A run's own record is kept short; migrated history is kept whole.
+  const line = (value, max = 2000) => oneLine(value, full ? Infinity : max).replaceAll('\\|', '|');
+  return [`# ${date} · run ${run} · ${line(goal, 100)}`, '', `Result: ${line(result)}`, ...(completed ? [`Completed: ${completed}`] : []), `Proof: ${line(proof)}`, `Changed: ${line(changed)}`, `Learned: ${line(learned)}`, '',
+    'Components:', ...components.map(c => `- ${c.doc}: ${line(c.note || noNote)}`), '', 'Files:', ...files.map(f => `- ${f.path}@${f.hash}`), ''].join('\n');
+}
+
+export function parseChanges(source, file) {
+  const entries = [];
+  let entry = null, list = null;
+  for (const line of source.replace(/^﻿/, '').replaceAll('\r\n', '\n').split('\n')) {
+    const head = line.match(changeHeading);
+    if (head) { entries.push(entry = { file, date: head[1], run: head[2], goal: head[3] ?? '', fields: {}, components: [], files: [], issues: [], lines: [] }); list = null; }
+    // Text before the first entry would be lost when records are joined, so it is reported.
+    if (!entry) { if (line.trim()) entries.stray = true; continue; }
+    entry.lines.push(line);
+    if (head || !line.trim()) continue;
+    const field = line.match(/^(Result|Completed|Proof|Changed|Learned|Components|Files):\s*(.*)$/);
+    const item = line.match(/^- (.+)$/);
+    // A path may hold spaces or "@": the hash is what follows the last "@".
+    const bound = list === 'Files' && item?.[1].match(recordItem);
+    if (field) { list = ['Components', 'Files'].includes(field[1]) ? field[1] : null; if (!list) entry.fields[field[1].toLowerCase()] = field[2]; }
+    else if (list === 'Components' && item) { const at = item[1].indexOf(': '); entry.components.push({ doc: at < 0 ? item[1] : item[1].slice(0, at), note: at < 0 || item[1].slice(at + 2) === noNote ? '' : item[1].slice(at + 2) }); }
+    else if (bound) entry.files.push({ path: bound[1], hash: bound[2] });
+    else entry.issues.push(`Unreadable line: ${oneLine(line, 80)}`);
+  }
+  for (const item of entries) item.source = `${item.lines.join('\n').replace(/\n*$/, '')}\n`;
+  return entries;
+}
+
+// Every entry in the changes folder, newest first, with the folder's lint issues.
+export function readChanges(root) {
+  const folder = `${contextLocation(root).folder}/changes`, path = local(root, folder), entries = [], issues = [], files = [];
+  const issue = (rule, message) => issues.push({ rule, message });
+  for (const name of existsSync(path) ? readdirSync(path).sort() : []) {
+    const file = `${folder}/${name}`;
+    if (!changeFile.test(name) || !lstatSync(join(path, name)).isFile()) { issue('change-name', `${file} is not a change record or a monthly digest.`); continue; }
+    files.push(name);
+    const found = parseChanges(read(root, file), file), digest = name.length === 10;
+    if (!found.length || found.stray || (digest ? found.some(e => !e.date.startsWith(name.slice(0, 7))) : found.length !== 1 || found[0].date !== name.slice(0, 10) || !found[0].run.startsWith(name.slice(11, -3)))) issue('change-entry', `${file} does not hold ${digest ? 'only entries of its month' : 'the one entry its name gives'}.`);
+    for (const entry of found) {
+      if (!entry.fields.result || entry.issues.length) issue('change-entry', `${file}, run ${entry.run}: ${entry.issues[0] ?? 'no "Result:" line.'}`);
+      if (entries.some(e => e.run === entry.run)) issue('change-duplicate', `Run ${entry.run} has more than one entry; the second is in ${file}.`);
+      entries.push(entry);
+    }
+  }
+  entries.sort(newestFirst);
+  return { folder, files, entries, issues };
+}
+
+// A completed run's record, from its own state. `files` are the verified bytes at completion; a
+// later catch-up has only the delivery handoff's hashes. Only a run that planned a doc names it:
+// a record that names a doc says the run verified the doc against these bytes.
+export function changeFor(root, state, files) {
+  if (state.status !== 'complete') throw Error(`Run ${state.id} is ${state.status}; only a completed run leaves a change record.`);
+  const { folder } = contextLocation(root), plan = retentionOf(state), record = runRecord(root, state);
+  const planned = plan?.disposition === 'required', source = path => !support(path, folder);
+  const bound = planned && files
+    ? [...[...new Set([...Object.keys(files).filter(p => files[p] !== state.initialSource.files[p]), ...plan.features.flatMap(f => featureFiles(root, state, f, files).files.map(item => item.path))])].filter(source).map(path => ({ path, hash: `sha256:${files[path]}` })),
+      ...Object.keys(state.initialSource.files).filter(p => !(p in files) && source(p)).map(path => ({ path, hash: 'deleted' }))].sort((a, b) => a.path < b.path ? -1 : 1)
+    : record.files.filter(f => source(f.path)).map(f => ({ path: f.path, hash: `sha256:${f.sha256}` }));
+  const accepted = state.verification?.acceptedPreexistingFailures ?? [];
+  const result = !state.requiresChecks ? 'completed · no executable checks, agent-reviewed evidence'
+    : `passed${accepted.length ? ` with accepted pre-existing failures (${accepted.join(', ')})` : ''} · ${record.checks.join(', ') || 'check results not recorded'}`;
+  return { name: `${record.date}-${shortRun(state.id)}.md`, source: changeSource({ date: record.date, run: state.id, goal: state.goal, result, completed: record.completedAt, proof: record.decisiveCheck, changed: record.changed.join(' ') || 'No Build summary recorded.', learned: record.lessons.join(' ') || 'No reusable learning recorded for this run.',
+    components: planned ? plan.features.map(f => ({ doc: f.doc, note: state.contextPreparation?.notes?.[f.id] })) : [], files: bound }) };
+}
+
+// Published once per run. Catch-up keeps an entry that is already there; the completing run
+// (`files` given) owns its record, so entries it did not write are removed, never adopted.
+export function publishChange(root, state, files) {
+  const staging = local(root, `.cyc/runs/${state.id}/context-staging`);
+  let known = readChanges(root);
+  const mine = known.entries.filter(entry => entry.run === state.id);
+  if (mine.length && !files) return { path: mine[0].file, created: false };
+  const change = changeFor(root, state, files);
+  if (mine.length === 1 && mine[0].source === change.source) return { path: mine[0].file, created: false };
+  for (const file of new Set(mine.map(entry => entry.file))) {
+    const rest = parseChanges(read(root, file)).filter(entry => entry.run !== state.id);
+    if (rest.length) atomicWrite(local(root, file), rest.map(entry => entry.source).join('\n'), staging);
+    else unlinkSync(local(root, file));
+  }
+  if (mine.length) known = readChanges(root);
+  const name = known.files.includes(change.name) ? `${change.name.slice(0, 11)}${state.id}.md` : change.name;
+  if (known.files.includes(name)) throw Error(`${known.folder}/${name} already holds another entry; remove it.`);
+  mkdirSync(local(root, known.folder), { recursive: true });
+  atomicWrite(local(root, `${known.folder}/${name}`), change.source, staging);
+  return { path: `${known.folder}/${name}`, created: true };
+}
+
+// ---------------------------------------------------------------- review: propose and publish
 
 function componentsOf(root) {
   const { folder: contextFolder, index: indexName } = contextLocation(root);
@@ -563,187 +663,183 @@ function componentsOf(root) {
   return { exists, components };
 }
 
+// Runs that already have a record: a change entry, or a History entry in a doc of the earlier layout.
 function recordedRuns(root, docs) {
-  const { folder: contextFolder } = contextLocation(root);
-  const runs = new Map();
-  for (const name of docs) {
-    const parsed = parseDoc(read(root, `${contextFolder}/${name}`), name);
-    for (const entry of parsed.history) runs.set(entry.run, [...(runs.get(entry.run) ?? []), `${contextFolder}/${name}`]);
+  const { folder } = contextLocation(root), runs = new Map();
+  for (const entry of readChanges(root).entries) runs.set(entry.run, { file: entry.file, docs: new Set() });
+  for (const name of docs) for (const entry of parseDoc(read(root, `${folder}/${name}`), name).history) {
+    const known = runs.get(entry.run) ?? { file: null, docs: new Set() };
+    known.docs.add(`${folder}/${name}`);
+    runs.set(entry.run, known);
   }
   return runs;
 }
 
+const newIndexSource = '# Context index\n\nRead this index first, then only the docs whose Covers match the paths you are about to change.\n\n| Component | Covers | Doc |\n| --- | --- | --- |\n';
 function newDocSource(title, covers) {
-  return `# ${title}\n\nCovers: ${covers.join(', ')}\n\nLast changed by AI: none recorded\n\n## Current view\n\n<Write what the code cannot tell a reader: the invariant, its writers and readers, the adopted decisions and the known dead ends.>\n\n## Lessons\n\n## History\n`;
+  return `# ${title}\n\nCovers: ${covers.join(', ')}\n\n## Current view\n\n<Write what the code cannot tell a reader: the invariant, its writers and readers, the adopted decisions and the known dead ends.>\n\n## Lessons\n`;
 }
 
-// Insert the entry under History and the lessons under Lessons, newest first, and set the
-// last-change line. The Current view is the author's; it is never edited here.
-export function applyEntry(source, { entry, lessons, lastChange }) {
-  const lines = source.replaceAll('\r\n', '\n').split('\n');
-  const at = name => lines.findIndex(line => line === `## ${name}`);
-  const history = at('History'), lessonsAt = at('Lessons'), last = lines.findIndex(line => /^Last changed by AI:/.test(line));
-  if (history === -1 || lessonsAt === -1 || last === -1) throw Error('The doc lacks the fixed layout (Last changed by AI line, ## Lessons, ## History); fix it with cyc context lint before writing to it.');
-  const entryDate = entry.split('\n')[0].match(historyHeading)?.[1];
-  const existing = lines.flatMap((line, index) => index > history && historyHeading.test(line) ? [{ index, date: line.match(historyHeading)[1] }] : []);
-  const insertion = existing.find(item => item.date <= entryDate)?.index ?? (existing.length ? lines.length : history + 1);
-  lines.splice(insertion, 0, '', ...entry.split('\n'), '');
-  if (lessons.length) {
-    const bullets = lines.flatMap((line, index) => index > lessonsAt && index < at('History') && lessonLine.test(line) ? [{ index, date: line.match(lessonLine)[1] }] : []);
-    const lessonDate = lessons[0].match(lessonLine)?.[1];
-    const first = bullets.find(item => item.date <= lessonDate)?.index ?? (bullets.length ? at('History') : lessonsAt + 1);
-    lines.splice(first, 0, '', ...lessons);
-  }
-  // Catching up an older missing run must not relabel a newer current view.
-  if (!existing.length || entryDate >= existing[0].date) lines[last] = lastChange;
-  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n*$/, '')}\n`;
-}
-
-function indexCells(root, docPath) {
-  const parsed = parseDoc(read(root, docPath), fileName(docPath));
-  const last = parsed.lastChange && parsed.lastChange !== 'none recorded' ? `${parsed.lastChange.date} · run ${shortRun(parsed.lastChange.run)}${parsed.history[0]?.title ? ` · ${oneLine(parsed.history[0].title, 80)}` : ''}` : 'none recorded';
-  const lessons = parsed.lessons.length ? `${parsed.lessons.length} · latest: ${oneLine(parsed.lessons[0].text, 80)}` : 'none';
-  return { parsed, last, lessons };
-}
-
-export function refreshIndex(root, { staging, docs } = {}) {
-  const { folder: contextFolder, index: indexName } = contextLocation(root);
-  const table = parseIndex(read(root, indexName));
-  if (!table.header) throw Error(`${indexName} has no table with a Covers column.`);
-  const lines = table.lines;
-  const columns = { ...table.columns };
-  const width = table.header.length;
-  const added = [];
-  for (const [key, label] of [['lastChange', 'Last AI change'], ['lessons', 'Lessons']]) if (columns[key] === -1) { columns[key] = width + added.length; added.push(label); }
-  const render = cells => `| ${cells.map(c => c.replaceAll('|', '\\|')).join(' | ')} |`;
-  if (added.length) {
-    lines[table.headerLine] = render([...table.header, ...added]);
-    if (table.separatorLine >= 0) lines[table.separatorLine] = render([...Array(width + added.length)].map(() => '---'));
-  }
-  const seen = new Set();
+// Rebuild the index from the docs: Covers follows each doc, the earlier per-run columns are dropped,
+// a new doc's row goes in sorted position so two branches seldom add at the same line, and a merge
+// conflict keeps both sides' rows, one per doc. Other rows and columns stay as written.
+export function refreshIndex(root, { staging, docs, write = true } = {}) {
+  const { folder, index } = contextLocation(root);
+  const table = parseIndex(read(root, index));
+  if (!table.header) throw Error(`${index} has no table with a Covers column.`);
+  const dropped = ['lastChange', 'lessons'].map(key => table.columns[key]).filter(at => at >= 0);
+  const render = cells => `| ${cells.filter((_, at) => !dropped.includes(at)).map(c => c.replaceAll('|', '\\|')).join(' | ')} |`;
+  const rows = [], seen = new Set();
   for (const row of table.rows) {
-    if (row.malformed) continue;
-    const docPath = resolveLink(root, row.link);
-    const cells = [...row.cells, ...added.map(() => '')];
-    if (isComponentDoc(docPath, contextFolder) && existsSync(local(root, docPath))) {
-      seen.add(docPath);
-      if (!docs || docs.includes(docPath)) {
-        const { parsed, last, lessons } = indexCells(root, docPath);
-        if (parsed.covers.length) cells[columns.covers] = parsed.covers.join(', ');
-        cells[columns.lastChange] = last; cells[columns.lessons] = lessons;
-      }
+    if (row.malformed) { rows.push({ text: table.lines[row.line] }); continue; }
+    const doc = resolveLink(root, row.link), owned = isComponentDoc(doc, folder) && existsSync(local(root, doc)), cells = [...row.cells];
+    if (owned && seen.has(doc)) continue;
+    if (owned) {
+      seen.add(doc);
+      const covers = !docs || docs.includes(doc) ? parseDoc(read(root, doc), fileName(doc)).covers : [];
+      if (covers.length) cells[table.columns.covers] = covers.join(', ');
     }
-    lines[row.line] = render(cells);
+    rows.push({ text: render(cells), doc: owned ? doc : null });
   }
-  const lastRow = table.rows.length ? table.rows.at(-1).line : table.separatorLine;
-  const appended = [];
+  let addedRows = 0;
   for (const name of listDocs(root)) {
-    const docPath = `${contextFolder}/${name}`;
-    if (seen.has(docPath) || docs && !docs.includes(docPath)) continue;
-    const { parsed, last, lessons } = indexCells(root, docPath);
-    const cells = [...Array(width + added.length)].map(() => '');
-    if (columns.component >= 0) cells[columns.component] = parsed.title ?? name;
-    cells[columns.covers] = parsed.covers.join(', ');
-    cells[columns.doc] = `[${parsed.title ?? name}](${name})`;
-    cells[columns.lastChange] = last; cells[columns.lessons] = lessons;
-    appended.push(render(cells));
+    const doc = `${folder}/${name}`;
+    if (seen.has(doc) || docs && !docs.includes(doc)) continue;
+    const parsed = parseDoc(read(root, doc), name), cells = table.header.map(() => '');
+    if (table.columns.component >= 0) cells[table.columns.component] = parsed.title ?? name;
+    cells[table.columns.covers] = parsed.covers.join(', ');
+    cells[table.columns.doc] = `[${parsed.title ?? name}](${name})`;
+    const owned = rows.flatMap((row, at) => row.doc ? [at] : []);
+    rows.splice(owned.find(at => rows[at].doc > doc) ?? (owned.length ? owned.at(-1) + 1 : rows.length), 0, { text: render(cells), doc });
+    addedRows++;
   }
-  lines.splice(lastRow + 1, 0, ...appended);
-  const content = `${lines.join('\n').replace(/\n*$/, '')}\n`;
-  if (read(root, indexName) !== content) atomicWrite(local(root, indexName), content, staging);
-  return { addedColumns: added, addedRows: appended.length };
+  // A conflict that opens just above the header covers the whole table, so its opening marker goes too.
+  const opened = /^<{7} /.test(table.lines[table.headerLine - 1] ?? '') ? 1 : 0, count = mark => table.markers.filter(at => table.lines[at][0] === mark).length;
+  if (count('<') + opened !== count('=') || count('=') !== count('>')) throw Error(`${index} has a merge conflict that reaches beyond its table; resolve it by hand.`);
+  const start = table.headerLine - opened;
+  const end = Math.max(table.headerLine, table.separatorLine, ...table.rows.map(row => row.line), ...table.markers);
+  const content = `${[...table.lines.slice(0, start), render(table.header), render(table.separator ?? table.header.map(() => '---')), ...rows.map(row => row.text), ...table.lines.slice(end + 1)].join('\n').replace(/\n*$/, '')}\n`;
+  const current = read(root, index) === content;
+  if (write && !current) atomicWrite(local(root, index), content, staging);
+  return { current, addedRows, droppedColumns: dropped.map(at => table.header[at]) };
 }
 
-export function reviewContext(root, { run, since, all = false, write = false, newDoc, updateRun } = {}) {
+export function indexContext(root, { write = false } = {}) {
   root = realpathSync(root);
-  const { folder: contextFolder, index: indexName } = contextLocation(root);
-  if (newDoc !== undefined && (!docFileName.test(`${newDoc}.md`) || reservedDocs.has(`${newDoc}.md`))) throw Error(`--new needs a kebab-case component name (${docFileName.source} without .md).`);
+  const { index } = contextLocation(root);
+  if (!existsSync(local(root, index))) throw Error(`${index} does not exist.`);
+  const result = refreshIndex(root, { write });
+  const conflict = read(root, index).split('\n').some(line => conflictMarker.test(line));
+  return { ok: !conflict && (write || result.current), path: index, ...result, written: write && !result.current, ...(conflict ? { conflict: 'Merge conflict markers remain outside the table rows; resolve them by hand.' } : {}) };
+}
+
+// Completed runs that lack a change record. --write publishes them from the runs' own state and
+// never edits a doc: a doc that should have changed needs a normal run that plans it.
+export function reviewContext(root, { run, since, all = false, write = false } = {}) {
+  root = realpathSync(root);
   if (since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw Error('--since needs YYYY-MM-DD.');
-  const { exists, components } = componentsOf(root);
-  const docs = listDocs(root);
-  const recorded = recordedRuns(root, docs);
+  const recorded = recordedRuns(root, listDocs(root));
   let states;
   if (run) {
     const state = readRun(root, run);
     if (state.status !== 'complete') throw Error(`Run ${run} is ${state.status}; context proposals come from completed runs.`);
     states = [state];
   } else states = completedRuns(root);
-  const records = states.map(state => runRecord(root, state)).filter(record => !since || record.date >= since).sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId.localeCompare(b.runId));
-  const proposals = [];
-  const unmappedAll = new Map();
-  for (const record of records) {
-    const perComponent = new Map();
-    const unmapped = [];
-    const retained = new Set([...record.contextDocs, ...(record.learning?.artifacts ?? []), ...(record.errorHistory?.artifacts ?? [])]);
-    for (const file of record.files) {
-      if (file.path.startsWith('.cyc/') || [indexName, `${contextFolder}/error-ledger.md`, `${contextFolder}/verify-recipe.md`, `${contextFolder}/recipes.json`].includes(file.path)) continue;
-      let mapped = false;
-      for (const component of components) {
-        if (!covered(component.covers, file.path)) continue;
-        mapped = true;
-        const key = component.doc ?? component.component;
-        if (!perComponent.has(key)) perComponent.set(key, { ...component, files: [] });
-        perComponent.get(key).files.push(file);
-      }
-      if (!mapped && !retained.has(file.path) && !file.path.startsWith('.cyc/')) unmapped.push(file);
-    }
-    const proposal = { runId: record.runId, date: record.date, goal: record.goal, playbook: record.playbook, contextDocsTouched: record.contextDocs,
-      components: [...perComponent.values()].map(component => {
-        const alreadyRecorded = (recorded.get(record.runId) ?? []).includes(component.doc);
-        const touched = !!component.doc && (record.contextDocs.includes(component.doc) || (record.learning?.artifacts ?? []).includes(component.doc));
-        return { component: component.component, doc: component.doc, writable: component.inFolder, touched, alreadyRecorded, shouldHaveBeenTouched: !touched && component.inFolder, files: component.files, entry: entryMarkdown(record, component.files), lessons: lessonBullets(record) };
-      }),
-      unmapped, lessons: record.lessons, decisiveCheck: record.decisiveCheck, learning: record.learning, errorHistory: record.errorHistory, ledgerEntries: record.ledgerEntries };
-    // A run is caught up only when every writable component has its entry and no changed file
-    // remains unmapped. Explicit --run/--all keep the complete diagnostic view.
-    if (!run && !all && recorded.has(record.runId) && !unmapped.length && !proposal.components.some(component => component.writable && !component.alreadyRecorded)) continue;
-    if (unmapped.length && newDoc) {
-      const path = `${contextFolder}/${newDoc}.md`;
-      proposal.newDoc = { path, covers: unmapped.map(f => f.path), entry: entryMarkdown(record, unmapped), lessons: lessonBullets(record), exists: existsSync(local(root, path)) };
-    }
-    for (const file of unmapped) unmappedAll.set(file.path, [...(unmappedAll.get(file.path) ?? []), record.runId]);
-    proposals.push(proposal);
-  }
-  const result = { ok: true, index: { path: indexName, exists, components: components.length, componentDocs: docs.length }, runs: proposals, unmappedFiles: [...unmappedAll].map(([path, runs]) => ({ path, runs })), written: null,
-    note: write ? 'Entries were appended from the runs\' own records; the Current view of each doc is yours to update. Review the diff before committing.' : 'Read-only proposal from completed run records: nothing was written. Add --write to append these entries and refresh the index; --new NAME creates a doc for unmapped files.' };
+  const pending = [];
+  const runs = states.map(state => ({ state, record: runRecord(root, state) })).filter(({ record }) => !since || record.date >= since)
+    .sort((a, b) => a.record.completedAt.localeCompare(b.record.completedAt) || a.record.runId.localeCompare(b.record.runId)).flatMap(({ state, record }) => {
+      const known = recorded.get(record.runId);
+      // Explicit --run/--all also list runs that already have a record.
+      if (known && !run && !all) return [];
+      if (!known) pending.push(state);
+      return [{ runId: record.runId, date: record.date, goal: record.goal, playbook: record.playbook, contextDocsTouched: record.contextDocs, record: known?.file ?? null, earlierDocs: [...(known?.docs ?? [])], ...(known ? {} : { change: changeFor(root, state) }) }];
+    });
+  const result = { ok: true, runs, written: null, note: `${write ? 'Records were published from the runs\' own state; no doc was edited.' : 'Read-only: --write publishes each missing change record.'} A doc that should have changed needs a normal run that plans it.` };
   if (!write) return result;
-  if (!updateRun) throw Error('Completed-run catch-up needs a new active scoped update: context review --run SOURCE_ID --write --update-run UPDATE_ID. Use context prepare for current work; a reply packet cannot verify changed context.');
-  const writePaths = [...new Set([indexName, ...proposals.flatMap(p => [...p.components.filter(c => c.writable && !c.alreadyRecorded).map(c => c.doc), ...(p.newDoc ? [p.newDoc.path] : [])])])];
-  return contextUpdate(root, updateRun, writePaths, state => {
-  const retention = retentionOf(state);
-  if (!state.requiresChecks || !state.commands.length || retention?.disposition !== 'required' || writePaths.some(path => path !== indexName && !retention.features.some(f => f.doc === path))) throw Error('Catch-up needs a required feature-context plan covering these records and executable final verification. Start an implementation update with those canonical docs before Build; advisory catch-up cannot complete the repair.');
-  const staging = local(root, `.cyc/runs/${updateRun}/context-staging`);
-  const written = [];
-  for (const proposal of proposals) {
-    for (const component of proposal.components) {
-      if (!component.writable || component.alreadyRecorded) continue;
-      const source = read(root, component.doc);
-      const parsed = parseDoc(source, fileName(component.doc));
-      const blocking = parsed.issues.filter(i => ['sections', 'last-change', 'title'].includes(i.rule));
-      if (blocking.length) { written.push({ doc: component.doc, runId: proposal.runId, written: false, reason: `Fix first: ${blocking.map(i => `${i.rule} (${i.message})`).join('; ')}` }); continue; }
-      const lastChange = `Last changed by AI: ${proposal.date} · run ${proposal.runId} · files: ${component.files.map(f => f.path).join(', ')}`;
-      atomicWrite(local(root, component.doc), applyEntry(source, { entry: component.entry, lessons: component.lessons, lastChange }), staging);
-      recorded.set(proposal.runId, [...(recorded.get(proposal.runId) ?? []), component.doc]);
-      written.push({ doc: component.doc, runId: proposal.runId, written: true });
-    }
-    if (proposal.newDoc) {
-      const { path, covers, entry, lessons } = proposal.newDoc;
-      const title = newDoc.split('-').map((w, i) => i ? w : w[0].toUpperCase() + w.slice(1)).join(' ');
-      const source = existsSync(local(root, path)) ? read(root, path) : newDocSource(title, covers);
-      if (parseDoc(source, `${newDoc}.md`).history.some(e => e.run === proposal.runId)) continue;
-      mkdirSync(dirname(local(root, path)), { recursive: true });
-      atomicWrite(local(root, path), applyEntry(source, { entry, lessons, lastChange: `Last changed by AI: ${proposal.date} · run ${proposal.runId} · files: ${covers.join(', ')}` }), staging);
-      written.push({ doc: path, runId: proposal.runId, written: true, created: !proposal.newDoc.exists });
-    }
-  }
-  let index = null;
-  if (written.some(w => w.written)) {
-    if (!existsSync(local(root, indexName))) { mkdirSync(dirname(local(root, indexName)), { recursive: true }); atomicWrite(local(root, indexName), '# Context index\n\nRead the index, then the docs whose Covers match the paths you are about to change.\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n', staging); }
-    index = refreshIndex(root, { staging });
-  }
+  const written = pending.map(state => ({ runId: state.id, ...publishChange(root, state) }));
   const lint = lintContext(root, { git: false });
-  return { ...result, written, indexRefreshed: index, lint: { ok: lint.ok, index: lint.index.issues, docs: lint.docs.filter(d => !d.ok).map(d => ({ path: d.path, issues: d.issues })) } };
-  });
+  return { ...result, written, lint: { ok: lint.ok, index: lint.index.issues, docs: lint.docs.filter(d => !d.ok).map(d => ({ path: d.path, issues: d.issues })), changes: lint.changes.issues } };
+}
+
+// A component's history: the entries that name its doc or changed a file it covers, newest first.
+export function historyContext(root, { doc } = {}) {
+  root = realpathSync(root);
+  const { folder } = contextLocation(root), path = !doc ? null : /[\\/]/.test(doc) ? doc.replaceAll('\\', '/') : `${folder}/${doc.replace(/\.md$/, '')}.md`;
+  if (path && !(isComponentDoc(path, folder) && existsSync(local(root, path)))) throw Error(`${path} is not a component doc in ${folder}.`);
+  const covers = path ? parseDoc(read(root, path), fileName(path)).covers : [], own = file => !path || covered(covers, file.path);
+  const entries = readChanges(root).entries.filter(entry => !path || entry.components.some(c => c.doc === path) || entry.files.some(own))
+    .map(entry => ({ date: entry.date, run: entry.run, goal: entry.goal, result: entry.fields.result ?? 'not recorded', changed: entry.components.find(c => c.doc === path)?.note || entry.fields.changed, learned: entry.fields.learned, proof: entry.fields.proof, files: entry.files.filter(own).map(f => f.path), record: entry.file }));
+  return { ok: true, doc: path, entries, note: 'Each entry is what that run recorded at completion, not the state of the code now.' };
+}
+
+// A month's digest holds its entries, newest first. A run already in it is kept as written; a
+// record that says something else for that run is a conflict to resolve, not text to drop.
+function writeDigest(root, folder, month, entries) {
+  const path = `${folder}/${month}.md`, all = new Map();
+  for (const entry of [...(existsSync(local(root, path)) ? parseChanges(read(root, path), path) : []), ...entries]) {
+    if (!all.has(entry.run)) all.set(entry.run, entry);
+    else if (all.get(entry.run).source !== entry.source) throw Error(`Run ${entry.run} has two entries with different text for ${month}; keep one before folding.`);
+  }
+  mkdirSync(local(root, folder), { recursive: true });
+  atomicWrite(local(root, path), [...all.values()].sort(newestFirst).map(entry => entry.source).join('\n'), local(root, '.cyc/runtime/context-staging'));
+  if (parseChanges(read(root, path), path).length !== all.size) throw Error(`${path} did not keep every entry; nothing was removed.`);
+}
+
+// Fold earlier months' records into their digests. A record is removed only once its digest holds it.
+export function rollupContext(root, { before = new Date().toISOString().slice(0, 7), write = false } = {}) {
+  root = realpathSync(root);
+  if (!/^\d{4}-\d{2}$/.test(before)) throw Error('--before needs YYYY-MM.');
+  const known = readChanges(root), blocking = known.issues.find(issue => issue.rule !== 'change-duplicate');
+  if (blocking) throw Error(`Repair the changes folder first: ${blocking.message}`);
+  const months = new Map();
+  for (const name of known.files) if (name.length > 10 && name.slice(0, 7) < before) months.set(name.slice(0, 7), [...(months.get(name.slice(0, 7)) ?? []), `${known.folder}/${name}`]);
+  const digests = [...months].sort().map(([month, records]) => ({ path: `${known.folder}/${month}.md`, records }));
+  if (write) for (const [month, records] of months) {
+    writeDigest(root, known.folder, month, known.entries.filter(entry => records.includes(entry.file)));
+    for (const file of records) unlinkSync(local(root, file));
+  }
+  return { ok: true, before, digests, written: write, note: 'A digest holds the full text of the records it replaces.' };
+}
+
+// Convert docs of the earlier layout: History entries become change entries in monthly digests and
+// the doc keeps Covers, Current view and Lessons. Nothing is dropped: what one doc said differently
+// about a run goes in that doc's line, and a doc that cannot be converted completely stops the
+// whole conversion. What an entry did not record stays "not recorded".
+export function migrateContext(root, { write = false } = {}) {
+  root = realpathSync(root);
+  const { folder, index } = contextLocation(root), known = readChanges(root);
+  const runs = new Map(), docs = [], skipped = [];
+  for (const name of listDocs(root)) {
+    const path = `${folder}/${name}`, source = read(root, path), parsed = parseDoc(source, name);
+    if (parsed.layout !== 'earlier') continue;
+    const blocking = parsed.issues.find(issue => ['sections', 'history-entry', 'evidence', 'last-change', 'last-change-current'].includes(issue.rule));
+    const recorded = parsed.history.find(h => known.entries.some(entry => entry.run === h.run && !entry.components.some(c => c.doc === path)));
+    if (blocking || recorded) { skipped.push({ path, reason: blocking ? `${blocking.rule}: ${blocking.message}` : `Run ${recorded.run} already has a change entry that does not name this doc.` }); continue; }
+    for (const h of parsed.history) {
+      const run = runs.get(h.run) ?? { date: h.date, run: h.run, goal: h.title, changed: h.changed, learned: h.learned, proof: h.proof, components: [], files: new Map() };
+      const own = [['Date', h.date, run.date], ['Goal', h.title, run.goal], ['Changed', h.changed, run.changed], ['Learned', h.learned, run.learned], ['Proof', h.proof, run.proof]].filter(([, mine, theirs]) => mine && mine !== theirs).map(([label, mine]) => `${label}: ${mine}`);
+      run.components.push({ doc: path, note: [...own, ...(h.extra ?? [])].join(' / ') });
+      for (const file of h.files) run.files.set(`${file.path}@${file.hash}`, file);
+      runs.set(h.run, run);
+    }
+    const lines = source.split('\n');
+    docs.push({ path, entries: parsed.history.length, source: `${lines.slice(0, lines.indexOf('## History')).filter(line => !/^Last changed by AI:/.test(line)).join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n*$/, '')}\n` });
+  }
+  const months = new Map(), missing = 'not recorded';
+  for (const run of runs.values()) {
+    if (known.entries.some(entry => entry.run === run.run)) continue;
+    const [entry] = parseChanges(changeSource({ ...run, full: true, result: `${missing} (migrated from the doc History of the earlier layout)`, proof: run.proof ?? missing, changed: run.changed ?? missing, learned: run.learned ?? missing, files: [...run.files.values()] }));
+    months.set(run.date.slice(0, 7), [...(months.get(run.date.slice(0, 7)) ?? []), entry]);
+  }
+  write &&= !skipped.length;
+  if (write) {
+    const staging = local(root, '.cyc/runtime/context-staging');
+    for (const [month, entries] of months) writeDigest(root, known.folder, month, entries);
+    for (const doc of docs) atomicWrite(local(root, doc.path), doc.source, staging);
+    if (docs.length && existsSync(local(root, index))) refreshIndex(root, { staging });
+  }
+  return { ok: !skipped.length, docs: docs.map(({ path, entries }) => ({ path, entries })), runs: [...months.values()].flat().length, digests: [...months.keys()].sort().map(month => `${known.folder}/${month}.md`), skipped, written: write,
+    note: skipped.length ? 'Nothing was converted: repair the skipped docs first, so no history is dropped.' : 'Docs and the index are verified source. Outcomes the earlier entries did not record stay "not recorded".' };
 }
 
 // ---------------------------------------------------------------- measure: what the index path costs

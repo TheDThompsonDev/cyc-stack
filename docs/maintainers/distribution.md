@@ -17,7 +17,7 @@ npm run pack:release
 npm publish ./release-assets/cyc-stack-0.6.0.tgz --dry-run --ignore-scripts --tag next
 ```
 
-The builder validates package/plugin/lockfile identity, packs with lifecycle scripts disabled, checks required resources and the 1 MiB unpacked budget, and writes `release-assets/cyc-stack-0.6.0.tgz` plus `SHA256SUMS`. It runs no project installation and never publishes. `--output DIRECTORY` selects a different output folder. A rejected candidate has no release checksum; discard its archive. Checksums establish integrity, not publisher identity or host compatibility.
+The builder validates package/plugin/lockfile identity, packs with lifecycle scripts disabled, checks required resources and the 1.1 MiB unpacked budget (1 MiB until the owner raised it on 2026-11-11), and writes `release-assets/cyc-stack-0.6.0.tgz` plus `SHA256SUMS`. It runs no project installation and never publishes. `--output DIRECTORY` selects a different output folder. A rejected candidate has no release checksum; discard its archive. Checksums establish integrity, not publisher identity or host compatibility.
 
 The archive serves both `npm exec`/`npx` consumers and plugin hosts. It includes root `plugin.json` using the portable Agent Plugins schema, an OpenAI extension selecting the Codex adapter, and existing native compatibility manifests. Setup invokes the existing public `cyc` skill, preserving one public entry point. The inline OpenAI extension replaces the compatibility overlay, so preflight keeps their hook and presentation settings equal. [Official plugin packaging contract](https://developers.openai.com/plugins/build/plugins).
 

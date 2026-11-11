@@ -2,6 +2,18 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
+## Unreleased (after 0.9.1)
+
+- Record context history as one change record per completed run, written by the controller after verification with the check results it observed, under `<context folder>/changes/`. Component docs now hold Covers, Current view and Lessons only; finish writes no History entry or Last-changed line. Change records are kept with the project and are not verified source; any other file in that folder still is.
+- Rebuild the index from the docs without per-run cells (`cyc context index`), insert a new doc's row in sorted position and repair an index left with merge conflict markers. Two branches that finish runs in one component now merge their context files cleanly unless they changed the same line.
+- Read freshness from change records in `cyc investigate`, queried paths first, and count a committed change record in `cyc context lint`'s Git freshness.
+- Add `cyc context history`, `cyc context rollup` (one digest per earlier month) and `cyc context migrate`, which moves the History of earlier-layout docs into change records without inventing an outcome. The earlier layout still parses, lints and finishes.
+- `cyc context review --write` now publishes missing change records and never edits a doc. Its `--new` and `--update-run` options and its per-component and unmapped-file diagnostics were removed; current runs enforce owners at finish.
+- Raise the packed-archive and installed-engine size budgets from 1 MiB to 1.1 MiB (owner decision, 2026-11-11): the archive had 283 bytes left before this change.
+- Fix what an independent review demonstrated in the first candidate: paths with a space or `@` broke the record, a folder named like a record was hidden from verified source, a routine run's record or a roll-up commit could make a doc look revalidated, and migration could drop per-doc history.
+- `learning.context` rows accept optional `changed` (one line for the change record) and `lesson` (one dated line in the doc).
+- Tests cover a real two-branch Git merge and a real index conflict with local Git. Hosted merge behavior, measured reading savings and native hook activation are not established by them.
+
 ## 0.9.1 (2026-11-08)
 
 - Document recovery from a missing npm trusted-publisher connection, the first-publication validation deadline, and the distinction between a successful GitHub release, registry publication and deployment status.

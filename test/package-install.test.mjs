@@ -29,7 +29,8 @@ test('packed archive installs offline through npm without GitFetcher, including 
   for (const path of ['plugin.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json', '.cursor-plugin/plugin.json', 'skills/cyc/SKILL.md', 'hooks/codex.json', 'hooks/claude.json', 'hooks/cursor.json']) {
     assert.ok(packed.files.some(file => file.path === path), `missing plugin resource: ${path}`);
   }
-  assert.ok(packed.unpackedSize < 1024 * 1024, 'release archive must stay below 1 MiB unpacked');
+  // The owner raised this budget from 1 MiB to 1.1 MiB on 2026-11-11 for change records.
+  assert.ok(packed.unpackedSize < 1.1 * 1024 * 1024, 'release archive must stay below 1.1 MiB unpacked');
   for (const file of packed.files) {
     assert.equal(/^(?:evals\/|test\/|docs\/context\/)|^scripts\/bump-version\.mjs$|^docs\/assets\/(?:.*\.png|.*\.html|build-workflow-diagram\.mjs)$/.test(file.path), false, `development-only file packed: ${file.path}`);
   }

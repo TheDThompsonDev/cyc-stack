@@ -6,9 +6,10 @@ import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSy
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { finishRun, nextRun, readRun, recordHandoff, retryRun, startRun } from '../test-support/historical-runtime.test.fixture.mjs';
-import { applyEntry, lintContext, measureContext, parseDoc, reviewContext as actualReviewContext, rules } from '../scripts/context-review.mjs';
+import { historyContext, lintContext, measureContext, migrateContext, parseDoc, readChanges, reviewContext, rules } from '../scripts/context-review.mjs';
 import * as live from '../scripts/runtime.mjs';
 import * as contextTools from '../scripts/context-review.mjs';
 import { investigateProject } from '../scripts/project-tools.mjs';
@@ -22,8 +23,12 @@ const cli = resolve(repo, 'bin/cyc.mjs');
 const hasGit = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function put(root, name, content) { const path = join(root, name); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, content); }
-const validDoc = (title = 'Orders', covers = 'src/orders/**') => `# ${title}\n\nCovers: ${covers}\n\nLast changed by AI: none recorded\n\n## Current view\n\nOrders are persisted as text; the count derives from the same list.\n\n## Lessons\n\n## History\n`;
-const validIndex = (rows = '| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Billing | src/billing/** | [Billing](../billing.md) | reference row | reference row |') =>
+const validDoc = (title = 'Orders', covers = 'src/orders/**') => `# ${title}\n\nCovers: ${covers}\n\n## Current view\n\nOrders are persisted as text; the count derives from the same list.\n\n## Lessons\n`;
+const validIndex = (rows = '| Orders | src/orders/** | [Orders](orders.md) |\n| Billing | src/billing/** | [Billing](../billing.md) |') =>
+  `# Context index\n\nRead the index first.\n\n| Component | Covers | Doc |\n| --- | --- | --- |\n${rows}\n`;
+// The layout before change records: history lived in the doc and the index carried per-run cells.
+const earlierDoc = (title = 'Orders', covers = 'src/orders/**') => `# ${title}\n\nCovers: ${covers}\n\nLast changed by AI: none recorded\n\n## Current view\n\nOrders are persisted as text; the count derives from the same list.\n\n## Lessons\n\n## History\n`;
+const earlierIndex = (rows = '| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Billing | src/billing/** | [Billing](../billing.md) | reference row | reference row |') =>
   `# Context index\n\nRead the index first.\n\n| Component | Covers | Doc | Last AI change | Lessons |\n| --- | --- | --- | --- | --- |\n${rows}\n`;
 
 function fixture(t, { index = validIndex(), doc = validDoc() } = {}) {
@@ -58,7 +63,6 @@ function twoRuns(root) {
   return { first, second };
 }
 function run(root, args) {
-  if (args[0] === 'context' && args[1] === 'review' && args.includes('--write') && !args.includes('--update-run')) args = [...args, '--update-run', updateRun(root, args.includes('--new') ? args[args.indexOf('--new') + 1] : undefined)];
   const result = spawnSync(process.execPath, [cli, ...args, '--project', root], { encoding: 'utf8' });
   return { ...result, data: JSON.parse(result.stdout || result.stderr) };
 }
@@ -70,179 +74,177 @@ function treeBytes(root) {
 }
 const sha = (root, id, path) => readRun(root, id).handoffs.findLast(h => h.stage === 'deliver').artifacts.find(a => a.path === path).sha256;
 
-// These older backlog fixtures intentionally contain incomplete historical runs.
-// Writes now happen inside a separate authorized update, never in their receipt.
-function updateRun(root, newDoc) {
-  const names = [...new Set([...contextTools.lintContext(root, { git: false }).docs.map(d => d.path), ...(newDoc ? [`docs/context/${newDoc}.md`] : [])])];
-  return live.startRun(root, { goal: 'Repair retained historical context.', playbook: 'feature', executionMode: 'standalone', allowedPaths: ['docs/context'], contextRetention: { disposition: 'required', features: names.map(doc => ({ id: doc.split('/').at(-1).slice(0, -3), doc, paths: [] })) } }).runId;
-}
-function reviewContext(root, options = {}) { return actualReviewContext(root, options.write && !options.updateRun ? { ...options, updateRun: updateRun(root, options.newDoc) } : options); }
+// The older backlog fixtures are historical runs that planned no context, so completing them
+// publishes no change record; review is how such a run gets one.
+const entriesFor = (root, doc) => readChanges(root).entries.filter(entry => entry.components.some(c => c.doc === doc));
+const sha256 = text => createHash('sha256').update(text).digest('hex');
 
-test('context review maps two completed runs to one component and proposes both entries with their evidence, read-only', t => {
+test('context review lists completed runs that lack a change record and proposes each record from the run\'s own state, read-only', t => {
   const root = fixture(t);
   const { first, second } = twoRuns(root);
   const before = treeBytes(root);
   const result = run(root, ['context', 'review']);
   assert.equal(result.status, 0, result.stderr);
   const { data } = result;
-  assert.deepEqual(data.runs.map(r => r.runId), [first, second], 'oldest first, every unrecorded completed run');
+  assert.deepEqual(data.runs.map(r => r.runId), [first, second], 'oldest first, every completed run without a record');
   for (const [proposal, id] of [[data.runs[0], first], [data.runs[1], second]]) {
-    const orders = proposal.components.find(c => c.component === 'Orders');
-    assert.ok(orders, 'the changed file maps to the Orders row');
-    assert.equal(orders.writable, true);
-    assert.equal(orders.touched, false);
-    assert.equal(orders.shouldHaveBeenTouched, true, 'the run did not update its component doc');
-    assert.deepEqual(orders.files, [{ path: 'src/orders/order.txt', sha256: sha(root, id, 'src/orders/order.txt') }], 'files carry the final handoff hashes');
-    assert.match(orders.entry, new RegExp(`^### \\d{4}-\\d{2}-\\d{2} · run ${id} · `));
-    assert.match(orders.entry, /\*\*Decisive check:\*\* No test proof \(exempt\): .*Checks: checks passed \(exit 0\)\./);
-    assert.match(orders.entry, new RegExp(`\\*\\*Files:\\*\\* src/orders/order\\.txt@sha256:${sha(root, id, 'src/orders/order.txt').slice(0, 12)}$`, 'm'));
-    assert.ok(!proposal.components.some(c => c.component === 'Billing'), 'an untouched component is not proposed');
+    assert.equal(proposal.record, null);
+    assert.match(proposal.change.name, new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${id.slice(0, 8)}\\.md$`));
+    const text = proposal.change.source;
+    assert.match(text, new RegExp(`^# \\d{4}-\\d{2}-\\d{2} · run ${id} · `));
+    assert.match(text, /^Result: passed · checks passed \(exit 0\)$/m, 'the result is the check outcome the controller recorded');
+    assert.match(text, /^Proof: No test proof \(exempt\): /m);
+    assert.match(text, /^Components:\n\nFiles:/m, 'a run that planned no doc names none: naming a doc says the run verified it');
+    assert.match(text, new RegExp(`^- src/orders/order\\.txt@sha256:${sha(root, id, 'src/orders/order.txt')}$`, 'm'), 'files carry the full final handoff hashes');
   }
-  assert.match(data.runs[0].components[0].entry, /\*\*Learned:\*\* No reusable learning recorded for this run\./, 'a run without learning says so instead of inventing it');
-  const lessons = data.runs[1].lessons;
-  assert.ok(lessons.some(l => l.startsWith('Synthetic failures represented')), 'the error history reason becomes a lesson');
-  assert.ok(lessons.some(l => l.startsWith('Retry: The first fix hid finished orders')), 'retry reasons become lessons');
-  assert.ok(lessons.some(l => l === 'Ledger ERR-001: resolved · Count drifted from the list'), 'ledger entries naming the run become lessons');
-  assert.deepEqual(data.runs[1].ledgerEntries.map(e => e.id), ['ERR-001']);
+  assert.match(data.runs[0].change.source, /^Learned: No reusable learning recorded for this run\.$/m, 'a run without learning says so instead of inventing it');
+  const learned = data.runs[1].change.source.match(/^Learned: (.*)$/m)[1];
+  assert.match(learned, /Synthetic failures represented/, 'the error history reason is kept');
+  assert.match(learned, /Retry: The first fix hid finished orders/, 'retry reasons are kept');
+  assert.match(learned, /Ledger ERR-001: resolved · Count drifted from the list/, 'ledger entries naming the run are kept');
   assert.equal(data.written, null);
   assert.deepEqual(treeBytes(root), before, 'review without --write changes no project file');
 });
 
-test('context review --write appends the entries newest first, refreshes the index, lints clean, and is idempotent', t => {
+test('context review --write publishes one record per run, edits no doc or index, lints clean, and is idempotent', t => {
   const root = fixture(t);
   const { first, second } = twoRuns(root);
+  const doc = readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), index = readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8');
+  const receipts = [first, second].map(id => readFileSync(join(root, `.cyc/runs/${id}/state.json`)));
   const result = run(root, ['context', 'review', '--write']);
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(result.data.written.map(w => [w.doc, w.runId, w.written]), [['docs/context/orders.md', first, true], ['docs/context/orders.md', second, true]]);
+  assert.deepEqual(result.data.written.map(w => [w.runId, w.created]), [[first, true], [second, true]]);
   assert.equal(result.data.lint.ok, true, JSON.stringify(result.data.lint));
-  const doc = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
-  const parsed = parseDoc(doc, 'orders.md');
-  assert.deepEqual(parsed.issues, []);
-  assert.deepEqual(parsed.history.map(e => e.run), [second, first], 'newest first');
-  assert.equal(parsed.lastChange.run, second);
-  assert.deepEqual(parsed.lastChange.files, ['src/orders/order.txt']);
-  assert.equal(parsed.history[0].files[0].hash, `sha256:${sha(root, second, 'src/orders/order.txt').slice(0, 12)}`);
-  assert.equal(parsed.lessons.length, 3, 'the bug fix contributed three lessons, the feature none');
-  assert.ok(parsed.lessons.every(l => l.source === `run ${second.slice(0, 8)}`));
-  assert.match(doc, /## Current view\n\nOrders are persisted as text; the count derives from the same list\.\n/, 'the Current view is untouched');
-  const index = readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8');
-  const row = index.split('\n').find(line => line.includes('[Orders](orders.md)'));
-  assert.match(row, new RegExp(`\\| \\d{4}-\\d{2}-\\d{2} · run ${second.slice(0, 8)} · Fix the order count after reload\\. \\| 3 · latest: Synthetic failures`));
-  assert.match(index, /\| Billing \| src\/billing\/\*\* \| \[Billing\]\(\.\.\/billing\.md\) \| reference row \| reference row \|/, 'reference rows are kept as written');
+  assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), doc, 'the doc is never edited by review');
+  assert.equal(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), index, 'the index is never edited by review');
+  assert.deepEqual([first, second].map(id => readFileSync(join(root, `.cyc/runs/${id}/state.json`))), receipts, 'a completed receipt is not rewritten');
+  const changes = readChanges(root);
+  assert.deepEqual(changes.issues, []);
+  assert.deepEqual(changes.entries.map(e => e.run), [second, first], 'newest first');
+  assert.deepEqual(changes.files.sort(), result.data.written.map(w => w.path.split('/').at(-1)).sort());
+  assert.deepEqual(historyContext(root, { doc: 'orders' }).entries.map(e => [e.run, e.result]), [[second, 'passed · checks passed (exit 0)'], [first, 'passed · checks passed (exit 0)']]);
   const again = run(root, ['context', 'review', '--write']);
   assert.equal(again.status, 0);
-  assert.deepEqual(again.data.runs, [], 'both runs are now recorded in a doc');
-  assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), doc, 'a second write adds nothing');
+  assert.deepEqual(again.data.runs, [], 'both runs now have a record');
+  assert.deepEqual(again.data.written, [], 'a second write adds nothing');
   const forced = run(root, ['context', 'review', '--run', first, '--write']);
-  assert.equal(forced.data.runs[0].components[0].alreadyRecorded, true);
+  assert.equal(forced.data.runs[0].record, result.data.written[0].path);
+  assert.equal(forced.data.runs[0].change, undefined);
   assert.deepEqual(forced.data.written, [], 'a recorded run is not written twice');
+  assert.deepEqual(readChanges(root).files, changes.files);
   assert.equal(lintContext(root, { git: false }).ok, true);
 });
 
-test('--new creates a doc for unmapped files, with its placeholder reported, and an index row', t => {
+test('a run whose files no doc covers still gets its record, and the removed doc-writing options are refused', t => {
   const root = fixture(t);
-  const id = completeRun(root, { goal: 'Round bills.', edit: () => put(root, 'src/billing/bill.txt', 'v2') });
-  const dry = run(root, ['context', 'review', '--run', id]);
-  assert.deepEqual(dry.data.unmappedFiles, [], 'the billing reference row covers the file');
-  assert.equal(dry.data.runs[0].components[0].writable, false, 'a reference row is matched but not writable');
   put(root, 'src/shipping/ship.txt', 'v1');
   const shipped = completeRun(root, { goal: 'Ship orders.', edit: () => put(root, 'src/shipping/ship.txt', 'v2') });
-  const proposal = run(root, ['context', 'review', '--run', shipped, '--new', 'shipping']);
-  assert.deepEqual(proposal.data.unmappedFiles.map(f => f.path), ['src/shipping/ship.txt']);
-  assert.equal(proposal.data.runs[0].newDoc.path, 'docs/context/shipping.md');
-  assert.equal(proposal.data.runs[0].newDoc.exists, false);
-  const written = run(root, ['context', 'review', '--run', shipped, '--new', 'shipping', '--write']);
-  assert.deepEqual(written.data.written, [{ doc: 'docs/context/shipping.md', runId: shipped, written: true, created: true }]);
-  const parsed = parseDoc(readFileSync(join(root, 'docs/context/shipping.md'), 'utf8'), 'shipping.md');
-  assert.deepEqual(parsed.covers, ['src/shipping/ship.txt']);
-  assert.deepEqual(parsed.history.map(e => e.run), [shipped]);
-  assert.deepEqual(parsed.issues.map(i => i.rule), ['current-view'], 'the template placeholder is reported until someone writes the view');
-  assert.deepEqual(written.data.lint.docs.map(d => d.path), ['docs/context/shipping.md']);
-  assert.match(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), /\| Shipping \| src\/shipping\/ship\.txt \| \[Shipping\]\(shipping\.md\) \| \d{4}-\d{2}-\d{2} · run /);
-  assert.equal(run(root, ['context', 'review', '--new', 'Bad_Name']).status, 1);
+  const before = treeBytes(root);
+  for (const args of [['--new', 'shipping'], ['--update-run', shipped]]) {
+    const refused = run(root, ['context', 'review', '--run', shipped, '--write', ...args]);
+    assert.equal(refused.status, 1);
+    assert.match(refused.data.error, /were removed: context review --write publishes change records and never edits a doc/);
+  }
+  assert.deepEqual(treeBytes(root), before, 'a refused option writes nothing');
+  const written = run(root, ['context', 'review', '--run', shipped, '--write']);
+  assert.equal(written.data.written[0].created, true);
+  const [entry] = readChanges(root).entries;
+  assert.deepEqual(entry.components, [], 'no doc is invented for an uncovered file');
+  assert.deepEqual(entry.files.map(f => f.path), ['src/shipping/ship.txt']);
+  assert.deepEqual(historyContext(root, { doc: 'orders' }).entries, [], 'the Orders history does not claim it');
+  assert.deepEqual(historyContext(root).entries.map(e => e.run), [shipped], 'the project history has it');
 });
 
 test('the Deliver handoff records the context docs the change touched and review.md prints them', t => {
   const root = fixture(t);
-  const touched = completeRun(root, { goal: 'Document the count rule.', edit: () => { put(root, 'src/orders/order.txt', 'v2'); appendFileSync(join(root, 'docs/context/orders.md'), ''); writeFileSync(join(root, 'docs/context/orders.md'), validDoc().replace('same list.', 'same list; see count().')); } });
+  const touched = completeRun(root, { goal: 'Document the count rule.', edit: () => { put(root, 'src/orders/order.txt', 'v2'); writeFileSync(join(root, 'docs/context/orders.md'), validDoc().replace('same list.', 'same list; see count().')); } });
   const untouched = completeRun(root, { goal: 'Tweak order text.', edit: () => put(root, 'src/orders/order.txt', 'v3') });
   const deliverOf = id => readRun(root, id).handoffs.findLast(h => h.stage === 'deliver');
   assert.deepEqual(deliverOf(touched).contextDocs, ['docs/context/orders.md']);
   assert.deepEqual(deliverOf(untouched).contextDocs, []);
-  assert.match(readFileSync(join(root, `.cyc/runs/${touched}/review.md`), 'utf8'), /- Context docs touched: docs\/context\/orders\.md\. Historical catch-up requires a new scoped update: cyc context review --run /);
+  assert.match(readFileSync(join(root, `.cyc/runs/${touched}/review.md`), 'utf8'), /- Context docs touched: docs\/context\/orders\.md\. This run planned no context: cyc context review --run /);
   assert.match(readFileSync(join(root, `.cyc/runs/${untouched}/review.md`), 'utf8'), /- Context docs touched: none\./);
   const review = reviewContext(root, { all: true });
-  const byRun = Object.fromEntries(review.runs.map(r => [r.runId, r.components.find(c => c.component === 'Orders')]));
-  assert.equal(byRun[touched].touched, true);
-  assert.equal(byRun[touched].shouldHaveBeenTouched, false);
   assert.deepEqual(review.runs.find(r => r.runId === touched).contextDocsTouched, ['docs/context/orders.md']);
-  assert.equal(byRun[untouched].shouldHaveBeenTouched, true);
+  assert.deepEqual(review.runs.find(r => r.runId === untouched).contextDocsTouched, []);
 });
 
-test('every structure rule is rejected by name and a valid doc passes', t => {
-  const good = validDoc();
+test('every structure rule is rejected by name; a valid doc passes in the current and in the earlier layout', t => {
+  const good = validDoc(), earlier = earlierDoc();
   assert.deepEqual(parseDoc(good, 'orders.md').issues, []);
+  assert.equal(parseDoc(good, 'orders.md').layout, 'current');
+  assert.deepEqual(parseDoc(earlier, 'orders.md').issues, [], 'a doc that still holds History keeps linting');
+  assert.equal(parseDoc(earlier, 'orders.md').layout, 'earlier');
   const cases = {
     name: [good, 'Orders.md'],
     title: [good.replace('# Orders', 'Orders'), 'orders.md'],
     covers: [good.replace('Covers: src/orders/**', 'Covers: ../outside/**'), 'orders.md'],
-    'last-change': [good.replace('Last changed by AI: none recorded', 'Last changed by AI: yesterday'), 'orders.md'],
-    sections: [good.replace('## Lessons\n\n## History', '## History\n\n## Lessons'), 'orders.md'],
+    sections: [good + '\n## Notes\n', 'orders.md'],
     'current-view': [good.replace('Orders are persisted as text; the count derives from the same list.', '<Write the view here.>'), 'orders.md'],
     'lesson-dated': [good.replace('## Lessons\n', '## Lessons\n\n- Counts drift when two filters exist.\n'), 'orders.md'],
-    'history-entry': [good + '\n### Added the count\n**Files:** src/orders/order.txt@sha256:0123456789ab\n', 'orders.md'],
-    evidence: [good + '\n### 2026-11-01 · run abcd1234 · Added the count\n**Changed:** count.\n', 'orders.md'],
-    'last-change-current': [good + '\n### 2026-11-01 · run abcd1234 · Added the count\n**Files:** src/orders/order.txt@sha256:0123456789ab\n', 'orders.md'],
-    size: [good + '\n### 2026-11-01 · run abcd1234 · Big\n**Files:** a@0123456\n' + '\n'.repeat(300), 'orders.md']
+    size: [good + '\n'.repeat(300), 'orders.md'],
+    'last-change': [earlier.replace('Last changed by AI: none recorded', 'Last changed by AI: yesterday'), 'orders.md'],
+    'history-entry': [earlier + '\n### Added the count\n**Files:** src/orders/order.txt@sha256:0123456789ab\n', 'orders.md'],
+    evidence: [earlier + '\n### 2026-11-01 · run abcd1234 · Added the count\n**Changed:** count.\n', 'orders.md'],
+    'last-change-current': [earlier + '\n### 2026-11-01 · run abcd1234 · Added the count\n**Files:** src/orders/order.txt@sha256:0123456789ab\n', 'orders.md']
   };
   for (const [rule, [source, name]] of Object.entries(cases)) {
     const issues = parseDoc(source, name).issues;
     assert.ok(issues.some(i => i.rule === rule), `${rule}: expected it among ${JSON.stringify(issues)}`);
     assert.ok(rule in rules, `${rule} is documented`);
   }
+  assert.ok(parseDoc(earlier.replace('## Lessons\n\n## History', '## History\n\n## Lessons'), 'orders.md').issues.some(i => i.rule === 'sections'), 'the earlier layout keeps its section order');
+  assert.ok(parseDoc(good + '\n## History\n', 'orders.md').issues.some(i => i.rule === 'last-change'), 'a History section without its last-change line is the earlier layout, incomplete');
   const twoH1 = parseDoc(good + '\n# Another component\n', 'orders.md').issues;
   assert.ok(twoH1.some(i => i.rule === 'title' && /found 2/.test(i.message)), 'one component per file');
-  const notNewestFirst = good + '\n### 2026-10-01 · run aaaa1 · Old\n**Files:** a@0123456\n\n### 2026-11-01 · run bbbb2 · New\n**Files:** a@0123456\n';
+  const notNewestFirst = earlier + '\n### 2026-10-01 · run aaaa1 · Old\n**Files:** a@0123456\n\n### 2026-11-01 · run bbbb2 · New\n**Files:** a@0123456\n';
   assert.ok(parseDoc(notNewestFirst.replace('none recorded', '2026-10-01 · run aaaa1 · files: a'), 'orders.md').issues.some(i => i.rule === 'history-entry' && /newest first/.test(i.message)));
-  assert.ok(parseDoc(good + '\n### 2026-11-01 · run a1 · Short id\n**Files:** a@0123456\n', 'orders.md').issues.some(i => i.rule === 'history-entry' && /Unreadable entry heading/.test(i.message)), 'a run id needs at least four characters');
+  assert.ok(parseDoc(earlier + '\n### 2026-11-01 · run a1 · Short id\n**Files:** a@0123456\n', 'orders.md').issues.some(i => i.rule === 'history-entry' && /Unreadable entry heading/.test(i.message)), 'a run id needs at least four characters');
   const root = fixture(t, { doc: cases['lesson-dated'][0] });
   const result = run(root, ['context', 'lint', '--doc', 'docs/context/orders.md']);
   assert.equal(result.status, 1, 'a failing lint exits 1');
   assert.deepEqual(result.data.docs[0].issues.map(i => i.rule), ['lesson-dated']);
-  assert.equal(result.data.docs[0].issues[0].line, 13);
+  assert.equal(result.data.docs[0].issues[0].line, 11);
 });
 
-test('index rows are checked against their docs: columns, links, coverage, last change, lessons, one row per doc', t => {
-  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md) | 2026-01-01 · run deadbeef · Old | 4 · latest: none |\n| Ghost | src/ghost/** | [Ghost](ghost.md) | none recorded | none |\n| Orders again | src/orders/** | [Orders](orders.md) | none recorded | none |') });
+test('index rows are checked against their docs: columns, links, coverage, one row per doc, and no per-run cells', t => {
+  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md) |\n| Ghost | src/ghost/** | [Ghost](ghost.md) |\n| Orders again | src/orders/** | [Orders](orders.md) |') });
   put(root, 'docs/context/billing-rules.md', validDoc('Billing rules', 'src/billing/**'));
   const result = lintContext(root, { git: false });
   assert.equal(result.ok, false);
-  const rulesHit = result.index.issues.map(i => i.rule).sort();
-  assert.deepEqual(rulesHit, ['toc-last-change', 'toc-lessons', 'toc-link', 'toc-unindexed', 'toc-unindexed']);
+  assert.deepEqual(result.index.issues.map(i => i.rule).sort(), ['toc-link', 'toc-unindexed', 'toc-unindexed']);
   assert.ok(result.index.issues.some(i => i.rule === 'toc-unindexed' && /billing-rules\.md has no index row/.test(i.message)));
   assert.ok(result.index.issues.some(i => i.rule === 'toc-unindexed' && /more than one row/.test(i.message)));
-  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/**, src/legacy/** | [Orders](orders.md) | none recorded | none |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) | none recorded | none |'));
+  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/**, src/legacy/** | [Orders](orders.md) |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) |'));
   assert.deepEqual(lintContext(root, { git: false }).index.issues.map(i => i.rule), ['toc-covers']);
   put(root, 'docs/context/INDEX.md', '# Index\n\n| Area | Covers | Record |\n| --- | --- | --- |\n| Orders | src/orders/** | [Orders](orders.md) |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) |\n');
-  const old = lintContext(root, { git: false });
-  assert.deepEqual(old.index.issues.map(i => [i.rule, i.message]), [['toc-columns', 'Missing column last ai change.'], ['toc-columns', 'Missing column lessons.']], 'an older index is accepted by investigate but told what it lacks');
-  const id = completeRun(root, { goal: 'Persist orders.', edit: () => put(root, 'src/orders/order.txt', 'v2') });
-  const written = reviewContext(root, { run: id, write: true });
-  assert.equal(written.lint.ok, true);
-  assert.deepEqual(written.indexRefreshed, { addedColumns: ['Last AI change', 'Lessons'], addedRows: 0 });
-  assert.match(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), /^\| Area \| Covers \| Record \| Last AI change \| Lessons \|$/m, '--write adds the two columns to an older index');
+  assert.deepEqual(lintContext(root, { git: false }).index.issues, [], 'the three columns under their older names are a complete index');
+  // The earlier index carried a last-change and a lessons cell per row: the cells two branches always collided on.
+  put(root, 'docs/context/INDEX.md', earlierIndex('| Orders | src/orders/** | [Orders](orders.md) | 2026-01-01 · run deadbeef · Old | 4 · latest: none |\n| Billing | src/billing/** | [Billing](../billing.md) | reference row | reference row |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) | none recorded | none |'));
+  assert.deepEqual(lintContext(root, { git: false }).index.issues.map(i => [i.rule, i.message]), [['toc-columns', 'Per-run columns (Last AI change, Lessons) are no longer kept; cyc context index --write drops them.']]);
+  const dry = run(root, ['context', 'index']);
+  assert.equal(dry.status, 1, 'an index that differs from the docs exits 1 without --write');
+  assert.deepEqual([dry.data.current, dry.data.written, dry.data.droppedColumns], [false, false, ['Last AI change', 'Lessons']]);
+  const written = run(root, ['context', 'index', '--write']);
+  assert.equal(written.status, 0, written.stderr);
+  assert.equal(written.data.written, true);
+  assert.equal(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), '# Context index\n\nRead the index first.\n\n| Component | Covers | Doc |\n| --- | --- | --- |\n| Orders | src/orders/** | [Orders](orders.md) |\n| Billing | src/billing/** | [Billing](../billing.md) |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) |\n', 'the per-run columns are dropped; rows, the reference row and the prose are kept');
+  assert.equal(lintContext(root, { git: false }).ok, true);
+  assert.equal(run(root, ['context', 'index']).data.current, true);
   const missingIndex = fixture(t, { index: null });
   assert.deepEqual(lintContext(missingIndex, { git: false }).index.issues.map(i => i.rule), ['toc-unindexed']);
+  assert.equal(run(missingIndex, ['context', 'index']).status, 1, 'no index to rebuild');
 });
 
-test('--write refuses a doc without the layout and names what to fix; review refuses an unfinished run', t => {
+test('review publishes a record without touching a free-form doc, and refuses an unfinished run', t => {
   const root = fixture(t, { doc: '# Orders\n\nFree-form notes about orders.\n' });
   const id = completeRun(root, { goal: 'Persist orders.', edit: () => put(root, 'src/orders/order.txt', 'v2') });
   const before = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
   const result = run(root, ['context', 'review', '--run', id, '--write']);
   assert.equal(result.status, 0, JSON.stringify(result.data));
-  assert.equal(result.data.written[0].written, false);
-  assert.match(result.data.written[0].reason, /^Fix first: last-change \(Missing "Last changed by AI:" line\.\); sections \(Found sections: none\.\)/);
+  assert.equal(result.data.written[0].created, true);
+  assert.deepEqual(result.data.lint.changes, [], 'the record itself is well formed');
+  assert.deepEqual(result.data.lint.docs.map(d => d.path), ['docs/context/orders.md'], 'the doc still needs its layout, and says so');
   assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), before, 'nothing was written to the nonconforming doc');
   const running = startRun(root, { goal: 'Still running.', playbook: 'feature', criteria: [{ id: 'c1', description: 'x' }], allowedPaths: ['src'] }).runId;
   const refused = run(root, ['context', 'review', '--run', running]);
@@ -286,7 +288,7 @@ test('a stale index entry is detected against git, and committing the doc makes 
 test('context measure counts the index path against every doc and the run records without claiming savings', t => {
   const root = fixture(t);
   put(root, 'docs/context/billing-rules.md', validDoc('Billing rules', 'src/billing/**'));
-  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) | none recorded | none |'));
+  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md) |\n| Billing rules | src/billing/** | [Billing rules](billing-rules.md) |'));
   const id = completeRun(root, { goal: 'Persist orders.', edit: () => put(root, 'src/orders/order.txt', 'v2') });
   const chars = name => [...readFileSync(join(root, 'docs/context', name), 'utf8').replaceAll('\r\n', '\n')].length;
   const result = run(root, ['context', 'measure', '--path', 'src/orders/order.txt']);
@@ -309,7 +311,7 @@ test('context measure counts the index path against every doc and the run record
 test('the entry skill reads the index first and the context method states the rules, without claiming savings as fact', () => {
   const entry = readFileSync(join(repo, 'skills/cyc/SKILL.md'), 'utf8');
   assert.match(entry, /Read the project's context index first, `docs\/context\/INDEX\.md`, and then only the component docs whose Covers match/);
-  assert.match(entry, /Completed-run catch-up needs a new scoped update/);
+  assert.match(entry, /the controller publishes the run's change record at completion/);
   const method = readFileSync(join(repo, 'methods/cyc-context/SKILL.md'), 'utf8');
   assert.match(method, /Read the target index, then matched records/);
   for (const rule of Object.keys(rules)) assert.ok(method.includes(`\`${rule}\``) || method.includes(`(${rule}`), `the method names rule ${rule}`);
@@ -318,7 +320,7 @@ test('the entry skill reads the index first and the context method states the ru
 });
 
 test('context measurement counts every discovered local link once and excludes unrelated or unsafe documents', t => {
-  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md), [Billing](../billing.md#rules), [Again](../billing.md), [Missing](missing.md), [Web](https://example.invalid/doc), [Here](#section), [Index](INDEX.md) | none recorded | none |\n| Unrelated | src/billing/** | [Private](../unrelated.md) | reference row | reference row |') });
+  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md), [Billing](../billing.md#rules), [Again](../billing.md), [Missing](missing.md), [Web](https://example.invalid/doc), [Here](#section), [Index](INDEX.md) |\n| Unrelated | src/billing/** | [Private](../unrelated.md) |') });
   put(root, 'docs/unrelated.md', 'Not relevant to orders.');
   const paths = ['src/orders/order.txt'];
   const discovered = investigateProject(root, { paths });
@@ -329,57 +331,55 @@ test('context measurement counts every discovered local link once and excludes u
   assert.equal(measured.tocPath.chars, expected.reduce((total, path) => total + [...readFileSync(join(root, path), 'utf8').replaceAll('\r\n', '\n')].length, 0));
   assert.ok(!measured.tocPath.files.some(f => f.path.includes('unrelated') || f.path.includes('missing')));
   assert.deepEqual(treeBytes(root), before, 'measurement stays read-only');
-  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md), [Escape](../../../outside.md) | none recorded | none |'));
+  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md), [Escape](../../../outside.md) |'));
   assert.throws(() => measureContext(root, { paths }), /canonical/, 'a later link cannot escape the project');
 });
 
-function recordOneComponent(root, id, path = 'docs/context/orders.md') {
-  const proposal = reviewContext(root, { run: id }).runs[0];
-  const component = proposal.components.find(c => c.doc === path);
-  put(root, path, applyEntry(readFileSync(join(root, path), 'utf8'), { entry: component.entry, lessons: component.lessons, lastChange: `Last changed by AI: ${proposal.date} · run ${id} · files: ${component.files.map(f => f.path).join(', ')}` }));
-}
-
-test('batch context review retains a partially recorded run and writes only the missing component', t => {
-  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Order access | src/orders/** | [Access](access.md) | none recorded | none |') });
-  put(root, 'docs/context/access.md', validDoc('Order access'));
+test('a run recorded in the History of an earlier-layout doc is not published twice, and migration keeps it once without inventing its outcome', t => {
+  const root = fixture(t, { doc: earlierDoc(), index: earlierIndex() });
   const id = completeRun(root, { goal: 'Keep order access consistent.', edit: () => put(root, 'src/orders/order.txt', 'v2') });
-  recordOneComponent(root, id);
-  const original = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
-  const before = treeBytes(root);
-  const pending = run(root, ['context', 'review']);
-  assert.equal(pending.status, 0, pending.stderr);
-  assert.deepEqual(pending.data.runs.map(r => r.runId), [id], 'one recorded component cannot hide another component');
-  assert.deepEqual(pending.data.runs[0].components.map(c => [c.doc, c.alreadyRecorded]), [['docs/context/orders.md', true], ['docs/context/access.md', false]]);
-  assert.deepEqual(treeBytes(root), before, 'proposal does not write');
-  assert.deepEqual(reviewContext(root, { since: '2099-01-01' }).runs, [], 'date filtering still applies');
-  const written = reviewContext(root, { write: true });
-  assert.deepEqual(written.written.map(w => w.doc), ['docs/context/access.md']);
-  assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), original, 'existing component history is never duplicated or rewritten');
-  assert.equal(written.lint.ok, true, JSON.stringify(written.lint));
-  assert.deepEqual(reviewContext(root).runs, [], 'fully recorded runs leave the default backlog');
-  assert.equal(reviewContext(root, { all: true }).runs.length, 1, '--all keeps the explicit diagnostic view');
-  assert.deepEqual(reviewContext(root, { write: true }).written, [], 'repeating the write is idempotent');
+  const hash = sha(root, id, 'src/orders/order.txt');
+  put(root, 'docs/context/orders.md', earlierDoc().replace('Last changed by AI: none recorded', `Last changed by AI: 2026-11-01 · run ${id} · files: src/orders/order.txt`).replace('## Lessons\n', '## Lessons\n\n- 2026-11-01 · run fixture: Counts drift when two filters exist.\n')
+    + `\n### 2026-11-01 · run ${id} · Keep order access consistent.\n**Changed:** Access stays consistent.\n**Learned:** Nothing reusable.\n**Decisive check:** Planned commands: node --test. Final outcomes are not yet claimed.\n**Files:** src/orders/order.txt@sha256:${hash}\n`);
+  put(root, 'docs/context/INDEX.md', earlierIndex(`| Orders | src/orders/** | [Orders](orders.md) | 2026-11-01 · run ${id.slice(0, 8)} · Keep order access consistent. | 1 · latest: Counts drift |\n| Billing | src/billing/** | [Billing](../billing.md) | reference row | reference row |`));
+  assert.equal(lintContext(root, { git: false }).docs[0].ok, true, 'the earlier layout still lints');
+  assert.deepEqual(reviewContext(root).runs, [], 'the History entry already records the run');
+  const listed = reviewContext(root, { all: true }).runs[0];
+  assert.deepEqual([listed.record, listed.earlierDocs, listed.change], [null, ['docs/context/orders.md'], undefined]);
+  assert.deepEqual(reviewContext(root, { write: true }).written, []);
+  assert.deepEqual(readChanges(root).files, []);
+  const before = treeBytes(root), dry = run(root, ['context', 'migrate']);
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.deepEqual([dry.data.written, dry.data.runs, dry.data.docs, dry.data.digests], [false, 1, [{ path: 'docs/context/orders.md', entries: 1 }], ['docs/context/changes/2026-11.md']]);
+  assert.deepEqual(treeBytes(root), before, 'a dry run writes nothing');
+  assert.equal(run(root, ['context', 'migrate', '--write']).status, 0);
+  const [entry, ...others] = readChanges(root).entries;
+  assert.deepEqual(others, []);
+  assert.deepEqual([entry.file, entry.run, entry.date, entry.goal], ['docs/context/changes/2026-11.md', id, '2026-11-01', 'Keep order access consistent.']);
+  assert.equal(entry.fields.result, 'not recorded (migrated from the doc History of the earlier layout)', 'no outcome is invented for an old run');
+  assert.deepEqual([entry.fields.changed, entry.fields.learned, entry.fields.proof], ['Access stays consistent.', 'Nothing reusable.', 'Planned commands: node --test. Final outcomes are not yet claimed.'], 'what the entry said is kept word for word');
+  assert.deepEqual([entry.components, entry.files], [[{ doc: 'docs/context/orders.md', note: '' }], [{ path: 'src/orders/order.txt', hash: `sha256:${hash}` }]]);
+  const doc = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
+  assert.equal(doc, '# Orders\n\nCovers: src/orders/**\n\n## Current view\n\nOrders are persisted as text; the count derives from the same list.\n\n## Lessons\n\n- 2026-11-01 · run fixture: Counts drift when two filters exist.\n', 'the doc keeps its view and lessons and loses only the history');
+  assert.match(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), /\| Component \| Covers \| Doc \|\n\| --- \| --- \| --- \|\n\| Orders \| src\/orders\/\*\* \| \[Orders\]\(orders\.md\) \|\n\| Billing \| src\/billing\/\*\* \| \[Billing\]\(\.\.\/billing\.md\) \|\n$/);
+  assert.equal(lintContext(root, { git: false }).ok, true);
+  assert.equal(investigateProject(root, { paths: ['src/orders/order.txt'] }).contexts[0].recordEvidence[0].status, 'matches', 'the migrated hash still binds the doc to its source');
+  assert.equal(reviewContext(root, { all: true }).runs[0].record, 'docs/context/changes/2026-11.md');
+  const migrated = treeBytes(root), again = migrateContext(root, { write: true });
+  assert.deepEqual([again.docs, again.runs], [[], 0]);
+  assert.deepEqual(treeBytes(root), migrated, 'migration is idempotent');
 });
 
-test('batch context review keeps unmapped files and preserves newer history while catching up older entries', t => {
-  const root = fixture(t, { index: validIndex('| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Order access | src/orders/** | [Access](access.md) | none recorded | none |') });
-  const newer = '2099-01-01 · run future-run';
-  put(root, 'docs/context/access.md', validDoc('Order access').replace('Last changed by AI: none recorded', `Last changed by AI: ${newer} · files: src/orders/order.txt`).replace('## Lessons\n', '## Lessons\n\n- 2099-01-01 · run future-run: Later constraint.\n').replace('## History\n', `## History\n\n### ${newer} · Later change\n**Files:** src/orders/order.txt@abcdef1\n`));
-  const id = completeRun(root, { goal: 'Keep cross-component knowledge.', retry: 'An older failed attempt must remain below later lessons.', edit: () => { put(root, 'src/orders/order.txt', 'v2'); put(root, 'src/new-area/value.txt', 'v2'); } });
-  recordOneComponent(root, id);
-  const pending = reviewContext(root);
-  assert.deepEqual(pending.unmappedFiles, [{ path: 'src/new-area/value.txt', runs: [id] }]);
-  const written = reviewContext(root, { write: true, newDoc: 'new-area' });
-  const access = parseDoc(readFileSync(join(root, 'docs/context/access.md'), 'utf8'), 'access.md');
-  assert.deepEqual(access.history.map(h => h.run), ['future-run', id], 'catch-up entries do not become the newest history');
-  assert.equal(access.lastChange.run, 'future-run');
-  assert.equal(access.lessons[0].source, 'run future-run');
-  assert.ok(written.written.some(w => w.doc === 'docs/context/new-area.md' && w.created));
-  assert.deepEqual(reviewContext(root).runs, [], 'the new component resolves the unmapped backlog');
-  // A run still needs a proposal when its only missing context is an unmapped file.
-  rmSync(join(root, 'docs/context/new-area.md'));
-  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md) | none recorded | none |\n| Order access | src/orders/** | [Access](access.md) | none recorded | none |'));
-  assert.deepEqual(reviewContext(root).runs.map(r => r.runId), [id]);
+test('migration skips a doc whose History it cannot read completely, and says why', t => {
+  const unreadable = earlierDoc() + '\n### Added the count\n**Files:** src/orders/order.txt@sha256:0123456789ab\n';
+  const root = fixture(t, { doc: unreadable, index: earlierIndex() });
+  const result = run(root, ['context', 'migrate', '--write']);
+  assert.equal(result.status, 1, 'a skipped doc is reported as not ok');
+  assert.deepEqual(result.data.docs, []);
+  assert.deepEqual(result.data.skipped.map(s => s.path), ['docs/context/orders.md']);
+  assert.match(result.data.skipped[0].reason, /^history-entry: Unreadable entry heading/);
+  assert.equal(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), unreadable, 'history that cannot be read is not dropped');
+  assert.deepEqual(readChanges(root).files, []);
 });
 
 test('installed context discovery works for a fresh user and a teammate without private run history', t => {
@@ -389,7 +389,7 @@ test('installed context discovery works for a fresh user and a teammate without 
   assert.equal(installProject(root, { hosts: ['codex'] }).ok, true);
   put(root, '.cyc/config.json', config);
   put(root, 'docs/billing.md', 'Orders must use the existing server permission rules. Preserve this boundary.');
-  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md), [Permission boundary](../billing.md) | none recorded | none |'));
+  put(root, 'docs/context/INDEX.md', validIndex('| Orders | src/orders/** | [Orders](orders.md), [Permission boundary](../billing.md) |'));
   const installedCli = join(root, '.cyc/engine/bin/cyc.mjs');
   const invoke = (project, action) => {
     const result = spawnSync(process.execPath, [join(project, '.cyc/engine/bin/cyc.mjs'), action, ...(action === 'context' ? ['measure'] : []), '--project', project, '--path', 'src/orders/order.txt'], { encoding: 'utf8' });
@@ -447,18 +447,30 @@ test('retention: normal finish scaffolds target records, rejects placeholders, t
   const first = live.finishRun(root, id, structuredClone(input));
   assert.equal(first.status, 'needs-context', JSON.stringify(first)); assert.equal(first.finished, false); assert.equal(live.readRun(root, id).verification, null);
   assert.equal(lintContext(root, { git: false }).ok, false);
+  assert.deepEqual(readChanges(root).files, [], 'a run that has not completed leaves no change record');
   input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }];
   const second = live.finishRun(root, id, input); assert.equal(second.finished, true, JSON.stringify(second));
   const state = live.readRun(root, id);
   assert.deepEqual(state.handoffs.at(-1).contextDocs, ['docs/context/orders.md']);
   assert.equal(lintContext(root, { git: false }).ok, true);
-  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.filter(h => h.run === id).length, 1);
+  const retained = readFileSync(join(root, 'docs/context/orders.md'), 'utf8');
+  assert.equal(parseDoc(retained, 'orders.md').layout, 'current');
+  assert.doesNotMatch(retained, /Last changed by AI|## History/, 'finish writes no per-run entry into the doc');
+  assert.doesNotMatch(readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8'), /Last AI change|Lessons/, 'the index carries no per-run cells');
+  const [entry, ...others] = readChanges(root).entries;
+  assert.deepEqual(others, [], 'one record for the one completed run');
+  assert.deepEqual([entry.run, entry.fields.result, entry.file], [id, 'passed · checks passed (exit 0)', state.changeRecord.path], 'the record states the outcome the controller observed after the checks');
+  assert.deepEqual([entry.components, entry.files], [[{ doc: 'docs/context/orders.md', note: '' }], [{ path: 'src/orders/order.txt', hash: `sha256:${sha256('v2')}` }]]);
+  assert.equal(second.changeRecord.path, entry.file);
   assert.equal(state.verification.sourceHash, state.handoffs.at(-1).sourceHash);
+  assert.equal(live.sourceSnapshot(root).hash, state.verification.sourceHash, 'publishing the record leaves verified source unchanged');
+  assert.equal(live.finishRun(root, id, {}).changeRecord.path, entry.file, 'resuming a completed finish reports the same record');
+  assert.equal(readChanges(root).files.length, 1, 'and does not write a second one');
   const found = investigateProject(root, { paths: ['src/orders/order.txt'] }); assert(found.contexts.some(c => c.records.some(r => r.path === 'docs/context/orders.md')));
 });
-test('retention: learning recorded cannot conceal the audited missing History mismatch', t => {
-  const bad = validDoc().replace('Last changed by AI: none recorded', 'Last changed by AI: 2026-11-04 · run ed2b9913-a853-46b9-82da-3da9fe989c7f · files: src/orders/order.txt');
-  const { root, id, input } = currentFeature(t, {}, { doc: bad, index: validIndex('| Orders | src/orders/** | [Orders](orders.md) | 2026-11-04 · run ed2b9913 | none |') });
+test('retention: an earlier-layout doc whose last-change line names a missing History entry still stops finish', t => {
+  const bad = earlierDoc().replace('Last changed by AI: none recorded', 'Last changed by AI: 2026-11-04 · run ed2b9913-a853-46b9-82da-3da9fe989c7f · files: src/orders/order.txt');
+  const { root, id, input } = currentFeature(t, {}, { doc: bad, index: earlierIndex('| Orders | src/orders/** | [Orders](orders.md) | 2026-11-04 · run ed2b9913 | none |') });
   assert(lintContext(root, { git: false }).docs[0].issues.some(i => i.rule === 'last-change-current') || !parseDoc(bad, 'orders.md').history.length);
   input.assessment.learning.context = [{ id: 'orders', currentView: retainedView }];
   assert.throws(() => live.finishRun(root, id, input), /metadata\/history|older run|incomplete/);
@@ -477,7 +489,7 @@ test('retention: focused records reject missing links, mappings, placeholders an
     ['broken-link', root => put(root, 'docs/context/INDEX.md', readFileSync(join(root, 'docs/context/INDEX.md'), 'utf8').replace('(orders.md)', '(missing.md)'))],
     ['missing-mapping', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace('Covers: src/orders/order.txt', 'Covers: src/unrelated.mjs'))],
     ['inline-placeholder', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace(retainedView, 'Still unfinished: <Describe the feature contracts here>.'))],
-    ['last-history', root => put(root, 'docs/context/orders.md', readFileSync(join(root, 'docs/context/orders.md'), 'utf8').replace(/^Last changed by AI:.+$/m, 'Last changed by AI: 2026-11-05 · run other-run · files: src/orders/order.txt'))]
+    ['source-after-authoring', root => put(root, 'src/orders/order.txt', 'v3')]
   ];
   for (const [kind, corrupt] of corruptions) {
     const { root, id } = currentFeature(t);
@@ -486,6 +498,13 @@ test('retention: focused records reject missing links, mappings, placeholders an
     assert.equal(contextTools.checkRetention(root, live.readRun(root, id), live.sourceSnapshot(root).files).ok, false, kind);
     const blocked = live.verifyRun(root, id); assert.equal(blocked.status, 'needs-context', kind); assert.equal(live.readRun(root, id).verification, null);
   }
+  // Only change records are exempt from verified source. Any other file in that folder is named by
+  // the gate and, being ordinary source outside this run's scope, stops the run.
+  const { root: foreign, id: foreignId } = currentFeature(t);
+  assert.equal(live.prepareRunContext(foreign, foreignId, { records: [{ id: 'orders', currentView: retainedView }] }).ok, true);
+  put(foreign, 'docs/context/changes/notes.txt', 'Not a change record.');
+  assert(contextTools.checkRetention(foreign, live.readRun(foreign, foreignId), live.sourceSnapshot(foreign).files).issues.some(i => i.rule === 'change-name'));
+  assert.equal(live.verifyRun(foreign, foreignId).status, 'halted'); assert.equal(live.readRun(foreign, foreignId).verification, null);
   for (const doc of ['docs/context/INDEX.md', 'docs/context/error-ledger.md', 'docs/context/verify-recipe.md', 'docs/feature-guide.md', '.cyc/runtime/handoff.md']) {
     const root = fixture(t, { index: null, doc: null });
     assert.throws(() => live.startRun(root, { goal: 'Add an order feature.', playbook: 'feature', contextRetention: { disposition: 'required', features: [{ id: 'orders', doc, paths: ['src/orders/order.txt'] }] } }), /canonical|feature/);
@@ -507,10 +526,12 @@ test('retention: changed existing feature revalidates its record; distinct featu
   const a = { ...fixtureAssessment(live.readRun(root, nextId), 'verify'), ...fixtureAssessment(live.readRun(root, nextId), 'deliver') };
   a.learning = { status: 'recorded', reason: 'Revalidate existing order knowledge and separately retain billing.', artifacts: ['docs/context/orders.md', 'docs/context/billing.md'] };
   const nextInput = { summary: 'Order v3 and billing v2 are isolated persistence fixtures.', passedEvidence: 'Fixture checks.', assessment: a };
-  assert.equal(live.finishRun(root, nextId, structuredClone(nextInput)).status, 'needs-context', 'generated History cannot masquerade as authored contract revalidation');
+  assert.equal(live.finishRun(root, nextId, structuredClone(nextInput)).status, 'needs-context', 'an unchanged view after its source changed is not revalidation');
   a.learning.context = [{ id: 'orders', currentView: retainedView + ' This change now retains the third fixture value.' }, { id: 'billing', currentView: 'Billing owns the text in src/billing/bill.txt and is independent of orders. Its local check has no network or payment integration; the fixture does not certify a billing service. Keep billing decisions separate, run the configured check, and inspect real integrations before reuse. Ignored receipts are local evidence only.' }];
   assert.equal(live.finishRun(root, nextId, nextInput).finished, true);
-  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.length, 2);
+  assert.deepEqual(entriesFor(root, 'docs/context/orders.md').map(e => e.run), [nextId, id], 'each completed run left its own record naming the doc');
+  assert.deepEqual(entriesFor(root, 'docs/context/billing.md').map(e => e.run), [nextId]);
+  assert.equal(parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md').history.length, 0);
   assert.deepEqual(readFileSync(join(root, 'docs/context/unrelated.md')), unrelated);
   assert.deepEqual(live.readRun(root, nextId).handoffs.at(-1).contextDocs, ['docs/context/orders.md', 'docs/context/billing.md']);
 });
@@ -537,7 +558,7 @@ test('retention: changed shared entrypoints require every indexed canonical owne
     ['contract-tests', 'test/shared-contract.test.mjs', 'export const expected=false;', 'export const expected=true;']
   ]) for (const includeShared of [false, true]) {
     const doc = `docs/context/${owner}.md`;
-    const root = fixture(t, { doc: validDoc('Orders', `src/orders/order.mjs, ${sharedPath}`), index: validIndex(`| Orders | src/orders/order.mjs, ${sharedPath} | [Orders](orders.md) | none recorded | none |\n| Shared ${owner} | ${sharedPath} | [Shared](${owner}.md) | none recorded | none |`) });
+    const root = fixture(t, { doc: validDoc('Orders', `src/orders/order.mjs, ${sharedPath}`), index: validIndex(`| Orders | src/orders/order.mjs, ${sharedPath} | [Orders](orders.md) |\n| Shared ${owner} | ${sharedPath} | [Shared](${owner}.md) |`) });
     put(root, doc, validDoc(`Shared ${owner}`, sharedPath));
     put(root, 'src/orders/order.mjs', 'export const order=()=>0;'); put(root, sharedPath, original);
     const before = readFileSync(join(root, doc));
@@ -550,7 +571,7 @@ test('retention: changed shared entrypoints require every indexed canonical owne
     const result = live.finishRun(root, id, { summary: 'Both existing contracts changed.', passedEvidence: 'Isolated gate checks.', assessment });
     if (includeShared) {
       assert.equal(result.finished, true, `${owner}: ${JSON.stringify(result)}`);
-      assert.equal(parseDoc(readFileSync(join(root, doc), 'utf8'), `${owner}.md`).history[0].run, id);
+      assert.deepEqual(entriesFor(root, doc).map(e => e.run), [id], 'the shared owner is named in the run record');
     } else {
       assert.equal(result.status, 'needs-context', owner); assert.equal(result.finished, false);
       assert(result.retention.issues.some(i => i.rule === 'feature-owner' && i.message.includes(doc)), owner);
@@ -573,25 +594,28 @@ test('retention: advisory completion cannot hide Markdown features or source del
   }
 });
 
-test('retention: catch-up refuses advisory writers and requires the repair run history plus fresh verification', t => {
+test('retention: catch-up publishes an old run\'s record without a new run, and a doc repair still needs its own verified run', t => {
   const root = fixture(t), oldId = completeRun(root, { goal: 'Historical stored order.', edit: () => put(root, 'src/orders/order.txt', 'historical') });
-  const old = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`));
-  const advisory = live.startRun(root, { goal: 'Investigate missing history.', playbook: 'investigation', allowedPaths: ['docs/context'] }).runId;
-  live.quickHandoff(root, advisory, { summary: 'Read the old record.' }); const before = treeBytes(root);
-  assert.throws(() => actualReviewContext(root, { run: oldId, write: true, updateRun: advisory }), /required feature-context plan.*executable final verification/);
-  assert.deepEqual(treeBytes(root), before, 'advisory catch-up rejects before writes');
-  const id = live.startRun(root, { goal: 'Retain the missing order history.', playbook: 'feature', allowedPaths: ['docs/context'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] } }).runId;
-  live.quickHandoff(root, id, { summary: 'Inspect actual historical evidence and canonical order record.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
-  const written = actualReviewContext(root, { run: oldId, write: true, updateRun: id }); assert.equal(written.lint.ok, true);
-  assert.equal(live.verifyRun(root, id).status, 'needs-context', 'historical entry alone is not evidence of a verified repair');
+  const old = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), context = () => ['orders.md', 'INDEX.md'].map(name => readFileSync(join(root, 'docs/context', name), 'utf8'));
+  const before = context();
+  assert.equal(reviewContext(root, { run: oldId, write: true }).written[0].created, true);
+  assert.deepEqual(context(), before, 'publishing history edits no verified context');
+  const id = live.startRun(root, { goal: 'Retain the missing order knowledge.', playbook: 'feature', allowedPaths: ['docs/context'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }] } }).runId;
+  live.quickHandoff(root, id, { summary: 'Inspect the historical record and the canonical order doc.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+  assert.equal(live.verifyRun(root, id).status, 'needs-context', 'a published record is not authored knowledge of the component');
+  const records = [{ id: 'orders', currentView: retainedView }];
+  assert.equal(live.prepareRunContext(root, id, { records }).ok, true);
   const a = { ...fixtureAssessment(live.readRun(root, id), 'verify'), ...fixtureAssessment(live.readRun(root, id), 'deliver') };
-  a.learning = { status: 'recorded', reason: 'Restore actual older evidence while documenting this repair under its own run.', artifacts: ['docs/context/orders.md'], context: [{ id: 'orders', currentView: retainedView }] };
-  assert.equal(live.finishRun(root, id, { summary: 'Historical order evidence is retained; the repair has current provenance.', passedEvidence: 'Actual context and configured fixture checks.', assessment: a }).finished, true);
-  const completed = live.readRun(root, id), parsed = parseDoc(readFileSync(join(root, 'docs/context/orders.md'), 'utf8'), 'orders.md');
-  assert.equal(completed.verification.passed, true); assert.equal(parsed.history[0].run, id); assert(parsed.history.some(h => h.run === oldId));
+  a.learning = { status: 'recorded', reason: 'Document the order knowledge the historical run left out, under this repair run.', artifacts: ['docs/context/orders.md'], context: records };
+  assert.equal(live.finishRun(root, id, { summary: 'The order doc now states the storage boundary; the repair has current provenance.', passedEvidence: 'Actual context and configured fixture checks.', assessment: a }).finished, true);
+  const completed = live.readRun(root, id);
+  assert.equal(completed.verification.passed, true);
+  assert.deepEqual(historyContext(root, { doc: 'orders' }).entries.map(e => e.run), [id, oldId], 'each run has its own record in the component history');
+  assert.deepEqual(entriesFor(root, 'docs/context/orders.md').map(e => e.run), [id], 'only the run that authored the doc names it');
   assert.deepEqual(readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), old);
   assert.deepEqual(completed.handoffs.at(-1).contextDocs, ['docs/context/orders.md']); assert.equal(lintContext(root, { git: false }).ok, true);
 });
+
 test('retention: paths, source freshness and conversation ownership survive context preparation', t => {
   const { root, id, input } = currentFeature(t);
   assert.throws(() => live.prepareRunContext(root, id, { records: [{ id: 'late-feature', currentView: retainedView }] }), /planned ids/);
@@ -628,24 +652,26 @@ test('retention: paths, source freshness and conversation ownership survive cont
     assert.deepEqual(live.readRun(native, nativeId).handoffs.at(-1).contextDocs, ['docs/context/orders.md']);
   } finally { keys.forEach((key, index) => saved[index] === undefined ? delete process.env[key] : process.env[key] = saved[index]); }
 });
-test('retention: interrupted multi-record preparation resumes without duplicate History or unrelated writes', t => {
-  const { root, id, input } = currentFeature(t, { allowedPaths: ['src/orders', 'src/billing'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }, { id: 'billing', doc: 'docs/context/billing.md', paths: ['src/billing/bill.txt'] }] } });
+test('retention: interrupted multi-record preparation resumes without duplicate lessons, unrelated writes or a published record', t => {
+  const { root, id } = currentFeature(t, { allowedPaths: ['src/orders', 'src/billing'], contextRetention: { disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/order.txt'] }, { id: 'billing', doc: 'docs/context/billing.md', paths: ['src/billing/bill.txt'] }] } });
   put(root, 'src/billing/bill.txt', 'v2');
-  const records = [{ id: 'orders', currentView: retainedView }, { id: 'billing', currentView: 'Billing owns src/billing/bill.txt as a local stored text fixture. Its contract is distinct from orders and has no payment or network service. The configured check protects controller behavior only; run and inspect actual billing integrations before reuse. Local receipts do not constitute user acceptance.' }];
+  const records = [{ id: 'orders', currentView: retainedView, changed: 'Orders now persist the second value.', lesson: 'The checks read the same file the adapter writes.' }, { id: 'billing', currentView: 'Billing owns src/billing/bill.txt as a local stored text fixture. Its contract is distinct from orders and has no payment or network service. The configured check protects controller behavior only; run and inspect actual billing integrations before reuse. Local receipts do not constitute user acceptance.' }];
   const rename = fs.renameSync; let injected = false;
   fs.renameSync = (from, to) => { if (!injected && String(to).replaceAll('\\', '/').endsWith('/docs/context/billing.md')) { injected = true; throw new Error('seeded context publication failure'); } return rename(from, to); }; syncBuiltinESMExports();
   try { assert.throws(() => live.prepareRunContext(root, id, { records }), /seeded context publication/); }
   finally { fs.renameSync = rename; syncBuiltinESMExports(); }
   assert.equal(readFileSync(join(root, 'src/orders/order.txt'), 'utf8'), 'v2');
   assert.equal(live.prepareRunContext(root, id, { records }).ok, true);
-  for (const name of ['orders', 'billing']) assert.equal(parseDoc(readFileSync(join(root, `docs/context/${name}.md`), 'utf8'), `${name}.md`).history.filter(h => h.run === id).length, 1);
-  const bytes = treeBytes(root); assert.equal(live.prepareRunContext(root, id, { records }).ok, true); assert.deepEqual(treeBytes(root), bytes, 'unchanged preparation writes no new History or source');
-  const name = 'docs/context/orders.md', prepared = readFileSync(join(root, name), 'utf8');
-  const own = prepared.slice(prepared.indexOf('### '));
-  put(root, name, prepared + '\n' + own);
-  assert.equal(live.prepareRunContext(root, id, { records }).ok, true);
-  assert.equal(parseDoc(readFileSync(join(root, name), 'utf8'), 'orders.md').history.filter(h => h.run === id).length, 1, 'resumption repairs duplicate active entries without changing completed history');
+  const parsed = name => parseDoc(readFileSync(join(root, `docs/context/${name}.md`), 'utf8'), `${name}.md`);
+  for (const name of ['orders', 'billing']) assert.deepEqual([parsed(name).layout, parsed(name).issues, parsed(name).history], ['current', [], []], 'preparation writes the view, never a per-run entry');
+  const bytes = treeBytes(root); assert.equal(live.prepareRunContext(root, id, { records }).ok, true); assert.deepEqual(treeBytes(root), bytes, 'unchanged preparation writes nothing');
+  assert.deepEqual(parsed('orders').lessons.map(l => [l.source, l.text]), [[`run ${id.slice(0, 8)}`, 'The checks read the same file the adapter writes.']], 'a repeated preparation keeps one lesson for the run');
+  assert.deepEqual(parsed('billing').lessons, [], 'a lesson belongs to the component it was given for');
+  assert.deepEqual(live.readRun(root, id).contextPreparation.notes, { orders: 'Orders now persist the second value.' });
+  assert.throws(() => live.prepareRunContext(root, id, { records: [{ id: 'orders', currentView: retainedView, changed: '<One line: what this run changed for this component.>' }] }), /changed\/lesson/, 'a template placeholder is not a note');
+  assert.deepEqual(readChanges(root).files, [], 'preparation publishes no record; only completion does');
 });
+
 test('retention: equivalent project context and literal dynamic-route paths resolve without engine-map substitution', t => {
   const root = fixture(t, { index: null, doc: null }), cfg = JSON.parse(readFileSync(join(root, '.cyc/config.json')));
   cfg.context = { directory: 'knowledge/features' }; put(root, '.cyc/config.json', JSON.stringify(cfg));
@@ -658,12 +684,18 @@ test('retention: equivalent project context and literal dynamic-route paths reso
   assert.throws(() => investigateProject(root, { paths: ['../foreign/route.ts'] }), /canonical|project-relative/);
   assert.equal(lintContext(root, { git: false }).ok, true);
 });
-test('retention: completed catch-up needs a new scoped update and cannot mutate the completed receipt', t => {
+test('retention: catch-up never mutates a completed receipt, verified source or another run\'s scope', t => {
   const root = fixture(t), oldId = completeRun(root, { goal: 'Historical orders.', edit: () => put(root, 'src/orders/order.txt', 'old done') });
-  const receipt = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), bytes = treeBytes(root);
-  assert.throws(() => actualReviewContext(root, { run: oldId, write: true }), /new active scoped update/); assert.deepEqual(treeBytes(root), bytes);
+  const receipt = readFileSync(join(root, `.cyc/runs/${oldId}/state.json`));
   const active = live.startRun(root, { goal: 'Plan a small source-only investigation.', playbook: 'plan', allowedPaths: ['src/orders'] }).runId;
-  assert.throws(() => actualReviewContext(root, { run: oldId, write: true, updateRun: active }), /outside frozen/);
+  const source = live.sourceSnapshot(root).hash;
+  assert.equal(reviewContext(root, { run: oldId, write: true }).written[0].created, true);
+  assert.equal(live.sourceSnapshot(root).hash, source, 'a change record is outside verified source');
+  live.quickHandoff(root, active, { summary: 'Read the order module only.' });
+  assert.equal(live.readRun(root, active).status, 'running', 'a record published outside this run\'s scope does not trip its guard');
+  put(root, 'docs/context/changes/notes.txt', 'not a record');
+  assert.notEqual(live.sourceSnapshot(root).hash, source, 'any other file in the changes folder is ordinary source');
+  assert.deepEqual(lintContext(root, { git: false }).changes.issues.map(i => i.rule), ['change-name']);
   assert.deepEqual(readFileSync(join(root, `.cyc/runs/${oldId}/state.json`)), receipt);
 });
 
@@ -716,6 +748,7 @@ test('retention: installed fresh feature finishes through context and proof cont
   assert.equal(lintContext(root, { git: false }).ok, true);
   for (const path of ['src', 'test', 'docs', 'package.json', '.cyc/config.json']) { mkdirSync(dirname(join(portable, path)), { recursive: true }); cpSync(join(root, path), join(portable, path), { recursive: true }); }
   assert.equal(fs.existsSync(join(portable, '.cyc/runtime')), false);
+  assert.deepEqual(historyContext(portable, { doc: 'greeting' }).entries.map(e => [e.run, e.result]), [[id, 'passed · behavior passed (exit 0)']], 'the outcome travels with the source copy, without the local receipts');
   const found = investigateProject(portable, { paths: ['src/greet.mjs'] }); assert.equal(found.index.path, 'docs/context/INDEX.md'); assert(found.contexts.some(c => c.records.some(r => r.path === doc)));
   const knowledge = readFileSync(join(portable, doc), 'utf8'); assert.match(knowledge, /pure local greet\(name\)/); assert.match(knowledge, /no storage/); assert.match(knowledge, /node --test/); assert.match(knowledge, /ignored local storage/);
   const checked = spawnSync(process.execPath, ['-e', "delete process.env.NODE_TEST_CONTEXT;const r=require('node:child_process').spawnSync(process.execPath,['--test'],{stdio:'inherit'});process.exit(r.status??1)"], { cwd: portable, encoding: 'utf8' }); assert.equal(checked.status, 0, checked.stdout + checked.stderr);

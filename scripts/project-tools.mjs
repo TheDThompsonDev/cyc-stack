@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { atomicJSON, configuration, readRun, runCommands, sourceSnapshot } from './runtime.mjs';
 import { runBrowserAudit, validateBrowserPlan } from './browser-audit.mjs';
-import { canonicalPattern, matches, contextLocation, parseDoc } from './context-review.mjs';
+import { canonicalPattern, matches, contextLocation, parseDoc, readChanges } from './context-review.mjs';
 
 const registryName = 'docs/context/recipes.json';
 const indexName = 'docs/context/INDEX.md';
@@ -118,7 +118,9 @@ export function contextLinks(cell) {
   }).filter(Boolean);
 }
 
-function recordFreshness(root,record,limit) {
+// The bytes a doc was last verified against: each covered file's hash from the newest change entry
+// naming the doc, or the newest History entry of the earlier layout. Queried paths are checked first.
+function recordFreshness(root,record,limit,queried,changes) {
   const base={coverage:'selected-files-only',gitFreshness:'not-inspected',semanticCorrectness:'unverified'};
   if(!record.exists)return {...base,status:'missing'};
   try {
@@ -126,11 +128,15 @@ function recordFreshness(root,record,limit) {
     if(!lstatSync(path).isFile())return {...base,status:'invalid',reason:'Context link is not a regular file.'};
     const parsed=parseDoc(readFileSync(path,'utf8'),path.split(/[\\/]/).at(-1));
     if(parsed.issues.length)return {...base,status:'unverified',reason:'No valid canonical source binding; inspect this reference against current code.'};
-    const selected=parsed.history[0]?.files??[];
+    const named=changes().filter(entry=>entry.components.some(c=>c.doc===record.path)),bound=new Map();
+    for(const entry of named)for(const file of entry.files)if(!bound.has(file.path)&&parsed.covers.some(pattern=>matches(pattern,file.path)))bound.set(file.path,file.hash);
+    const asked=item=>queried.includes(item.path)?0:1,legacy=parsed.history[0];
+    // An earlier-layout doc is read from its History unless a change record is newer.
+    const selected=(legacy&&!(named[0]?.date>=legacy.date)?legacy.files:[...bound].map(([path,hash])=>({path,hash}))).sort((a,b)=>asked(a)-asked(b));
     if(!selected.length)return {...base,status:'unverified',checkedFiles:0};
     const files=selected.slice(0,limit).map(item=>{
-      if(!/^sha256:[a-f0-9]{64}$/i.test(item.hash)||item.path.startsWith('.cyc/')||item.path===record.path||!parsed.covers.some(pattern=>matches(pattern,item.path)))return {path:item.path,status:'unverified'};
-      try { const source=local(root,item.path);return {path:item.path,status:!existsSync(source)?'missing':lstatSync(source).isFile()&&hash(readFileSync(source))===item.hash.slice(7)?'matches':'changed'}; }
+      if(!/^(?:sha256:[a-f0-9]{64}|deleted)$/i.test(item.hash)||item.path.startsWith('.cyc/')||item.path===record.path||!parsed.covers.some(pattern=>matches(pattern,item.path)))return {path:item.path,status:'unverified'};
+      try { const source=local(root,item.path);const gone=!existsSync(source);return {path:item.path,status:item.hash==='deleted'?gone?'matches':'changed':gone?'missing':lstatSync(source).isFile()&&hash(readFileSync(source))===item.hash.slice(7)?'matches':'changed'}; }
       catch {return {path:item.path,status:'unverified'};}
     });
     return {...base,status:files.some(f=>['changed','missing'].includes(f.status))?'drifted':selected.length>limit||files.some(f=>f.status==='unverified')?'unverified':'matches',checkedFiles:files.length,totalBindings:selected.length,truncated:selected.length>limit,files};
@@ -167,7 +173,9 @@ export function investigateProject(target, options = {}) {
     }
   }
   const evidenceChecks = new Map(), recordChecks=new Map();
-  const contexts = found.slice(0, limit).map(entry => ({ ...entry, recordEvidence:entry.records.map(record=>{if(!recordChecks.has(record.path))recordChecks.set(record.path,recordFreshness(root,record,limit));return {path:record.path,...recordChecks.get(record.path)};}), evidence: entry.evidence.map(e => {
+  let entries;
+  const changes=()=>entries??=readChanges(root).entries;
+  const contexts = found.slice(0, limit).map(entry => ({ ...entry, recordEvidence:entry.records.map(record=>{if(!recordChecks.has(record.path))recordChecks.set(record.path,recordFreshness(root,record,limit,selected.paths,changes));return {path:record.path,...recordChecks.get(record.path)};}), evidence: entry.evidence.map(e => {
     if (!e.exists || !e.path.endsWith('.json')) return e;
     if (!evidenceChecks.has(e.path)) {
       const checked = spawnSync(process.execPath, [helper, 'check', '--project', root, '--manifest', e.path], { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024 });

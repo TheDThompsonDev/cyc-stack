@@ -15,7 +15,7 @@ import { artifactFiles, resolveExecution } from './execution.mjs';
 import { strictObject, contextPolicy, initializeContext, contextView, contextHash, contextPath, checkContextSize, checkProjection, publishContext, acknowledgeContext, requireContextReady, reconcileContext, touchContext } from './task-context.mjs';
 import { delegationPolicy, initializeDelegation, decideDelegation, assignWorker, recordWorker, cancelWorker, reconcileWorkers } from './delegation.mjs';
 import {startSwarm,swarmPhase,applySwarmPlan,assignSwarm,commitSwarm,cancelSwarm} from './swarm.mjs';
-import { planRetention, retentionOf, prepareRetention, checkRetention, contextLocation, isComponentDoc, parseDoc } from './context-review.mjs';
+import { planRetention, retentionOf, prepareRetention, checkRetention, contextLocation, isComponentDoc, parseDoc, publishChange } from './context-review.mjs';
 export { sourceSnapshot } from './source-snapshot.mjs';
 
 const text = value => typeof value === 'string' && value.trim().length > 0;
@@ -1860,7 +1860,7 @@ export function controlRun(root, id, action) {
 }
 
 export function completeRun(root, id) {
-  return transact(root, id, state => {
+  return publishRunChange(root, transact(root, id, state => {
     requireActive(state);
     if (!budget(state) || !guard(root, state)) return state;
     if (current(state) !== null) throw new Error(`Unfinished stage: ${current(state)}`);
@@ -1873,7 +1873,18 @@ export function completeRun(root, id) {
     state.status = 'complete';
     log(state, 'complete', { verification: state.requiresChecks ? 'recorded-command-results-and-agent-review' : 'agent-reviewed-evidence', sourceHash: delivery.sourceHash, acceptedPreexistingFailures: (state.acceptedFailures ?? []).map(item => item.id) });
     return state;
-  });
+  }));
+}
+
+// A completed run with planned context publishes its change record. Only completion can state how
+// the checks ended, so it is written here and is not verified source; a failed write is retried by
+// the next finish and never undoes completion.
+function publishRunChange(root, state) {
+  if (state.status !== 'complete' || retentionOf(state)?.disposition !== 'required' || state.changeRecord?.path) return state;
+  let record;
+  try { record = { path: publishChange(root, state, cachedSnapshot(root).files).path }; }
+  catch (error) { record = { error: error.message }; }
+  return transact(root, state.id, saved => { saved.changeRecord = record; log(saved, 'change-record', record); return saved; });
 }
 
 // Files that differ from the run-start snapshot and still exist: what this run changed.
@@ -1970,8 +1981,8 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
       const gate = json(projectFile(root, `.cyc/runtime/${state.session}.state.json`));
       if (!(Date.parse(delivery.recordedAt) >= Date.parse(gate.updatedAt))) throw new Error('Delivery is outside the current native request window.');
     }
-    if (state.status === 'running') state = completeRun(root, id);
-    return { runId: id, status: state.status, finished: true, steps: ['resume delivery'], packet: projectDelivery(root, state) };
+    state = state.status === 'running' ? completeRun(root, id) : publishRunChange(root, state);
+    return { runId: id, status: state.status, finished: true, steps: ['resume delivery'], ...(state.changeRecord ? { changeRecord: state.changeRecord } : {}), packet: projectDelivery(root, state) };
   }
   if (artifacts !== undefined) artifactFiles(root, artifacts.map(path => inputPath(root, path)));
   if (continuation) {
@@ -2124,7 +2135,7 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
   const packet = completed.status === 'complete' ? projectDelivery(root, completed) : null;
   // What the reply may state: the proof's scope and any pre-existing failure it must disclose.
   return { runId: id, status: completed.status, finished: completed.status === 'complete', steps, reviewPath: reviewPath(completed),
-    ...(packet ? { packet } : {}),
+    ...(completed.changeRecord ? { changeRecord: completed.changeRecord } : {}), ...(packet ? { packet } : {}),
     ...(completed.testProof?.claim && testProofStatus(root, completed)?.status === 'proven' ? { proofClaim: completed.testProof.claim } : {}),
     ...(completed.verification?.acceptedPreexistingFailures?.length ? { acceptedPreexistingFailures: (completed.acceptedFailures ?? []).filter(item => completed.verification.acceptedPreexistingFailures.includes(item.id)).map(({ id: check, reason }) => ({ check, reason })) } : {}),
     ...(dropped.length ? { droppedAcceptFailures: dropped } : {}) };
