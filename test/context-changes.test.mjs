@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -532,4 +534,86 @@ test('the completing run removes every entry it did not write, and a same-day re
   assert.deepEqual(changes.issues, []);
   assert.deepEqual(changes.entries.filter(e => e.run === id).map(e => e.fields.result), ['passed · checks passed (exit 0)']);
   assert.deepEqual(changes.files.sort(), ['2026-02.md', result.changeRecord.path.split('/').at(-1)].sort(), 'the forged record file is gone and the digest keeps only the other run');
+});
+
+// Findings from the automated review of the pull request.
+
+test('a staged record is not committed history: it does not make a stale doc fresh until it is committed', { skip: !hasGit && 'git is not installed' }, t => {
+  const root = fixture(t);
+  const at = date => ({ GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date }), status = () => lintContext(root).index.freshness[0].status;
+  ok(root, ['init', '-q', '-b', 'main']); ok(root, ['add', '.']); ok(root, ['commit', '-q', '-m', 'Base'], at('2026-10-01T10:00:00Z'));
+  put(root, 'src/orders/a.txt', 'a2');
+  ok(root, ['add', '.']); ok(root, ['commit', '-q', '-m', 'Change an order file'], at('2026-10-02T10:00:00Z'));
+  assert.equal(status(), 'stale');
+  put(root, 'docs/context/changes/2026-10-03-bbbb2222.md', record({ date: '2026-10-03', run: 'bbbb2222-0000-4000-8000-000000000002', files: [`src/orders/a.txt@sha256:${sha256('a2')}`] }));
+  ok(root, ['add', 'docs/context/changes']);
+  assert.match(ok(root, ['status', '--porcelain']), /^A  docs\/context\/changes\/2026-10-03-bbbb2222\.md$/, 'the record is staged, not committed');
+  assert.equal(status(), 'stale', 'a staged record is not history yet');
+  ok(root, ['commit', '-q', '-m', 'Record the revalidation'], at('2026-10-03T10:00:00Z'));
+  assert.equal(status(), 'fresh');
+  put(root, 'docs/context/changes/2026-10-03-bbbb2222.md', record({ date: '2026-10-03', run: 'bbbb2222-0000-4000-8000-000000000002', files: [`src/orders/a.txt@sha256:${sha256('a2')}`], result: 'passed · edited and staged' }));
+  ok(root, ['add', 'docs/context/changes']);
+  assert.equal(status(), 'stale', 'a committed record with a staged edit is not the committed record');
+});
+
+test('a record published later for a context-only run still names the implementation bytes that run verified', t => {
+  const root = fixture(t);
+  const id = live.startRun(root, { goal: 'Reword the order doc.', playbook: 'feature', criteria: [{ id: 'c1', description: 'The doc is current.' }], executionMode: 'standalone', allowedPaths: ['docs/context'], contextRetention: { version: 1, disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/a.txt'] }] } }).runId;
+  live.quickHandoff(root, id, { summary: 'Read the order storage and its doc.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+  put(root, 'docs/context/INDEX.md', `${read(root, 'docs/context/INDEX.md')}\nA note under the table.\n`);
+  const state = live.readRun(root, id), assessment = { ...fixtureAssessment(state, 'verify'), ...fixtureAssessment(state, 'deliver') };
+  assessment.learning = { status: 'recorded', reason: 'Keep the storage rule current.', artifacts: ['docs/context/orders.md'], context: [{ id: 'orders', currentView: view('Reads never mutate the stored text, and that rule was checked again against the unchanged adapter file.') }] };
+  const result = live.finishRun(root, id, { summary: 'The order doc is reworded; no implementation changed.', criterionEvidence: { c1: 'Configured fixture check.' }, assessment });
+  assert.equal(result.finished, true, JSON.stringify(result));
+  const anchor = [{ path: 'src/orders/a.txt', hash: `sha256:${sha256('a1')}` }];
+  assert.deepEqual(readChanges(root).entries[0].files, anchor, 'the unchanged file the view was written against is bound at completion');
+  rmSync(join(root, result.changeRecord.path));
+  assert.equal(reviewContext(root, { run: id, write: true }).written[0].created, true);
+  assert.deepEqual(readChanges(root).entries[0].files, anchor, 'publishing it again later keeps that binding');
+  assert.equal(investigateProject(root, { paths: ['src/orders/a.txt'] }).contexts[0].recordEvidence[0].status, 'matches');
+});
+
+test('migration keeps a History entry that says more than its existing change entry, and finishes an interrupted migration', t => {
+  const earlier = (learned = 'DOC-LEARNED') => `# Orders\n\nCovers: src/orders/**\n\nLast changed by AI: 2026-10-01 · run abcd1234 · files: src/orders/a.txt\n\n## Current view\n\n${view()}\n\n## Lessons\n\n## History\n\n### 2026-10-01 · run abcd1234 · Shared change\n**Changed:** Orders changed.\n**Learned:** ${learned}\n**Files:** src/orders/a.txt@sha256:${sha256('a1')}\n`;
+  const differing = fixture(t);
+  put(differing, 'docs/context/orders.md', earlier('ONLY-IN-THE-DOC'));
+  put(differing, 'docs/context/changes/2026-10-01-abcd1234.md', record({ date: '2026-10-01', run: 'abcd1234' }));
+  const refused = cyc(differing, ['context', 'migrate', '--write']);
+  assert.deepEqual([refused.status, refused.data.written, refused.data.skipped.map(s => s.path)], [1, false, ['docs/context/orders.md']]);
+  assert.match(refused.data.skipped[0].reason, /lacks part of its History; reconcile the two first/);
+  assert.equal(read(differing, 'docs/context/orders.md'), earlier('ONLY-IN-THE-DOC'), 'the History that only the doc holds is still there');
+  const interrupted = fixture(t);
+  put(interrupted, 'docs/context/orders.md', earlier());
+  assert.equal(cyc(interrupted, ['context', 'migrate', '--write']).status, 0);
+  const digest = read(interrupted, 'docs/context/changes/2026-10.md');
+  put(interrupted, 'docs/context/orders.md', earlier());
+  const resumed = cyc(interrupted, ['context', 'migrate', '--write']);
+  assert.deepEqual([resumed.status, resumed.data.written, resumed.data.runs, resumed.data.docs], [0, true, 0, [{ path: 'docs/context/orders.md', entries: 1 }]], 'the entry already holds everything this History says, so the doc is converted');
+  assert.equal(parseDoc(read(interrupted, 'docs/context/orders.md'), 'orders.md').layout, 'current');
+  assert.equal(read(interrupted, 'docs/context/changes/2026-10.md'), digest, 'and the digest is not rewritten');
+});
+
+test('a source file changed between completion and publication is not bound to the passed result', t => {
+  const root = fixture(t);
+  const id = live.startRun(root, { goal: 'Change the first order file.', playbook: 'feature', criteria: [{ id: 'c1', description: 'It works.' }], executionMode: 'standalone', allowedPaths: ['src/orders'], contextRetention: { version: 1, disposition: 'required', features: [{ id: 'orders', doc: 'docs/context/orders.md', paths: ['src/orders/a.txt'] }] } }).runId;
+  live.quickHandoff(root, id, { summary: 'Read the order storage.', assessment: fixtureAssessment(live.readRun(root, id), 'scout') });
+  put(root, 'src/orders/a.txt', 'a2');
+  const state = live.readRun(root, id), assessment = { ...fixtureAssessment(state, 'verify'), ...fixtureAssessment(state, 'deliver') };
+  assessment.learning = { status: 'recorded', reason: 'Keep the storage rule current.', artifacts: ['docs/context/orders.md'], context: [{ id: 'orders', currentView: view('Writes replace the whole value and are versioned.') }] };
+  // Change the file in the gap the review named: after the completion commit, before publication.
+  const rename = fs.renameSync; let changed = false;
+  fs.renameSync = (from, to) => {
+    const done = rename(from, to);
+    if (!changed && String(to).endsWith('state.json') && JSON.parse(readFileSync(to, 'utf8')).status === 'complete') { changed = true; put(root, 'src/orders/a.txt', 'changed after completion'); }
+    return done;
+  }; syncBuiltinESMExports();
+  let result;
+  try { result = live.finishRun(root, id, { summary: 'Versioned.', criterionEvidence: { c1: 'Configured fixture check.' }, assessment }); }
+  finally { fs.renameSync = rename; syncBuiltinESMExports(); }
+  assert.equal(changed, true, 'the file was changed inside the gap');
+  assert.deepEqual([result.finished, result.status], [true, 'complete'], 'completion stands');
+  assert.match(result.changeRecord.error, /Source changed after the run completed/);
+  assert.equal(result.changeRecord.path, undefined);
+  assert.equal(existsSync(join(root, 'docs/context/changes')), false, 'no record binds bytes the checks did not see');
+  assert.match(read(root, `.cyc/runs/${id}/review.md`), /- Change record: not written \(Source changed after the run completed/);
 });

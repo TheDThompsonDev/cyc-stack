@@ -12,6 +12,7 @@ Release notes describe changes to CYC's methods, local tooling and host adapters
 - Raise the packed-archive and installed-engine size budgets from 1 MiB to 1.1 MiB (owner decision, 2026-11-11): the archive had 283 bytes left before this change.
 - Fix what an independent review demonstrated in the first candidate: paths with a space or `@` broke the record, a folder named like a record was hidden from verified source, a routine run's record or a roll-up commit could make a doc look revalidated, and migration could drop per-doc history.
 - `learning.context` rows accept optional `changed` (one line for the change record) and `lesson` (one dated line in the doc).
+- Address the automated review of the change-record pull request: lint compares records with HEAD, so a staged record is not history yet; a record published later binds the files its run selected; migration keeps History that its existing entry lacks; publication requires the delivered source hash; the guide no longer promises a record for runs that planned no context.
 - Tests cover a real two-branch Git merge and a real index conflict with local Git. Hosted merge behavior, measured reading savings and native hook activation are not established by them.
 
 ## 0.9.1 (2026-11-08)

@@ -8,7 +8,7 @@ Project context is what the next agent or teammate needs without the original ch
 | Component doc | What is true now: boundaries, contracts, choices, checks, limits, lessons | The run that changes the component, before its checks |
 | Change record, changes/ | What did a run change, and how did its checks end? | The controller, after the checks pass |
 
-A doc changes only when the rule a reader should follow changes. History is one small record per completed run, so docs stay short and two people in one component conflict only where they changed the same line.
+A doc changes only when the rule a reader should follow changes. History is one small record per completed run that planned context, so docs stay short and two people in one component conflict only where they changed the same line. A routine run publishes none; `context review --write` can publish one for a completed run that lacks it.
 
 ## Normal workflow
 

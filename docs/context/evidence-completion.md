@@ -24,7 +24,7 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 
 Parent readiness now includes active/planned automatic phases before any worker assignment exists. Their model results never pass a parent stage or replace criterion evidence/check receipts. Merge commit records its context hash/revision; failed final acknowledgment reports committed work with pending local read/ack rather than a new failed generation. Nonrunning parent status remains authoritative.
 
-Completion also publishes the run's change record (publishRunChange in scripts/runtime.mjs) after the complete event, with the observed check results. The record is outside the source snapshot, so the delivery source hash, the artifacts and the review packet are unaffected; a failed write is stored as changeRecord.error and retried by the next finish without undoing completion. Finish returns changeRecord and review.md prints its path.
+Completion also publishes the run's change record (publishRunChange in scripts/runtime.mjs) after the complete event, with the observed check results. The record is outside the source snapshot, so the delivery source hash, the artifacts and the review packet are unaffected; a failed write is stored as changeRecord.error and retried by the next finish without undoing completion. Publication happens only while the source snapshot still equals the delivered source hash; a file changed in the gap after completion is recorded as a failed publication, not bound. Finish returns changeRecord and review.md prints its path.
 
 ## Lessons
 

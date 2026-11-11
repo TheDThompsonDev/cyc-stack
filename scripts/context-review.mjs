@@ -329,7 +329,9 @@ export function lintIndex(root, { git: checkGit = true, docs: selectedDocs } = {
   // Only committed records can vouch for a doc against Git; one written or edited since is not history yet.
   const named = new Map();
   if (checkGit) {
-    const changes = readChanges(root), loose = new Set(git(root, ['ls-files', '-z', '-m', '-o', '--', changes.folder]).stdout?.split('\0'));
+    // Compared with HEAD, so a record that is untracked, modified or only staged is left out.
+    const changes = readChanges(root), listed = args => git(root, [...args, '--', changes.folder]).stdout?.split('\0') ?? [];
+    const loose = new Set([...listed(['ls-files', '-z', '-o']), ...listed(['diff', '--relative', '--name-only', '-z', 'HEAD'])]);
     for (const entry of changes.entries) if (!loose.has(entry.file)) for (const { doc } of entry.components) named.set(doc, [...(named.get(doc) ?? []), entry]);
   }
   const seen = new Map();
@@ -468,7 +470,7 @@ export function prepareRetention(root, state, { records = [] } = {}, files, perm
   const plan = retentionOf(state);
   if (!plan || plan.disposition !== 'required') return { paths: [], authored: {} };
   if (!Array.isArray(records) || new Set(records.map(r => r?.id)).size !== records.length || records.some(r => !plan.features.some(f => f.id === r?.id) || !text(r.currentView) || /<(?:write|describe|fill|actual|placeholder|todo)\b/i.test(r.currentView) || ['changed', 'lesson'].some(key => r[key] !== undefined && !filled(r[key])))) throw Error('learning.context needs unique planned ids and actual nonplaceholder currentView text (and changed/lesson when given).');
-  const writes = [], authored = {}, notes = { ...state.contextPreparation?.notes };
+  const writes = [], authored = {}, bound = {}, notes = { ...state.contextPreparation?.notes };
   const date = state.contextPreparation?.date ?? new Date().toISOString().slice(0, 10);
   for (const feature of plan.features) {
     const exists = existsSync(local(root, feature.doc)), selected = featureFiles(root, state, feature, files);
@@ -489,6 +491,8 @@ export function prepareRetention(root, state, { records = [] } = {}, files, perm
     const viewHash = sha(parseDoc(source, fileName(feature.doc)).currentView), sourcesHash = sha(JSON.stringify(selected.files));
     const prior = state.contextPreparation?.authored?.[feature.id];
     if (record || viewHash !== (state.contextPreparation?.views?.[feature.id] ?? feature.baselineViewHash) || prior?.viewHash === viewHash && prior.sourcesHash === sourcesHash) authored[feature.id] = { viewHash, sourcesHash };
+    // Kept with the binding, so a record published later can still name the bytes this view was written against.
+    bound[feature.id] = selected.files;
     if (!exists || read(root, feature.doc) !== source) writes.push({ path: feature.doc, source });
   }
   for (const path of [...writes.map(w => w.path), plan.index]) { local(root, path); permit(path); }
@@ -496,7 +500,7 @@ export function prepareRetention(root, state, { records = [] } = {}, files, perm
   for (const w of writes) { mkdirSync(dirname(local(root, w.path)), { recursive: true }); atomicWrite(local(root, w.path), w.source, staging); }
   if (!existsSync(local(root, plan.index))) { mkdirSync(dirname(local(root, plan.index)), { recursive: true }); atomicWrite(local(root, plan.index), newIndexSource, staging); }
   refreshIndex(root, { staging, docs: plan.features.map(f => f.doc) });
-  return { paths: writes.map(w => w.path), date, authored, notes, views: Object.fromEntries(plan.features.map(f => [f.id, sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView)])) };
+  return { paths: writes.map(w => w.path), date, authored, selected: bound, notes, views: Object.fromEntries(plan.features.map(f => [f.id, sha(parseDoc(read(root, f.doc), fileName(f.doc)).currentView)])) };
 }
 
 // ---------------------------------------------------------------- run records
@@ -620,7 +624,7 @@ export function changeFor(root, state, files) {
   const bound = planned && files
     ? [...[...new Set([...Object.keys(files).filter(p => files[p] !== state.initialSource.files[p]), ...plan.features.flatMap(f => featureFiles(root, state, f, files).files.map(item => item.path))])].filter(source).map(path => ({ path, hash: `sha256:${files[path]}` })),
       ...Object.keys(state.initialSource.files).filter(p => !(p in files) && source(p)).map(path => ({ path, hash: 'deleted' }))].sort((a, b) => a.path < b.path ? -1 : 1)
-    : record.files.filter(f => source(f.path)).map(f => ({ path: f.path, hash: `sha256:${f.sha256}` }));
+    : [...new Map([...record.files, ...Object.values(state.contextPreparation?.selected ?? {}).flat()].filter(f => source(f.path)).map(f => [f.path, { path: f.path, hash: `sha256:${f.sha256}` }])).values()];
   const accepted = state.verification?.acceptedPreexistingFailures ?? [];
   const result = !state.requiresChecks ? 'completed · no executable checks, agent-reviewed evidence'
     : `passed${accepted.length ? ` with accepted pre-existing failures (${accepted.join(', ')})` : ''} · ${record.checks.join(', ') || 'check results not recorded'}`;
@@ -813,8 +817,11 @@ export function migrateContext(root, { write = false } = {}) {
     const path = `${folder}/${name}`, source = read(root, path), parsed = parseDoc(source, name);
     if (parsed.layout !== 'earlier') continue;
     const blocking = parsed.issues.find(issue => ['sections', 'history-entry', 'evidence', 'last-change', 'last-change-current'].includes(issue.rule));
-    const recorded = parsed.history.find(h => known.entries.some(entry => entry.run === h.run && !entry.components.some(c => c.doc === path)));
-    if (blocking || recorded) { skipped.push({ path, reason: blocking ? `${blocking.rule}: ${blocking.message}` : `Run ${recorded.run} already has a change entry that does not name this doc.` }); continue; }
+    // A run that already has an entry keeps it. The doc's History for that run may go only if the
+    // entry names the doc and already holds every part of it, as after an interrupted migration.
+    const parts = h => [h.date, h.title, h.changed, h.learned, h.proof, ...(h.extra ?? []), ...h.files.map(f => `${f.path}@${f.hash}`)].filter(Boolean).map(part => oneLine(part, Infinity).replaceAll('\\|', '|'));
+    const recorded = parsed.history.find(h => known.entries.some(entry => entry.run === h.run && !(entry.components.some(c => c.doc === path) && parts(h).every(part => entry.source.includes(part)))));
+    if (blocking || recorded) { skipped.push({ path, reason: blocking ? `${blocking.rule}: ${blocking.message}` : `Run ${recorded.run} already has a change entry that does not name this doc or lacks part of its History; reconcile the two first.` }); continue; }
     for (const h of parsed.history) {
       const run = runs.get(h.run) ?? { date: h.date, run: h.run, goal: h.title, changed: h.changed, learned: h.learned, proof: h.proof, components: [], files: new Map() };
       const own = [['Date', h.date, run.date], ['Goal', h.title, run.goal], ['Changed', h.changed, run.changed], ['Learned', h.learned, run.learned], ['Proof', h.proof, run.proof]].filter(([, mine, theirs]) => mine && mine !== theirs).map(([label, mine]) => `${label}: ${mine}`);

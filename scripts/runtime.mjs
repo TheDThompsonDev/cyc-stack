@@ -1882,7 +1882,12 @@ export function completeRun(root, id) {
 function publishRunChange(root, state) {
   if (state.status !== 'complete' || retentionOf(state)?.disposition !== 'required' || state.changeRecord?.path) return state;
   let record;
-  try { record = { path: publishChange(root, state, cachedSnapshot(root).files).path }; }
+  try {
+    // The record binds the bytes completion accepted: a file changed since then is not recorded.
+    const snapshot = cachedSnapshot(root);
+    if (snapshot.hash !== state.handoffs.at(-1)?.sourceHash) throw new Error('Source changed after the run completed, so its record would bind bytes the checks did not see.');
+    record = { path: publishChange(root, state, snapshot.files).path };
+  }
   catch (error) { record = { error: error.message }; }
   return transact(root, state.id, saved => { saved.changeRecord = record; log(saved, 'change-record', record); return saved; });
 }
