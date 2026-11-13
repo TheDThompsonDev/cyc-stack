@@ -1,30 +1,38 @@
 # Project context
 
-Every new feature leaves a focused canonical record and index row in the target project. Meaningful changes update that feature and affected shared-component knowledge. The next agent should find capability boundaries, contracts, choices, failures, checks and limits without the original chat. A handoff, recipe, setup guide or ignored receipt alone is insufficient.
+Project context is what the next agent or teammate needs without the original chat. It lives in the target project under docs/context/, in three parts:
 
-Read docs/context/INDEX.md, then matched records and relevant error history. Revalidate consequential claims against current source/dependencies. A configured context.directory can reuse a genuine equivalent project convention; never substitute the installed engine's development index.
+| Part | Answers | Written by |
+| --- | --- | --- |
+| Index, INDEX.md | Which doc covers the files I am about to change? | Rebuilt from the docs |
+| Component doc | What is true now: boundaries, contracts, choices, checks, limits, lessons | The run that changes the component, before its checks |
+| Change record, changes/ | What did a run change, and how did its checks end? | The controller, after the checks pass |
+
+A doc changes only when the rule a reader should follow changes. History is one small record per completed run that planned context, so docs stay short and two people in one component conflict only where they changed the same line. A routine run publishes none; `context review --write` can publish one for a completed run that lacks it.
 
 ## Normal workflow
 
-Scout/Start plans canonical records and representative entrypoints before scope freezes. Finish prepares/validates authored knowledge, History/source evidence and index before final checks. Missing/stale context returns needs-context with remaining input; fill learning.context or use context prepare --run ID for earlier feedback. Explicit restrictions remain pending without unauthorized writes. See the [Context method](../methods/cyc-context/SKILL.md) for schemas, fixed layout and recovery.
-
-Context-only upkeep can bind unchanged implementation files from its focused owner's Covers. Missing anchors remain pending; self/index hashes and unrelated source cannot substitute. Completion guidance retains the exact remaining input and owned command.
+Read docs/context/INDEX.md, then matched docs and relevant error history; revalidate consequential claims against current source. Start plans each feature's doc and entrypoints before scope freezes. Finish validates the authored Current view and the index before final checks; missing or stale context returns needs-context with the remaining input (fill learning.context, or use context prepare --run ID earlier). On completion the controller publishes the change record with the results it observed. Restrictions remain pending without unauthorized writes. See the [Context method](../methods/cyc-context/SKILL.md) for schemas, layout and recovery.
 
 ```text
 node bin/cyc.mjs investigate --path src/orders
+node bin/cyc.mjs context history orders
 node bin/cyc.mjs context lint
-node bin/cyc.mjs context review --run SOURCE_ID
+node bin/cyc.mjs context index --write
+node bin/cyc.mjs context rollup --write
+node bin/cyc.mjs context migrate --write
+node bin/cyc.mjs context review [--run ID] [--write]
 node bin/cyc.mjs context measure --path src/orders
 ```
 
-Installed projects use .cyc/engine/bin/cyc.mjs. Read-only inspection executes no recipe. Historical catch-up writes need a new implementation update with a required canonical plan and executable final checks (--write --update-run ID). Preserve old receipts, record the repair under its actual run/date and verify final files. A reply packet cannot restore evidence after context changes.
+Installed projects use .cyc/engine/bin/cyc.mjs. Commit a change record with the change it describes. rollup folds earlier months into one digest each, so the folder stays bounded; run it on the default branch. migrate converts docs that still hold a History section. review publishes the record of a completed run that lacks one and never edits a doc. A configured context.directory can reuse an equivalent convention; never substitute the engine's development index.
 
 ## Evidence limits
 
-Lint validates structure, mapping and supported freshness, not semantic truth or adoption. Optional manifests bind selected bytes, not complete dependencies. Context measure counts unique selected local files, estimates tokens as Unicode characters/4 and cannot see chat usage, billing or savings. Run records are not transcripts and may exist only in ignored local storage.
+Lint validates structure, mapping and supported freshness, not semantic truth or adoption. A change record states what one run observed when it completed; it is not verified source and does not show the code is correct now. measure counts selected local files and estimates tokens as characters/4; it cannot see chat usage, billing or savings.
 
-To evaluate actual reuse, give a fresh chat/teammate a related bounded task without the original conversation; observe discovery, reading, revalidation and successful use with real checks. Record missed/stale guidance. Parser/fixture passes alone do not establish future model quality or measured workflow savings.
+To evaluate actual reuse, give a fresh chat or teammate a related bounded task without the original conversation; observe discovery, reading, revalidation and successful use with real checks. Parser or fixture passes alone do not establish future model quality or measured savings.
 
 ## Consolidate delegated findings
 
-[Task context](task-context.md) reconciles read-only worker evidence into one parent document and feeds existing canonical feature owners before checks. It creates no permanent worker context documents and waives no retention, proof or freshness requirement.
+[Task context](task-context.md) reconciles read-only worker evidence into one parent document and feeds existing feature owners before checks. It creates no permanent worker context documents and waives no retention, proof or freshness requirement.

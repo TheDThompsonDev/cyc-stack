@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from '
 import { dirname, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { digest } from './response-gate.mjs';
-import { controllerPath, sourceSnapshot } from './source-snapshot.mjs';
+import { controllerPath, recordMatcher, sourceSnapshot } from './source-snapshot.mjs';
 
 // Connects the delivery gate to controller runs. A run counts only if this session owns it
 // (or it is an unowned legacy run) and it was touched during the current request, so parallel
@@ -79,8 +79,10 @@ export function changeFingerprint(root, { deadlineMs = changeCheckDeadlineMs } =
     else if (entry.startsWith('u ')) tracked.push(entry.split(' ').slice(10).join(' '));
     else if (entry.startsWith('? ')) untracked.push(entry.slice(2));
   }
-  // Porcelain paths are relative to the repository root, not to this project.
-  const local = paths => paths.map(path => [projectPath(root, top, path), resolve(top, path)]).filter(([path]) => !controllerPath(path));
+  // Porcelain paths are relative to the repository root, not to this project. Controller bookkeeping
+  // and published change records are not project edits.
+  const record = recordMatcher(root);
+  const local = paths => paths.map(path => [projectPath(root, top, path), resolve(top, path)]).filter(([path]) => !controllerPath(path) && !record(path));
   const files = {};
   for (const [path, absolute] of local(tracked)) {
     if (Date.now() > deadline) return unavailable('hashing the changed files');
@@ -104,7 +106,8 @@ function committedPaths(root, from, to) {
     ? git(root, ['ls-tree', '-r', '-z', '--name-only', '--full-name', to, '--', '.'])
     : git(root, ['diff', '--no-relative', '--name-only', '-z', from, to, '--', '.']);
   if (result.status !== 0) return [`commits ${from.slice(0, 7)}..${to.slice(0, 7)}`];
-  return result.stdout.split('\0').filter(Boolean).map(path => projectPath(root, top, path)).filter(path => !controllerPath(path));
+  const record = recordMatcher(root);
+  return result.stdout.split('\0').filter(Boolean).map(path => projectPath(root, top, path)).filter(path => !controllerPath(path) && !record(path));
 }
 
 function changedPaths(root, before, after) {

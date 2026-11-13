@@ -17,7 +17,7 @@ try {
     const name = args[i].slice(2);
     if (flags.has(name)) { options[name] = true; continue; }
     if (['mode', 'conversation', 'wait-ms', 'operation'].includes(name)) { const value = args[++i]; if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`); options[name] = value; continue; }
-    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc', 'update-run'].includes(name)) throw new Error(`Unknown option --${name}`);
+    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc', 'update-run', 'before'].includes(name)) throw new Error(`Unknown option --${name}`);
     const value = args[++i];
     if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`);
     if (['scope', 'artifact', 'criterion', 'passed', 'unmet', 'tests', 'path'].includes(name)) {
@@ -30,8 +30,8 @@ try {
   if ((options.host !== undefined || options.token !== undefined) && command !== 'onboard') throw new Error('--host and --token are only supported by onboard.');
   if (options.kind !== undefined && command !== 'investigate' && (command !== 'recipe' || action !== 'list')) throw new Error('--kind is only supported by recipe list and investigate.');
   if (options.since !== undefined && command !== 'readiness' && command !== 'context') throw new Error('--since is only supported by readiness and context review.');
-  if (options['update-run'] !== undefined && (command !== 'context' || action !== 'review' || !options.write)) throw new Error('--update-run is only supported by context review --write.');
-  if ((options.write || options.all || options.new !== undefined || options.doc !== undefined) && command !== 'context') throw new Error('--write, --all, --new and --doc are only supported by context.');
+  if (options['update-run'] !== undefined || options.new !== undefined) throw new Error('--new and --update-run were removed: context review --write publishes change records and never edits a doc');
+  if ((options.write || options.all || options.doc !== undefined || options.before !== undefined) && command !== 'context') throw new Error('--write, --all, --doc and --before are only supported by context.');
   if (options.verify && command !== 'onboard') throw new Error('--verify is only supported by onboard. Use run verify for task verification.');
   if (options.verify && options['dry-run']) throw new Error('Do not combine --verify with --dry-run. Plain onboard performs read-only inspection.');
   if (!command || command === 'help' || options.help) {
@@ -54,19 +54,19 @@ Discover:
   cyc recipe run --recipe ID [--run ID]
       (execute an applicable authorized recipe; retain diagnostic evidence)
 
-Component context docs (docs/context/):
+Project context (docs/context/): docs say what is true now, change records what each run did.
   cyc context task --run ID
   cyc context ack --run ID --file ACK.json
   cyc delegate swarm|decide|assign|execute|record|cancel|cancel-swarm|reconcile --run ID --file INPUT.json
   cyc context prepare --run ID [--file CONTEXT.json]
-  cyc context review [--run ID | --since YYYY-MM-DD | --all] [--write --update-run UPDATE_ID] [--new NAME]
-      (map completed runs' changed files to component docs and propose the doc entry from each run's
-       record: what changed, what was learned, the decisive check, files with hashes, date and run ID.
-       Read-only without --write; --write appends the entries and refreshes INDEX.md)
-  cyc context lint [--doc PATH]
-      (check the doc layout rules and the index rows, including freshness against Git)
-  cyc context measure --path PATH... [--run ID]
-      (characters and estimated tokens of INDEX.md plus the matched docs, against every doc and the run records)
+  cyc context lint [--doc PATH]   (docs, index, change records, freshness against Git)
+  cyc context index [--write]   (rebuild INDEX.md from the docs; repairs conflict markers)
+  cyc context history [DOC]   (a component's change records, newest first)
+  cyc context review [--run ID | --since YYYY-MM-DD | --all] [--write]
+      (completed runs without a change record; --write publishes them)
+  cyc context rollup [--before YYYY-MM] [--write]   (one digest per earlier month)
+  cyc context migrate [--write]   (move History out of earlier-layout docs)
+  cyc context measure --path PATH... [--run ID]   (reading cost of INDEX.md plus matched docs)
 
 Execute through your existing AI host:
   cyc run start --goal TEXT --playbook feature [--criterion "done when..."]... [--scope PATH] [--session ID] [--scout FILE --plan TEXT]
@@ -155,14 +155,18 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
     result = taskContext(root, options.run, action, action === 'ack' ? readJSON(options.file) : {});
   } else if (command === 'context') {
     const context = await import('../scripts/context-review.mjs');
-    if (action === 'review') result = context.reviewContext(root, { run: options.run, since: options.since, all: !!options.all, write: !!options.write, newDoc: options.new, updateRun: options['update-run'] });
+    if (action === 'review') result = context.reviewContext(root, { run: options.run, since: options.since, all: !!options.all, write: !!options.write });
     else if (action === 'prepare') {
       if (!options.run) throw new Error('context prepare needs the exact --run ID.');
       result = prepareRunContext(root, options.run, options.file ? inputObject(options.file, ['records', 'summary', 'reason']) : {});
     }
     else if (action === 'lint') result = context.lintContext(root, { doc: options.doc });
     else if (action === 'measure') result = context.measureContext(root, { paths: options.path ?? [], run: options.run });
-    else throw new Error('Use context prepare, context review, context lint, or context measure.');
+    else if (action === 'index') result = context.indexContext(root, { write: !!options.write });
+    else if (action === 'history') result = context.historyContext(root, { doc: options.doc ?? positionals[2] });
+    else if (action === 'rollup') result = context.rollupContext(root, { before: options.before, write: !!options.write });
+    else if (action === 'migrate') result = context.migrateContext(root, { write: !!options.write });
+    else throw new Error('Use context prepare, lint, index, history, review, rollup, migrate or measure.');
   } else if (command === 'onboard') {
     result = (await import('../scripts/onboarding.mjs')).onboardProject(root, { verify: !!options.verify, host: options.host, session: options.session, token: options.token });
   } else if (['init', 'install', 'uninstall', 'doctor', 'activate'].includes(command)) {

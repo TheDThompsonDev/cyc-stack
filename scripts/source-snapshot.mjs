@@ -13,6 +13,23 @@ const internal = ['.cyc/runtime', '.cyc/runs', '.cyc/engine'];
 const within = (path, parent) => path === parent || path.startsWith(`${parent}/`);
 // Controller bookkeeping inside the project, never project source.
 export const controllerPath = path => internal.some(p => within(path, p));
+// Change records published after verification, in <context folder>/changes: kept with the project,
+// never verified source. Only these names; any other file there is source.
+export const changeFile = /^(?:\d{4}-\d{2}-\d{2}-[A-Za-z0-9][A-Za-z0-9._-]{3,}|\d{4}-\d{2})\.md$/;
+export function recordMatcher(root) {
+  let folder = 'docs/context';
+  // Read the folder as the controller does (trimmed, no backticks), and as Windows names it.
+  try { const value = JSON.parse(readFileSync(resolve(root, '.cyc/config.json'), 'utf8').replace(/^﻿/, '')).context?.directory; if (typeof value === 'string' && value.trim()) folder = value.trim().replaceAll('`', ''); }
+  catch { /* no readable configuration: the default folder */ }
+  const fold = process.platform === 'win32' ? text => text.toLowerCase() : text => text, prefix = `${folder}/changes/`;
+  // Only a regular file is exempt: a folder, link or submodule under a record name is source. A
+  // record that is gone (folded into its digest) is not a project edit either.
+  return path => {
+    if (fold(path.slice(0, prefix.length)) !== fold(prefix) || !changeFile.test(path.slice(prefix.length))) return false;
+    try { return lstatSync(resolve(root, path)).isFile(); } catch (error) { return error.code === 'ENOENT'; }
+  };
+}
+
 const secret = path => /(^|\/)\.env(?:$|\.)/.test(path) && !/\.(example|sample|template)$/.test(path);
 function paths(root, value, label) {
   if (!Array.isArray(value) || value.some(p => typeof p !== 'string' || !p || isAbsolute(p) || p.includes('\\') || p.split('/').some(x => !x || x === '.' || x === '..'))) throw new Error(`source.${label} must contain literal project-relative paths, not globs.`);
@@ -301,8 +318,9 @@ export function inspectSource(project, { signatures = 'content', useCache = fals
   const probe = git(['rev-parse', '--is-inside-work-tree']);
   const gitAware = probe.status === 0 && probe.stdout.trim() === 'true';
   if (!gitAware && existsSync(resolve(root, '.git'))) throw new Error('Cannot inspect Git file selection; repair Git access before starting CYC.');
+  const record = recordMatcher(root);
   function excluded(path, forced = false) {
-    if (controllerPath(path) || path.split('/').includes('.git')) return true;
+    if (controllerPath(path) || record(path) || path.split('/').includes('.git')) return true;
     if (tracked.has(path)) return false;
     if (secret(path)) return true;
     if (forced) return false;

@@ -150,7 +150,8 @@ test('standard install excludes development payload and engine documentation lin
     const location = join(directory, entry.name);
     return sum + (entry.isDirectory() ? bytes(location) : lstatSync(location).size);
   }, 0);
-  assert.ok(bytes(engine) < 1024 * 1024, 'standard engine must stay below the 1-MiB release budget');
+  // The owner raised this budget from 1 MiB to 1.1 MiB on 2026-11-11 for change records.
+  assert.ok(bytes(engine) < 1.1 * 1024 * 1024, 'standard engine must stay below the 1.1-MiB release budget');
   assert.equal(doctorProject(root).ok, true);
 
   function markdownFiles(directory) {
