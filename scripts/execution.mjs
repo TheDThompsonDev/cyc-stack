@@ -12,10 +12,15 @@ function setup(message) {
 export function resolveExecution(root, { executionMode, conversationId, session } = {}, env = process.env) {
   if (executionMode !== undefined && !executionModes.includes(executionMode)) setup(`Unknown executionMode ${executionMode}.`);
   const caller = conversationIdentity(env);
+  let callerHost = null;
+  if (caller && caller !== env.CYC_SESSION) {
+    if (caller === env.CLAUDE_CODE_SESSION_ID) callerHost = 'claude';
+    else if (caller === env.CODEX_THREAD_ID) callerHost = 'codex';
+  }
   for (const value of [conversationId, session]) if (value !== undefined && !/^[A-Za-z0-9_-]{4,80}$/.test(value)) setup('Session must be 4-80 letters, digits, underscores or dashes; conversationId uses the same safe identity shape.');
   const native = id => {
     if (!id) return null;
-    for (const host of ['codex', 'claude', 'cursor']) {
+    for (const host of callerHost ? [callerHost] : ['codex', 'claude', 'cursor']) {
       const key = /^[a-f0-9]{32}$/.test(id) ? id : digest(`${host}:${id}`).slice(0, 32);
       const path = resolve(root, '.cyc/runtime', `${key}.state.json`);
       if (existsSync(path)) {
@@ -30,12 +35,16 @@ export function resolveExecution(root, { executionMode, conversationId, session 
   const active = native(caller);
   if (active && executionMode && executionMode !== active.mode) setup(`Active ${active.mode} request cannot use ${executionMode}.`);
   if (active && conversationId && conversationId !== caller && native(conversationId)?.gateSession !== active.gateSession) setup('conversationId does not identify the active native request.');
-  const identity = conversationId ?? caller;
   const observed = active ?? native(conversationId) ?? native(session) ?? native(caller);
   if (observed && executionMode === 'standalone') setup(`Active ${observed.mode} context cannot use standalone.`);
   const mode = executionMode ?? observed?.mode;
   if (!mode) setup(/^[a-f0-9]{32}$/.test(session ?? '') ? `No hook state for session ${session}. Provide the current native context or choose an explicitly authorized execution mode.` : 'Execution capability is unknown; choose --mode standalone for explicitly authorized no-hook work, or provide the current native context.');
   if (mode.startsWith('native-') && (!observed || observed.mode !== mode)) setup(`${mode} needs current native hook state for the supplied conversationId/session. Reload the host and use its injected context.`);
+  let identity = conversationId ?? caller;
+  if (mode.startsWith('native-')) {
+    if (active) identity = caller === active.gateSession ? null : caller;
+    else if (conversationId === observed.gateSession) identity = null;
+  }
   return { mode, conversationId: identity ?? null, workflowSession: session ?? null, gateSession: observed?.gateSession ?? null, hookActivation: 'unverified' };
 }
 export function artifactFiles(root, paths, label = 'Artifact') {

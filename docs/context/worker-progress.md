@@ -26,6 +26,10 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 
 Private planner/worker/merge transports keep events correlated; parallel batches share one acknowledged snapshot and allSettled drains siblings after failure. Cancellation needs matching terminal acknowledgment. Unknown transport keeps claims, no silent redispatch. Explicit retries retain cycles/usage/failures/assignment totals. Windows transient publication retries only the same staged rename; committed merge plus ack failure returns pending read/ack without generation retry.
 
+Starting/waiting for an operation and stopping a native run require the current caller's recorded gate. Historical gate aliases use the same guard as active-run selection and pause/resume; their saved identity remains unchanged. The compatibility repair changes neither cancellation ownership/acknowledgment, check output nor failure limits. Real CLI interruption evidence is distinct from simulated worker or native-state fixtures.
+
+Task-context-dependent worker/swarm consumers pass through assertTaskOwner and reuse the native execution already validated by assertRunOwner. They must not choose another host's state from the same raw ID after the owner check. This reconciles parent authority without changing worker claims, cancellation, terminal acknowledgments or legacy/non-native mapping.
+
 ## Lessons
 
 - 2026-11-06 · current maintenance: A finished worker or passing check is distinct from workflow completion. CLI guidance retains the exact wait handle and exposes failed delivery publication without claiming activation.

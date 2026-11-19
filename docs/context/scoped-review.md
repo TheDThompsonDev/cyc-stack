@@ -24,6 +24,10 @@ Delegated token usage is reporting only; it cannot stop workers or refuse assign
 
 Automatic semantic review checks returned worker claims against scoped source and preserves uncertainty as conflicts; it is separate from required fresh source review. Findings retain worker origins/evidence and judgment labels, not independent certification. Prior knowledge and negative evidence cannot be overwritten by a merge proposal. Review/source freshness and receipt-scoped findings continue to apply to this implementation.
 
+Review capture/record mutations use the shared actual-caller guard, including verified historical native aliases. Identical raw IDs from different native host variables cannot borrow the other host's gate. Preserve a prior review as historical when bytes change; capture the final candidate before dispatch and record actual findings rather than importing a stale success label. A verification-only playbook cannot enforce reviewPolicy, so its required fresh review must be checked explicitly before completion.
+
+Review actual protected consumers after the shared guard, not only the guard itself. A fresh reviewer demonstrated task reads/acknowledgments rejecting a valid Codex owner because assertTaskOwner repeated a conflicting host lookup; the corrected consumer retains the validated native gate. Preserve that initial finding and its reproduction when capturing the corrected source for another review.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.

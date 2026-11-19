@@ -1,10 +1,22 @@
 # Execution capability and conversation ownership
 
-Covers: scripts/execution.mjs, scripts/packet.mjs, scripts/runtime.mjs, bin/cyc.mjs, test/workflow-ergonomics.test.mjs
+Covers: scripts/execution.mjs, scripts/packet.mjs, scripts/runtime.mjs, bin/cyc.mjs, test/workflow-ergonomics.test.mjs, test/response-gate.test.mjs
 
 ## Current view
 
 A controller execution has an explicit capability: native-codex, native-claude, cursor or intentionally requested standalone. scripts/execution.mjs:resolveExecution separates the real host conversation, a workflow label and the controller run ID. A label's shape does not select Cursor. Runtime assertRunOwner binds the recorded conversation and native gate to the actual caller, including gate-only starts; no-hook or foreign callers cannot borrow the target's stored label to resolve its owner.
+
+For a native start with a valid same-gate alias, resolveExecution records the actual observed caller when available. A gate key without a distinct observed conversation remains a null conversation identity with a recorded gate; it never invents a host UUID. The workflow label and state.session gate key keep their existing meanings.
+
+Historical native records whose conversationId is exactly their gateSession remain usable by the actual caller only after that caller's own current native state resolves to the recorded mode and gate. Ownership checks do not rewrite those records. Canonical UUID owners still require their exact caller identity. Missing context, a foreign gate, another host and contradictory conversation ownership remain rejected before mutation.
+
+Native lookup preserves the source host of an observed CLAUDE_CODE_SESSION_ID or CODEX_THREAD_ID. Identical raw IDs with both hosts' state present cannot borrow one another's gate. Explicit CYC_SESSION keeps its existing manual caller precedence; no host is guessed from its text alone.
+
+The simulated host fixtures in test/response-gate.test.mjs isolate and restore ambient caller IDs once per test, including tests with several fixtures. They retain their packet, ownership and rejection assertions. The dedicated workflow-ergonomics cases explicitly supply each native actor; test isolation must not permit production lookup through a different host's state.
+
+activeRun uses the same native owner check before applying an implicit or explicit session selector. Passing a gate key as --session selects an already owned run; it cannot supply caller authority. This covers historical alias and gate-only records as well as newly canonicalized runs, while standalone and manual Cursor selection remain unchanged. The decisive workflow-ergonomics tests exercise real-caller selection, pause/resume, preserved failure counters/limits, and refused mutations with unchanged saved bytes.
+
+assertRunOwner returns the execution resolved from the current caller after validating the recorded identity and gate. assertTaskOwner reuses that native gate for task-context/delegation and requireTaskReady consumers. It must not remap the raw UUID through the historical host search after a successful guard: with both hosts' states present, the older Claude-first mapping rejected a rightful Codex owner. Legacy/non-native task ownership retains its existing lookup branch. Six direct production-runtime cases in workflow-ergonomics exercise both hosts and canonical/alias/gate-only task reads and acknowledgments, with unchanged state on rejected actors.
 
 The entrypoints are run start, packet/check-reply, and runtime mutations. Native modes require observed context and cannot be downgraded to standalone while a native request is active. Native delivery still checks tokens, request windows, source freshness and exact responses where required. Cursor needs an explicit exact-response packet. Standalone completion writes local delivery evidence without certifying host activation; hexadecimal conversation IDs remain standalone on resume.
 
@@ -25,6 +37,8 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 Planner and merge review use distinct parent-owned host claims, immutable correlated thread/turn receipts and scoped snapshots. Workers keep private transports; parent identity is excluded from child environment. Claim requires current auto policy and source/context; terminal cleanup can survive parent stop without reopening it. Explicit terminal-only retry archives cycles and preserves counters; unknown claims prohibit dispatch. Read scope remains cooperative, not OS isolation.
 
 ## Lessons
+
+- 2026-11-14 · Journey pilot: a real CLI interruption exposed an accepted gate alias that the same thread could not resume. Preserve the original run and use current caller evidence to recover; never repair this by editing saved ownership, removing the run or resetting a budget. Source regression proof and live continuation results belong to the repair run and pilot evidence.
 
 - 2026-11-06 · current maintenance: Completion guidance is an additive projection of owned results, including bounded workers; command templates retain the exact run and do not change native ownership or activation requirements.
 

@@ -59,6 +59,10 @@ Two edits to the same line of a Current view still conflict, and two new docs wh
 A record edited by hand after publication, or written by hand for a run that never existed, is not detected; it is a plain file under review like any other. A migrated run that recorded two hashes for one file keeps both, and investigate reads the first. Structure, mapping and byte checks cannot prove a doc true, complete or adopted, and no token or time saving is claimed.
 INDEX.md is itself covered by this doc, so changing a reference row advances this doc's Git freshness boundary even when no contract changed.
 
+Runtime context preparation uses the same native owner guard as other mutations. Historical gate aliases require the actual caller's matching native gate; a document/session selector cannot supply authority. Changing a shared runtime path requires every indexed canonical owner in the frozen retention plan, even when only ownership lookup changed. Preserve an incomplete plan's history rather than editing it to include missed owners.
+
+Task-context-dependent preparation/check work also reuses the native execution returned by assertRunOwner. Repeating the older host-blind mapping after validation would reject the actual owner when two hosts share a raw ID. Direct production-runtime regression cases retain that distinction; context structure/source binding alone could not detect it.
+
 Kept from earlier runs that touched the shared controller files this doc covers:
 workflowAdvice is limited to explicit run next; ordinary record status keeps its 3000-character budget.
 Unified task context adds parent-owned read/ack and strict contribution reconciliation; read-only workers cannot complete a parent stage, reset budgets or create a context doc per worker (docs/task-context.md).

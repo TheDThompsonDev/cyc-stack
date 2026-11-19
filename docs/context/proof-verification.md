@@ -26,6 +26,10 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 
 Active planning/planned/work phases block parent proof/check handoffs, including the initial no-worker planner window. Internal claims use explicit state guards and never certify criteria. Source/context/result-set bindings protect automatic proposals independently of source proof. Semantic model review and parallel success cannot waive original-code proof, retained feature knowledge or configured broad verification.
 
+Native proof/check operations and their bounded waits use the shared caller-owned runtime guard. Exact historical gate aliases remain usable through the actual caller's current gate; a foreign or missing host context cannot supply authority from the stored run. This compatibility does not rewrite original captures, verification inputs, limits or receipts. Proof obtained by a stopped implementation run remains that run's evidence; a later verification of already-patched bytes must not relabel its baseline as original defective code.
+
+Task-context-dependent checks reuse the native execution that assertRunOwner validated instead of remapping the caller through another host. The November 14 follow-up found this missed consumer after a passing suite. Its direct pre-change/after regression executions are separate from the stopped implementation's managed proof; the verify playbook does not capture managed proof originals. Final checks and review bind the corrected bytes independently.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.

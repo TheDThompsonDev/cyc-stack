@@ -16,6 +16,10 @@ Begin with one legitimate caller: what can it supply, what does it expect and wh
 
 Keep a suitable project pattern. Compare a different design only when uncertainty could materially affect correctness, ownership or maintenance. Explain the trade-off through a concrete operation. A component's size or number of callers is a reason to investigate its responsibility, not sufficient evidence to delete it.
 
+When two names imply different behavior, try each in the user's account of a real task. “I added a step to the checklist for this job. Will the next job include it?” A shared checklist suggests the edit carries forward. A job-specific copy suggests it affects only this job.
+
+Check how the code and any existing glossary or decision record use the term. If ownership is still open, ask which outcome the user expects. For a job-specific copy, reopen the edited job and create another from the same template. Only the edited job should contain the added step. Keep the agreed meaning in the project's existing context when future callers need it.
+
 Use the relevant worked guide for the decision:
 
 - [Code standards](engineering/code-standards.md) for comments, types, component structure and error interpretation.

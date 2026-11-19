@@ -8,6 +8,8 @@ Use a project copy with a recorded baseline and a bounded feature that has a rea
 
 Install CYC locally and inspect its hooks and recipe effects. Configure the project's actual checks before starting a run. Use normal host configuration and its trust flow. A supported invocation-only hook trust option can be used in vetted automation, but record it; this does not test interactive trust. Confirm hook-issued state in the live host. In the recorded trial, `--ignore-user-config` omitted observable project hook execution. Do not infer activation from an installation, a manual packet check, or a simulated event.
 
+Check readiness in the same client that will execute the task. Hook discovery through an API does not establish that the client's model turn receives prompt context. Require the actual request-bound native state before starting an implementation run for native qualification. If it is missing, preserve the observation and correct the launch setup or report the limit; do not silently select standalone execution and count it as native evidence.
+
 ## Run and checkpoint
 
 1. In a real host session, invoke `/cyc` (or the host's skill invocation) with the feature outcome. Allow normal discovery, implementation, testing and proportionate retention. Do not supply the solving agent with an implementation answer. Keep failed checks and any intervention.
@@ -33,3 +35,5 @@ Report a missed behavior as a failure or unverified item, even if the code passe
 Separate observations from interpretation. Agent self-review is traceable evidence, not independent human approval or proof of understanding. One successful handoff establishes feasibility on that case; it cannot establish reliability across teams, operating systems or hosts. Different sequential tasks are not a basis for speed, cost or token-saving claims. Provider input totals include cached repeated context and must not be presented as unique tokens read or tokens avoided.
 
 Save a concise public result with evidence hashes and explicit limits. Keep any sensitive raw transcripts outside distribution and say which evidence is local-only. When transferring a verified feature back from a copy, refuse to overwrite destination changes made after the baseline and recheck the integrated result. Do not copy runtime state or host-specific setup into product source.
+
+During teardown, inspect any project-trust entries the host added for the disposable project. Remove only entries introduced for that pilot, preserve unrelated configuration bytes and record the cleanup. Keep invocation-only trust, interactive trust and observed hook execution as separate claims.

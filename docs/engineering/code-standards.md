@@ -1,6 +1,6 @@
 # Code standards that improve the delivered change
 
-Use these standards while implementing or reviewing code. Read the active project's instructions and applicable `code-standards.md`, design system, contribution guide and tool configuration first. Keep its established conventions unless the task calls for changing them. This guide supplies portable engineering criteria; it does not impose EventConvo's labels, colors, form library or React architecture on other projects.
+Use these standards while implementing or reviewing code. Read the active project's instructions and applicable `code-standards.md`, design system, contribution guide and tool configuration first. Keep its established conventions unless the task calls for changing them. Bind these portable engineering criteria to the active project's own labels, design system, libraries and architecture.
 
 Apply the relevant rules to the changed code and affected behavior. Fix related findings within scope; record unrelated cleanup separately. Do not turn an ordinary feature into a repository-wide standards migration.
 
@@ -91,9 +91,9 @@ When adopting the standard in another project, identify the files, real commands
 
 In CYC, read the project's applicable standards during Scout/Build and carry them into Verify's semantic review. Existing configured executable checks and controller evidence retain their current meanings; this document adds no hook, parser, stage or machine-enforced comment-quality check. Record only checks actually run on the final candidate, and disclose material unverified behavior.
 
-## Changes from the supplied older standard
+## Applying the standard
 
-The supplied EventConvo example was inspected as evidence on 2026-11-02. Its specific labels path, design-system file, colors and form stack remain local project choices. The improvements here address these concrete weaknesses:
+Apply each criterion through the active project's actual contracts and tools:
 
 - **Comment count → information value.** Keep necessary rationale, notices and contracts while removing narration.
 - **An annotated empty catch → an allowed failure contract.** A word such as "intentional" cannot justify hiding a failed operation.

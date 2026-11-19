@@ -24,6 +24,10 @@ The output is proposed edits, not a list of lessons. A lesson that doesn't chang
 5. **Prefer editing an existing skill over creating one.** A new skill needs recurring evidence across tasks.
 6. **Write each proposal as an edit.** Target file, the exact change, the evidence (quoted correction or failed check), where it should *not* apply, and how you would tell if it made things worse.
 
+For a retrospective spanning related runs, match a human review comment to the diff it concerns. Use relevant handoffs or transcripts to trace how the choice was made. A comment quoted across several handoffs counts as one observation. If a project example teaches the rejected pattern, verify the intended rule and propose correcting the example.
+
+For an agreed rule with many existing violations, propose a check that rejects new occurrences while allowing identified legacy cases to be fixed over time. Try a change that fixes one old occurrence and adds a new one elsewhere. It should fail even though the total stays flat. Feedback about taste can stay a review judgment when a mechanical check would also reject good work.
+
 ## Acceptance for a proposal
 
 Keep a proposal only if it is: tied to a real moment, specific enough to apply, decision-changing, not already covered, and durable (it will still be true next month). Drop one-off facts like commit hashes and versions; keep the pattern behind them.

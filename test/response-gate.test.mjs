@@ -117,7 +117,22 @@ test('artifact edits, missing files, and out-of-project paths are rejected', t =
   assert.match(check(packet, { root }).join(' '), /outside this project/);
 });
 
+const isolatedCallerTests = new WeakSet();
 function hookFixture(t, host) {
+  // Simulated hosts must not borrow the live runner's native conversation.
+  // Several fixtures can share one test, so restore its environment only once.
+  if (!isolatedCallerTests.has(t)) {
+    isolatedCallerTests.add(t);
+    const names = ['CYC_SESSION', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID'];
+    const saved = new Map(names.map(name => [name, process.env[name]]));
+    for (const name of names) delete process.env[name];
+    t.after(() => {
+      for (const [name, value] of saved) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    });
+  }
   const root = fixture(t);
   mkdirSync(join(root, 'scripts'));
   mkdirSync(join(root, 'nested'));

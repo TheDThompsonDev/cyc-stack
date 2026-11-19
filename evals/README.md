@@ -10,6 +10,10 @@ These small source-only projects exercise concrete engineering behavior. They ar
 | Cohort task-board journey (`cohort-journey/`) | Known first/related behavior probes plus an actual-user observation protocol | `node evals/cohort-journey/evaluate.mjs PATH_TO_CANDIDATE first` or `related`; recovery needs separate observations |
 | [Fresh-session handoff](live-session-reuse.md) | Check saved knowledge and verification across real chats | Follow the protocol in the linked guide |
 
+Use the [CYC journey map](../docs/maintainers/journeys.md) to connect installation, activation, recovery and fresh-chat reuse to their existing checks and required observations.
+
+The [November 14 journey pilot](results/2026-11-14-journey-pilot.md) records actual CLI observations and a development ownership repair, including failed probes and evidence limits. It is a known-fixture case, not a participant trial or a current pass for another revision.
+
 Give a producer the task, public criteria and a disposable candidate copy. Evaluate its current output separately. Preserve rejected cases and failed observations. A semantic review must establish structural or explanation quality where executable checks cannot.
 
 These are exposed development fixtures with finite checks. They do not establish browser quality, live host activation, performance gains or production reliability. [Validation boundaries](../docs/validation.md) describe the separate evidence needed for those claims.

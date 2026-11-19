@@ -231,7 +231,13 @@ export function activeRun(root, session = callerSession()) {
     .map(entry => { try { return json(resolve(directory, entry.name, 'state.json')); } catch { return null; } })
     .filter(run => run && ['running', 'paused', 'blocked'].includes(run.status));
   const key = session === undefined ? undefined : gateSession(root, session);
-  const candidates = key === undefined ? runs.filter(run => !run.execution?.conversationId) : runs.filter(run => run.execution ? run.execution.conversationId === session || (!run.execution.conversationId && !run.session) : run.session === key || !run.session);
+  const candidates = runs.filter(run => {
+    if (run.execution?.mode?.startsWith('native-') && run.execution.gateSession) {
+      try { assertRunOwner(root, run); } catch { return false; }
+      return session === callerSession() || session === run.execution.conversationId || key === run.execution.gateSession;
+    }
+    return key === undefined ? !run.execution?.conversationId : run.execution ? run.execution.conversationId === session || (!run.execution.conversationId && !run.session) : run.session === key || !run.session;
+  });
   if (candidates.length === 1) return candidates[0].id;
   if (!candidates.length) throw new Error(key === undefined || !runs.length ? 'No active CYC run in this project. Start one with run start, or pass --run ID for a finished run.' : `No active run for session ${key}; other conversations' runs are not selected implicitly. Pass --run ID.`);
   throw new Error(`Several runs are active: ${candidates.map(run => `${run.id} (${run.status}: ${run.goal.slice(0, 60)})`).join('; ')}. Pass --run ID or --session.`);
@@ -430,10 +436,13 @@ function requireActive(state) {
 export function assertRunOwner(root, state) {
   if (!state.execution) return;
   const execution = state.execution, caller = callerSession();
-  if (execution.conversationId && execution.conversationId !== caller) throw new Error(`Run ${state.id} belongs to conversation ${execution.conversationId}; the current conversation cannot mutate it.`);
+  // Historical native records may use their gate key as identity; the caller must still prove that gate below.
+  const gateAlias = execution.mode.startsWith('native-') && execution.gateSession && execution.conversationId === execution.gateSession;
+  if (execution.conversationId && execution.conversationId !== caller && !gateAlias) throw new Error(`Run ${state.id} belongs to conversation ${execution.conversationId}; the current conversation cannot mutate it.`);
   if (execution.gateSession && !caller) throw new Error(`Run ${state.id} needs its current conversation context before mutation.`);
   const observed = resolveExecution(root, { executionMode: execution.mode, conversationId: execution.gateSession ? caller : execution.conversationId ?? undefined, ...(execution.gateSession ? {} : { session: execution.workflowSession ?? undefined }) });
   if (execution.gateSession && observed.gateSession !== execution.gateSession) throw new Error(`Run ${state.id} belongs to native gate ${execution.gateSession}; the current conversation cannot mutate it.`);
+  return observed;
 }
 function budget(state) {
   if (!state.limits.maxDurationMs || Date.now() - Date.parse(state.startedAt) < state.limits.maxDurationMs) return true;
@@ -2311,9 +2320,10 @@ function taskIO(root, state) {
     normalize: paths => normalizePaths(root, paths, 'assignment paths') };
 }
 function assertTaskOwner(root, state) {
-  assertRunOwner(root, state);
+  const observed = assertRunOwner(root, state);
   const caller = callerSession();
-  if (!caller || !state.session || gateSession(root, caller) !== state.session) throw new Error('Task context belongs to its recorded parent conversation; the current owner is required.');
+  const ownerSession = observed?.mode?.startsWith('native-') ? observed.gateSession : gateSession(root, caller);
+  if (!caller || !state.session || ownerSession !== state.session) throw new Error('Task context belongs to its recorded parent conversation; the current owner is required.');
 }
 function requireTaskReady(root, state, options) {
   if (!state.taskContext) return;

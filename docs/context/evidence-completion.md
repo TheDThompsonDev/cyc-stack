@@ -26,6 +26,10 @@ Parent readiness now includes active/planned automatic phases before any worker 
 
 Completion also publishes the run's change record (publishRunChange in scripts/runtime.mjs) after the complete event, with the observed check results. The record is outside the source snapshot, so the delivery source hash, the artifacts and the review packet are unaffected; a failed write is stored as changeRecord.error and retried by the next finish without undoing completion. Publication happens only while the source snapshot still equals the delivered source hash; a file changed in the gap after completion is recorded as a failed publication, not bound. Finish returns changeRecord and review.md prints its path.
 
+Native finish resolves authority from the actual caller before accepting a historical gate-alias run. The shared guard also protects active-run selection; the selected run cannot supply missing caller context. Alias compatibility changes neither completion evidence nor native request/Stop requirements. Verification-only playbooks currently use the unversioned contract; keep explicit criteria and procedural fresh-review evidence without claiming versioned implementation enforcement.
+
+requireTaskReady uses assertTaskOwner, which reuses the validated native execution returned by assertRunOwner. Finish, handoff and verification must not reject an already validated owner by selecting a different host's state afterward. A green broad suite can miss such a consumer; preserve the demonstrated finding, retry within existing limits and renew source-bound review/checks after correction.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.
