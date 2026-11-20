@@ -8,6 +8,7 @@ Write this before any markup, as `design/decisions.md` in the project. Every fie
 # Design decisions: <site>
 
 Subject and audience: <who arrives, what they came to do, what they already know>
+Project material: <a verified offering, asset or product state; where it comes from; what must remain discoverable>
 Premise (one sentence a visitor could verify in the first screen): <...>
 Rejection condition: fail if <the opening could belong to any ... / the work is buried under a slogan / ...>
 
@@ -19,9 +20,9 @@ Display face: <name, weight> · Text face: <name> · Accent voice: <italic phras
 Display size: <desktop px / phone px>, tracking <−0.0x em>, line height <x>
 
 Palette (canvas, surface, ink, ink-muted, brand, accent, accent-ink, line): <8 hex values>
-Contrast (from the script in color.md): <ink/canvas, muted/canvas, canvas/brand, accent-ink/canvas, accent display/canvas>
+Contrast: <measured foreground/background pairs for the actual text, action and meaningful control cues>
 Derived from: <two materials and a place>
-Radius: <0 / 4 / 8 / 999> · Surface system: <hairline / flat blocks / sharp panels> · Dark section: <which one>
+Radius: <0 / 4 / 8 / 999> · Surface system: <hairline / flat blocks / sharp panels> · Change of emphasis: <where and why>
 
 Signature element: <the one thing a visitor would describe afterwards>
 Imagery (see visual-material.md): <kinds: photograph / rendered object / illustration / surface / texture / map>, <subject, crop, treatment>, <source and license, stored in /assets>. "None" only for a tool-dense screen, with the reason.
@@ -29,9 +30,12 @@ Icons: <set, stroke, size>
 
 Voice: <how it talks> · Headline candidates: 1. <...> 2. <...> 3. <...>
 Primary action: <verb + object> → <what happens next, and what is demo>
+Access: <target; how the action is named, reached and used; the design choice most likely to obscure it and how to check it>
 
 Tells to watch: <numbers from generic-tells.md this subject tends to attract>
 ```
+
+After rendering, add the visual choice you compared, which treatment you kept, and the detail visible at desktop or phone size that decided it. A short observation and the relevant views are enough.
 
 ## Example: café
 
@@ -60,6 +64,7 @@ Icons: Lucide, 1.5 px stroke, 20 px, only for hours, map and phone.
 
 Voice: short, specific, no exclamation marks · Headline candidates: 1. Roasted here on Thursdays. 2. Two shots, textured milk, no hurry. 3. The 6:30 pour for the 7:15 ferry.
 Primary action: "See this week's coffees" → scrolls to the index list; "Order ahead" is labeled demo and shows the pickup form with a saved-locally notice.
+Access: the coffee link follows the introduction in reading and tab order. Give it a solid surface so the counter photo can keep its detail. Follow its visible focus to the list.
 
 Tells to watch: 2, 16 (cup icons), 17 ("crafted with care").
 ```
@@ -91,6 +96,7 @@ Icons: Phosphor regular, 24 px, in the problem picker only.
 
 Voice: plain, direct, numbers first · Headline candidates: 1. Broken today. Fixed today. 2. Tell us what failed; we tell you when. 3. Twelve miles, four crews, one window.
 Primary action: "Request a window" → confirmation with the chosen window; labeled demo, nothing sent.
+Access: keep the ZIP code label visible. On invalid input, associate the error text with the field, retain the entry, and check keyboard correction through confirmation.
 
 Tells to watch: 2 (service cards), 5 (invented 10k+ repairs), 11 (blue accent is close to navy; keep orange as the only accent).
 ```

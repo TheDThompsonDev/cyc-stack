@@ -1,13 +1,17 @@
 ---
 name: frontend-design
-description: "Build web interfaces a reviewer cannot mistake for a default AI page. Three gates: a written design decision sheet before any markup, the signature section rendered and scored against the generic-tells list before the page is extended, and a set-divergence table when several sites are requested. Use for new websites, pages, dashboards and visual redesigns. For a narrow UI bug, keep the existing identity and use only the relevant checks."
+description: "Design a distinctive, usable website or application screen from a brief as simple as “make my homepage look better.” Use for new pages, dashboards and visual redesigns. For a narrow UI repair, preserve the existing identity."
 ---
 
 # Frontend design
 
-The page a model writes without instructions is recognizable at a glance: a centered hero, one sans-serif font, three equal cards with icons, a blue or violet accent, rounded corners and soft shadows on everything, the same container and padding in every section. Every site built that way looks like every other site built that way. This method makes that output impossible to ship by requiring three things you can show.
+Own the visual decisions. Someone with an existing project can point to the page and ask for a redesign. Inspect the current page, its destinations, brand assets, and representative content before asking for more input. For a new project, start with the brief and available material. A reference is optional. When supplied, use it to understand taste and verify its sample claims against the project. Ask a plain-language question only if an unresolved fact or preference would materially change the work and a reversible assumption is insufficient.
 
 ## Gate 1: the decision sheet exists before any markup
+
+Decide what the visitor should see, feel and be able to do. Ground that direction in something specific you can actually show. For example, a developer meetup can feel like walking up to a table where people are building together. That suggests a close photograph of shared work, a conversational headline and an event within reach. A dispatch tool might open on a late delivery, with the promised time easy to scan and reassignment at hand. Trace important existing offerings and actions into the new page, including what happens below the opening. Treat unconfirmed material as a proposal.
+
+Design the reading order, accessible name and keyboard path of the main action alongside its visual treatment. Identify where the signature idea could make the experience harder to use and how you will test it. Use the project's accessibility requirements and WCAG 2.2 AA as the working target when none is specified. Preserve stricter commitments. The [UX foundations](references/ux-foundations.md) give criteria and exceptions for common design choices.
 
 Write `design/decisions.md` in the project (or in the run directory when the project forbids new files) using the [decision sheet](references/decision-sheet.md). Every field holds a concrete value: a named typeface pair, eight hex values with roles and their contrast ratios, a layout archetype by name, a signature element, the visual material by kind and source (a photograph stored in `/assets` with its license, a rendered object, an illustration with depth), three candidate headlines in the product's own voice. "Warm and modern" is not a value, and "none, strong type instead" is not a material plan for a site; a tool-dense dashboard may have no photograph, a café, a portfolio or a service may not. Read these first; they are short and they are where the values come from:
 
@@ -24,13 +28,23 @@ Keep the user's criterion count. Visual quality is a subcondition with a rejecti
 
 ## Gate 2: the signature section is rendered and scored before the page is extended
 
-Build the one section that carries the identity (usually the opening; for a tool or portfolio, the tool or the work) in the real page: final copy, the chosen material actually in place (the downloaded photograph, the rendered board, not a placeholder rectangle), the main action and its next state, and the transition into the next section. Render it at desktop and phone width. Score it with the [generic-tells score sheet](references/generic-tells.md#score-sheet). Three or more tells is a fail, and the fix is a different decision (archetype, type, imagery, copy), not a color swap. Then apply the [craft rules](references/craft-rules.md) and extend the treatment to the rest of the page.
+Compose the section that carries the identity with the real headline or task, chosen material, primary action and transition to the next section. For implementation, build this slice in the real page and include the next action state. For a concept request, use the requested mockup format and identify any proposed behavior.
 
-Writing the whole site and taking screenshots at the end skips this gate. Do not skip it.
+Before the first handoff, compare rendered treatments of the most consequential visual decision. When direction is open, explore different ways to present the same real material. When the brand or direction is settled, compare a focused choice within it, such as the headline weight and crop. Two studies can be successive renders of the same slice. Keep alternatives internal unless the user requests options.
+
+Look at the pictures side by side. Where does the eye land first and next? What do the type size, weight and line breaks do to the actual words? Does the area of accent color lead toward the important content or compete with it? Which detail survives the phone crop? At DSD, a framed table photo made a friendly invitation. A closer view of people looking at a laptop gave “What are you building?” a subject. The yellow mark behind *building?* singled out the word the image answered. Use that reasoning with this project's material.
+
+Before adopting a treatment, exercise its main action on the working slice. Tab to it from the page, see where focus lands, activate it and inspect the next state. Check its accessible name, actual text and control contrast, and narrow-screen reading order. For static concepts, assess the visible risks and specify the intended interaction. Repair a barrier in the treatment and check it again before extending it. For example, move an unreadable photo caption to an opaque print label and keep the photograph at its intended scale.
+
+Choose among the usable treatments on visual merit. Record the difference that decided it in the decision sheet. Check the selected slice at desktop and phone width with the [generic-tells score sheet](references/generic-tells.md#score-sheet) and [craft rules](references/craft-rules.md). Three or more tells fail the check. A low count still needs a visible, project-specific reason to choose this design.
 
 ## Gate 3: the finished page passes the tells check and the experience review
 
-Score the full page at desktop and phone width, including the [density rule](references/visual-material.md#the-density-rule) for material, then run the [experience review](references/experience-review.md) (visual pass, primary-task pass, access pass) with the applicable [UX foundations](references/ux-foundations.md). The access pass includes an executed check, not a reading: axe-core or an equivalent in the rendered page at desktop and phone width, with the contrast ratios and target sizes it reports recorded in the evidence. A contrast rule "computed, not eyeballed" that nobody ran is how a page with a perfect tells score still ships 4.0:1 numerals. Test the decision sheet's rejection condition directly. A page that works, passes every automated check and still reads as a default page has an unmet visual criterion. Say so; do not shrink the criterion to fit the page.
+For a static concept, judge the rendered composition and identify the actions proposed. Apply the following interaction and browser checks to a working implementation.
+
+Read the full page as a sequence. Cover the hero and inspect the next section and the action it leads to. Can a visitor find concrete evidence for the opening promise? Give a collection, a story and a task the space each needs. Carry a recognizable type or alignment choice across the transition. Remove decoration or repeated copy that competes with the work. Check the result again at reading size and on a phone.
+
+Score the full page, including the applicable [material checks](references/visual-material.md#the-density-rule), and test the decision sheet's rejection condition. Run the [experience review](references/experience-review.md) on the primary journey, including its access pass at desktop and phone widths. Record repairs, retests and remaining gaps. A known accessibility failure in the changed journey keeps it open for repair.
 
 For a set, lay the openings side by side at the same width and the full scrolls side by side. Cover the names and the colors. What remains different must be composition, type, imagery and voice.
 
@@ -40,4 +54,4 @@ No mascot, animation, asymmetry or paid assets. A conventional grid in a well-ch
 
 ## Handoff
 
-Pass the decision sheet, the rendered evidence at both widths, the tells scores and the review findings through [Build](../../cyc-build/SKILL.md) and [Verify](../../cyc-verify/SKILL.md). Keep `design/decisions.md` in the repository so the next change can read why the page looks the way it does.
+Give the owner the preview or working page and show the desktop and phone result. Explain one choice in everyday language by pointing to a visible detail. When a preference remains open, frame it in terms of what the visitor would experience. Carry the decision sheet, renders, tells scores and findings through [Build](../../cyc-build/SKILL.md) and [Verify](../../cyc-verify/SKILL.md). Keep the rationale with the project for its next change.

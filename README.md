@@ -168,9 +168,10 @@ Explain the evidence behind the findings. No edits.
 ```
 
 ```text
-/cyc Improve this site's complete signup journey. Establish a visual direction,
-build a usable mobile layout, and check keyboard, validation and recovery states.
+/cyc Make my homepage look better.
 ```
+
+Run that in the project you want to improve. CYC uses the page, content and brand assets to choose type, colors, imagery and layout. Before it extends a design, it checks that the main action is readable, reachable by keyboard and usable on a narrow screen. You see the recommended desktop and phone design, what was tested and any remaining limits. Add preferences in your own words, such as “Keep our logo” or “Show the work we make.”
 
 ## Updating
 

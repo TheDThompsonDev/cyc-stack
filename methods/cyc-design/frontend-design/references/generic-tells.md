@@ -64,6 +64,8 @@ Each row is a different decision, not a style.
 
 ## Score sheet
 
+Score the designed view in its ordinary presentation. A system font, simplified layout or system color supplied by the visitor's zoom, font or forced-colors settings is an adaptation to respect. For a product's own presentation, judge a treatment required by its brand or task against the decision sheet. Record that reason and score the discretionary choices. A passing score never offsets a barrier found on the primary path.
+
 Record this in the run evidence for the signature section and for the finished page, at desktop and phone width:
 
 ```text

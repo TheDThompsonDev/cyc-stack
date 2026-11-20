@@ -32,11 +32,12 @@ In a prototype, local state and example data can be the intended outcome. Label 
 
 ## Access and comfort pass
 
-Run an automated check in the rendered page first (axe-core through Playwright or the browser extension, or Lighthouse) at desktop and phone width, and record every reported contrast ratio and target size in the evidence. The decision sheet's script checks the palette; this step checks what the page actually rendered, including text on photographs, the dark band and button labels. Then:
+Scan the rendered page with axe-core or an equivalent at desktop and phone widths. Exercise the relevant opened, error or success state and scan changed controls there too. Investigate incomplete results, particularly text over photos or translucent surfaces. Measure the actual foreground/background at the least legible part under the text, or give it a known surface and retest. Record the state and result. Leave an uncheckable item visibly unverified.
 
-- Follow the primary path with a keyboard. Check focus visibility, logical order, activation, modal containment where needed, Escape/close and focus return.
-- Inspect labels and semantic roles for controls, alternatives for meaningful images and text equivalents for visual data. Icon-only actions need accessible names. Check reading order when layouts reorder content.
-- Check contrast and legibility on actual surfaces, zoom/reflow, and targets that are practical to tap. Use project or applicable accessibility requirements; visual taste does not excuse inaccessible controls.
+- Start with the keyboard at the page entry. Use Tab and Shift+Tab to reach the main control and Enter or Space as appropriate to its role. Check visible, unobscured focus, dialog containment where needed, close and return. Clicking a control or calling `focus()` directly can hide a missing tab stop.
+- Follow focus through recovery too. If a Retry button disappears while content reloads, check where the keyboard user lands and how they learn the outcome.
+- Inspect names, roles, states, heading order, meaningful alternatives and form error associations in the browser's accessibility tree. Check reading order when layouts reorder content. If assistive technology is available, exercise the changed journey with it and name the tool used. Record a tree inspection as such.
+- Enlarge text to 200% and check the primary task for clipping or lost controls. Check reflow of vertical content at a 320 CSS pixel viewport, allowing applicable two-dimensional content exceptions. Inspect the action's touch target and spacing. Apply the [criterion-specific guidance](ux-foundations.md#keep-visual-treatment-accessible).
 - Check fixed navigation, banners and overlays for obscured actions or content. Phone keyboards and safe areas matter when they affect the requested input flow.
 - Check reduced motion and any automatic tour's pause/manual controls. Read status and errors without relying on animation or color alone.
 

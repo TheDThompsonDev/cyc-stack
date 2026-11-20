@@ -23,11 +23,12 @@ Reduce competing decisions where they impede this task; keep important choices d
 
 ## Keep visual treatment accessible
 
-Use the project's applicable accessibility target. For work targeting WCAG 2.2, the following are concrete considerations, not a complete conformance checklist. Read the linked criterion for its exact scope and exceptions when a boundary case matters.
+Use the project's applicable accessibility target. When none is specified, design and test the changed journey against the applicable level A and AA criteria in [WCAG 2.2](https://www.w3.org/TR/WCAG22/). These examples cover common visual choices. Read the criterion for its exact scope and exceptions.
 
 | Concern | Implementation and check | Primary source |
 | --- | --- | --- |
 | Text on photos, gradients or translucent surfaces | Check actual rendered backgrounds and interaction states. AA text contrast is generally at least 4.5:1, or 3:1 for qualifying large text, with stated exceptions. | [Contrast minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) |
+| Controls, focus and meaningful graphics | Where a visual cue is needed to identify a control, its state or information in a graphic, check 3:1 against adjacent colors, subject to the criterion's exceptions. Give status and selection a cue beyond color. Decorative dividers may stay subtle. | [Non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html) · [Use of color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) |
 | Small or crowded controls | Make pointer targets practical to activate. SC 2.5.8 uses 24×24 CSS pixels or applicable exceptions such as sufficient spacing; do not incorrectly call 44×44 a universal AA rule. Larger touch targets can still be a good design choice. | [Target size minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) |
 | Enlarged text and narrow views | Preserve content and functionality when reflowing at 320 CSS pixels for vertical content, with the criterion's exceptions for inherently two-dimensional parts. Inspect zoom and content rather than only page width. | [Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html) |
 | Floating navigation, chat and banners | Follow the keyboard path and ensure author-created layers do not entirely hide the focused component; prefer keeping it fully visible. | [Focus not obscured](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) |

@@ -16,7 +16,7 @@ Name two materials and one place or time that belong to this business, then take
 | Careers or finance | Forest green, aged paper, gold leaf | Deep green brand, cream canvas, gold accent (observed at Undersold.ai) |
 | Daily health tool | Sage, linen, morning light | Sage-tinted canvas, forest brand, muted green ink (observed in Rep & Plate) |
 
-A user-supplied brand always wins. Record it in the decision sheet and derive the missing roles from it.
+Keep the supplied brand identity. When a brand color is too faint for a label or focus indicator, give the color a different role or pair it with an accessible ink. Record the pairing.
 
 ## Eight roles
 
@@ -39,28 +39,23 @@ Rules:
 - Ink carries the brand hue: `#171b18` on a green site, `#2a1f16` on a brown site, `#101828` on a blue site. Gray-on-white text is the default page.
 - One accent, under 10 percent of the view. The brand color does the heavy lifting (buttons, the dark section). The accent marks the two words that matter, a rule under them, one number, one state.
 - `--accent` touches text only at display size (24 px and up, or 19 px bold), where 3:1 is the requirement, and only when the script's "accent display" line passes; on a light canvas most accents do not, and the display word then uses `--accent-ink` too. Index numerals, dates, prices, eyebrow labels, links and button labels in the accent hue use `--accent-ink`. Undersold.ai does exactly this: bright gold `#e5a128` for the underline and for text on the green band, dark gold `#805000` for the handwritten phrase on cream.
-- Exactly one dark section per page, in the brand color, unless the whole site is dark. Its text is the canvas color, not white; the accent is usually fine there, check it.
+- Use a dark or brand-colored band when the content calls for a change of emphasis. Choose readable text, links and focus colors for that surface and measure each pairing.
 - Surfaces come from mixing, not from a gray scale: `color-mix(in oklab, var(--brand) 6%, var(--canvas))` gives a surface that belongs to the palette.
 - Status (error, success, warning) gets its own hue and an icon or text; never color alone.
 
 ## Check it before writing markup
 
-Contrast is computed, not eyeballed. Run this on the eight values (Node, no dependencies) and paste the output into the decision sheet; the finished page is then checked again in the browser with axe-core or an equivalent (see [experience review](experience-review.md)).
+Run the bundled [contrast calculator](../scripts/contrast.mjs) with Node before committing to a palette. Quote each hex color. Give it eight colors in decision-sheet order to inspect possible pairings. Use two colors for a specific use, such as the lettering on an accent button or a required control outline against its adjacent surface. Run this example from the frontend method directory.
 
-```js
-// node contrast.mjs "#canvas" "#surface" "#ink" "#ink-muted" "#brand" "#accent" "#accent-ink" "#line"
-const [canvas, surface, ink, muted, brand, accent, accentInk] = process.argv.slice(2);
-const lum = h => { const c = h.slice(1).match(/../g).map(x => parseInt(x, 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
-const cr = (a, b) => ((Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05)).toFixed(2);
-const pairs = [['ink on canvas', ink, canvas, 4.5], ['ink on surface', ink, surface, 4.5], ['muted on canvas', muted, canvas, 4.5], ['muted on surface', muted, surface, 4.5], ['canvas text on brand', canvas, brand, 4.5], ['accent-ink on canvas', accentInk, canvas, 4.5], ['accent-ink on surface', accentInk, surface, 4.5], ['canvas text on accent-ink', canvas, accentInk, 4.5], ['accent display on canvas', accent, canvas, 3], ['accent on brand', accent, brand, 3]];
-for (const [name, a, b, min] of pairs) console.log(`${cr(a, b) >= min ? 'pass' : 'FAIL'}  ${name}: ${cr(a, b)} (min ${min})`);
+```sh
+node scripts/contrast.mjs "#995d25" "#f6efe4"
 ```
 
-Any FAIL means a different value, not a smaller font. Derive `--accent-ink` by mixing the accent toward the ink until the pair passes; keep the hue.
+Read the verdict for the role you intend to use. The tool compares the full ratio and truncates only the printed value. A pale brand accent can work as a background with dark lettering even when it fails as small text. Resolve failing combinations used by the page and check the actual rendered states, including focus, captions over photographs, and translucent surfaces. The calculator takes opaque sRGB hex colors. Use the [experience review](experience-review.md#access-and-comfort-pass) for those browser checks. [W3C text contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 
 ## Example palettes
 
-Starting points to adapt. Eight values in the order canvas, surface, ink, ink-muted, brand, accent, accent-ink, line. Every accent-ink below was computed to 4.6:1 or better on its canvas and surface on 2026-11-02; the plain accent on a light canvas is 1.8 to 3.7:1, so there it is for underlines, rules, marks and text on the dark band; only the catalog and home-repair accents clear 3:1 for display words.
+Starting points to adapt. Eight values in the order canvas, surface, ink, ink-muted, brand, accent, accent-ink, line. Check each accent against the surface where you use it. The café accent works as a mark on cream. For a word on cream, the darker accent ink works at body size.
 
 | Subject | Values |
 | --- | --- |

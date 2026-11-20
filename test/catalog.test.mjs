@@ -152,6 +152,24 @@ test('routing returns a valid advisory suggestion for clear, ambiguous, and unkn
   }
 });
 
+test('plain-language homepage redesign selects experience and respects narrower requests', () => {
+  for (const [goal, expected] of [
+    ['Make my homepage look better.', 'experience'],
+    ['Build a new version of the home page.', 'experience'],
+    ['Make our website feel more professional.', 'experience'],
+    ['Review how we could make my homepage look better.', 'review'],
+    ['Prototype a way to make my homepage look better.', 'explore'],
+    ['Make my homepage look better. Concepts only.', 'explore'],
+    ['Critique how we could make the site feel more polished.', 'review'],
+    ['Fix the broken link on my homepage.', 'bug-fix'],
+    ['Make my homepage remember the last search.', 'feature'],
+    ['Build a new version of the homepage API.', 'feature'],
+    ['Make my report look better.', 'feature'],
+  ]) {
+    assert.equal(routeTask(goal).playbook, expected, goal);
+  }
+});
+
 test('route CLI cannot create task state or mutate the target project', t => {
   const project = mkdtempSync(join(tmpdir(), 'cyc-route-'));
   t.after(() => {

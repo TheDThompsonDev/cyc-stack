@@ -11,7 +11,7 @@ You own the outcome. Keep normal work short without dropping context reuse, revi
 
 ## Frontend work
 
-For new websites/composed redesigns use the [frontend design method](../../methods/cyc-design/frontend-design/SKILL.md) and its three gates: before markup, design/decisions.md names archetype, typeface pair, seven subject-derived colors, signature and rejection condition (plus multi-site divergence); Build renders/scores the signature before expansion (three generic tells fails); Verify checks desktop/phone and experience. Keep it within the original criteria even on fast routes. Combine host/platform guidance into that sheet. Narrow repairs preserve identity; review-only stays review-only.
+“Make my homepage look better” is enough to start a visual redesign. Use the [frontend design method](../../methods/cyc-design/frontend-design/SKILL.md) for new sites and composed redesigns, including fast routes. The assistant owns art direction, accessible interaction and rendered comparison. Check the main action before extending a design, then verify the finished journey on desktop and phone. Apply the same sheet to host/platform requirements and the original criteria. Narrow repairs preserve identity. A request for critique or concepts stays within that scope.
 
 ## The flow
 

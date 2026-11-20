@@ -17,13 +17,15 @@ export function routeTask(goal, {paths=[]}={}) {
     ['bug-fix', /\b(bug|broken|crash|fails?|regression|fix)\b/i],
     ['performance', /\b(slow|latency|performance|speed up)\b/i],
     ['refactor', /\b(refactor|rename|restructure)\b/i],
-    ['review', /\b(review|audit)\b/i],
+    ['review', /\b(review|audit|critique)\b/i],
     ['verify', /\b(verify|test whether|does .* work)\b/i],
     ['plan', /\b(plan|roadmap|phases)\b/i],
-    ['explore', /\b(explore|prototype|alternatives|brainstorm)\b/i],
+    ['explore', /\b(explore|prototype|alternatives|brainstorm|(?:mockups?|concepts?) only)\b/i],
     ['handoff', /\b(handoff|pull request|prepare.*review)\b/i],
     ['experience', /\b(redesign|user journey|cohesion|layout)\b/i],
-    ['investigation', /\b(how does|why does|investigate|understand)\b/i]
+    ['investigation', /\b(how does|why does|investigate|understand)\b/i],
+    ['experience', /\bmake (?:my |our |the |this )?(?:home ?page|website|site|landing page|dashboard|front[ -]?end) (?:look|feel) (?:better|less generic|(?:more )?(?:professional|polished|stylish|modern))\b/i],
+    ['experience', /\bnew (?:version|design) of (?:my |our |the |this )?home ?page\b(?=\s*(?:[.!?,]|$)|\s+(?:with|that|so)\b)/i]
   ];
   const match = rules.find(([, pattern]) => pattern.test(goal));
   const consequential=/\b(auth(?:orization|entication)?|permissions?|privacy|identity|payments?|migrat(?:e|ion)|delet(?:e|ion)|restor(?:e|ation)|concurren\w*|public (?:api|interface)|stored (?:data|records?))\b/i.test([goal,...paths].join(' '));

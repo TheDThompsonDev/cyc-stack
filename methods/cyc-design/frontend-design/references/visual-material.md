@@ -4,6 +4,8 @@ A page made only of type and hairlines is a document, not a website. Every site 
 
 ## The density rule
 
+Use these checks on composed pages where the material helps visitors understand the offer or work. In a task-dense interface, inspect how clearly the actual records, labels and actions communicate their relationships. Preserve the working space and keep reflow and user-selected presentations usable.
+
 Measured on the desktop render, checked again on the phone:
 
 - In each of the first two viewports, at least one non-text element at least 25 percent of the viewport width: a photograph, an illustration with depth, a rendered object (a ticket, a menu board, a map, a product panel), or a color surface holding content.
@@ -19,7 +21,7 @@ A page that fails this is tell 21 on the [generic list](generic-tells.md) howeve
 | Photograph with a subject | Puts a person, a place or the work in the room; the single biggest difference between a site and a document | Download under a permissive license and store in `/assets` with source and license noted (below) |
 | Product or interface rendered as an object | A ticket, a chalkboard, a receipt, a schedule card, an app screen in a device frame; proves the thing exists | Build it in HTML and CSS with the page's own tokens; it is content, not decoration |
 | Illustration with depth | A scene, not an icon: layered shapes, a horizon, shadow, texture, a drawn object at the size it would be | Inline SVG of 40 or more paths, or a generated bitmap when an image tool is available |
-| Color surface holding content | A dark band, a brand block with a list inside it, a panel behind a form | CSS only; one dark band per light page, plus tinted panels where content is item-like |
+| Color surface holding content | A dark band, a brand block with a list inside it, a panel behind a form | Use a CSS background where it groups or emphasizes related content. Check its text, links and controls on that surface. |
 | Texture | Paper grain, a subtle noise, a halftone, a printed-ink edge; makes flat color feel like a material | CSS: an SVG `feTurbulence` filter at 4 to 8 percent opacity, or a repeating gradient; never a stock "mesh" blob |
 | Map or diagram | Where the place is, how the process runs | Inline SVG drawn from the real streets or steps |
 | Data drawn as a mark | A ring, a bar, a sparkline beside a number | Inline SVG, sized to the number it explains |

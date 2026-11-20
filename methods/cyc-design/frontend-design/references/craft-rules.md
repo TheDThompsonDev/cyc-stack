@@ -12,7 +12,7 @@ Execution rules with numbers, applied after the signature section passes the [te
 
 - One radius for the whole site, chosen from 0, 4, 8 or 999 (pill). Cards at 16, buttons at 8 and badges at 999 on the same page is the default look.
 - One surface system: hairline borders (`--line`) on a tinted canvas, or flat color blocks, or sharp-edged panels. Shadows only on things that actually float (a menu, a dialog, a dragged item).
-- Exactly one dark section on a light site. Its text is the canvas color, not white.
+- Make a surface change mark a real transition, such as moving from a finished project to its commission details. A change in scale, density or spacing can carry that transition on a single surface.
 
 ## Imagery
 
@@ -29,11 +29,11 @@ Execution rules with numbers, applied after the signature section passes the [te
 
 ## Details that signal craft
 
-- Eyebrow labels (uppercase, tracked, 11 to 13 px) above display text and section headings, saying something specific.
-- Index numerals (01, 02) on lists and steps, set in the display face.
+- Add a short label when it gives a heading needed context. Remove it if the heading already says the same thing.
+- Use index numerals for a sequence the visitor actually follows. For an unordered collection, give that space to the work.
 - Hairline rules between rows instead of boxes around them.
 - Captions under images; meta lines under titles (date, place, duration, price).
-- A footer line with a real-sounding address, hours and one contact, proportional to the site.
+- Close with a useful next action or verified contact details, proportional to the site.
 - Hover and focus change one property (color, underline offset, background), 150 to 250 ms, and respect `prefers-reduced-motion`.
 - `text-wrap: balance` on display and section headings, `text-wrap: pretty` on paragraphs; `touch-action: manipulation` on buttons and links; a `theme-color` meta matching the canvas; the display face preloaded when it is self-hosted.
 
