@@ -2,8 +2,10 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
-## Unreleased (after 0.9.1)
+## 0.10.0 (2026-11-20)
 
+- Start a redesign with `/cyc Make my homepage look better.` CYC compares layouts using the project's content, chooses typography and imagery, and reviews the full page on desktop and phone.
+- Check keyboard access, readable contrast and narrow-screen reflow before choosing a layout. The frontend method uses WCAG 2.2 AA as its default target and includes a contrast checker that compares the unrounded ratio with each threshold.
 - Record context history as one change record per completed run, written by the controller after verification with the check results it observed, under `<context folder>/changes/`. Component docs now hold Covers, Current view and Lessons only; finish writes no History entry or Last-changed line. Change records are kept with the project and are not verified source; any other file in that folder still is.
 - Rebuild the index from the docs without per-run cells (`cyc context index`), insert a new doc's row in sorted position and repair an index left with merge conflict markers. Two branches that finish runs in one component now merge their context files cleanly unless they changed the same line.
 - Read freshness from change records in `cyc investigate`, queried paths first, and count a committed change record in `cyc context lint`'s Git freshness.
