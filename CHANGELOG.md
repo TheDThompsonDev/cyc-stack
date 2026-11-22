@@ -2,7 +2,7 @@
 
 Release notes describe changes to CYC's methods, local tooling and host adapters. A version entry does not establish npm publication or native host qualification.
 
-## Unreleased
+## 0.11.0 (2026-11-22)
 
 - Rebuild the frontend design method around what the site contains and lets a visitor do. A builder now writes an inventory (pages, records, one working journey, what is true now) before any visual decision, chooses a site model from eight measured reference sites by the visitor's job, and starts from a plain system: white or near-black, one type family, one brand color. The earlier color and type pages steered every subject toward a tinted canvas and a serif display pairing, which is the look a model produces unasked; they no longer do.
 - Add `scripts/first-screen.mjs` to the frontend method: a probe to evaluate in a rendered page and a judge with a floor taken from first screens measured on 2026-11-21 (12 things to act on at desktop width, 6 on a phone, 3 other pages linked, 3 screens of content). It catches a brochure page. It does not measure taste, and one visit per site is a small sample.
