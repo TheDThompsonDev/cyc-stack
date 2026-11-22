@@ -29,8 +29,10 @@ test('packed archive installs offline through npm without GitFetcher, including 
   for (const path of ['plugin.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json', '.cursor-plugin/plugin.json', 'skills/cyc/SKILL.md', 'hooks/codex.json', 'hooks/claude.json', 'hooks/cursor.json']) {
     assert.ok(packed.files.some(file => file.path === path), `missing plugin resource: ${path}`);
   }
-  // The owner raised this budget from 1 MiB to 1.1 MiB on 2026-11-11 for change records.
-  assert.ok(packed.unpackedSize < 1.1 * 1024 * 1024, 'release archive must stay below 1.1 MiB unpacked');
+  // The owner raised this budget from 1 MiB to 1.1 MiB on 2026-11-11 for change records, to
+  // 1.2 MiB on 2026-11-20 for the work queue and its board, and to 1.3 MiB on 2026-11-21 for the
+  // frontend method's access checks.
+  assert.ok(packed.unpackedSize < 1.3 * 1024 * 1024, 'release archive must stay below 1.3 MiB unpacked');
   for (const file of packed.files) {
     assert.equal(/^(?:evals\/|test\/|docs\/context\/)|^scripts\/bump-version\.mjs$|^docs\/assets\/(?:.*\.png|.*\.html|build-workflow-diagram\.mjs)$/.test(file.path), false, `development-only file packed: ${file.path}`);
   }
@@ -40,12 +42,15 @@ test('packed archive installs offline through npm without GitFetcher, including 
   assert.ok(packed.files.some(file => file.path === 'scripts/host-activation.mjs'));
   assert.ok(packed.files.some(file => file.path === 'scripts/recovery.mjs'));
   assert.ok(packed.files.some(file => file.path === 'docs/work-assessments.md'));
+  for (const path of ['scripts/queue.mjs', 'scripts/queue-board.mjs', 'scripts/hub.mjs', 'scripts/hub-page.mjs', 'docs/work-queue.md']) assert.ok(packed.files.some(file => file.path === path), `the work queue ships: ${path}`);
   assert.ok(packed.files.some(file => file.path.startsWith('methods/')));
   const archive = join(temporary, packed.filename);
   const args = ['exec', '--offline', '--yes', '--package', archive, '--', 'cyc', 'init', '--project', target];
   assert.equal(JSON.parse(npm([...args, '--dry-run'], target)).ok, true);
   assert.deepEqual(readdirSync(target), []);
   assert.equal(JSON.parse(npm(args, target)).ok, true);
+  const fieldGuide = 'methods/cyc-design/frontend-design/references/field-guide.md';
+  assert.deepEqual(readFileSync(join(target, '.cyc/engine', fieldGuide)), readFileSync(join(source, fieldGuide)));
   assert.ok(readFileSync(join(target, '.cyc/engine/docs/installation.md'), 'utf8').includes('## Agent-guided installation'), 'agent procedure is available without the source checkout');
   assert.ok(readFileSync(join(target, '.cyc/engine/methods/cyc-setup/SKILL.md'), 'utf8').length, 'agent setup instructions ship with the guide');
   const doctor = spawnSync(process.execPath, [join(target, '.cyc/engine/bin/cyc.mjs'), 'doctor'], { cwd: target, encoding: 'utf8' });
@@ -118,4 +123,29 @@ test('packed archive installs offline through npm without GitFetcher, including 
   assert.equal(cli('context', 'lint').status, 0);
   const completed = JSON.parse(readFileSync(join(target, '.cyc/runs', id, 'state.json')));
   assert.deepEqual(completed.handoffs.at(-1).contextDocs, [doc]);
+
+  // The installed copy runs the work queue: create, read the line, start the unit, and refuse a second one.
+  const queueFile = join(target, '.cyc/runtime/installed-queue.json');
+  const queued = name => ({ id: name, outcome: `Explain ${name}.`, playbook: 'investigation', criteria: [{ id: 'explained', description: `${name} is explained.` }], paths: ['behavior.txt'], dependsOn: [] });
+  writeFileSync(queueFile, JSON.stringify({ version: 1, goal: 'Explain the installed fixture.', requirements: 'Explain how the fixture behaves.', units: [queued('behavior'), queued('note')] }));
+  const created = cli('queue', 'create', '--file', queueFile);
+  assert.equal(created.status, 0, created.stdout + created.stderr);
+  const offered = JSON.parse(cli('queue', 'next').stdout);
+  assert.equal(offered.unit.id, 'behavior');
+  const bound = cli('run', 'start', '--file', join(target, offered.startTemplate));
+  assert.equal(bound.status, 0, bound.stdout + bound.stderr);
+  assert.equal(JSON.parse(bound.stdout).queue.unitStatus, 'in-progress');
+  const second = join(target, '.cyc/runtime/installed-second.json');
+  writeFileSync(second, JSON.stringify({ ...JSON.parse(readFileSync(join(target, offered.startTemplate))), goal: 'Explain note.', criteria: queued('note').criteria, queue: { id: offered.queueId, unit: 'note' } }));
+  const refused = cli('run', 'start', '--file', second);
+  assert.equal(refused.status, 1);
+  assert.match(JSON.parse(refused.stderr).error, /One unit runs at a time/);
+  assert.equal(JSON.parse(cli('queue', 'status').stdout).line, 'in-progress');
+  // ... and its board: the running unit leaves a note for the next one, and status counts it.
+  const note = join(target, '.cyc/runtime/installed-note.json');
+  writeFileSync(note, JSON.stringify({ version: 1, kind: 'notice', to: 'note', text: 'Installed board note.' }));
+  const posted = cli('queue', 'post', '--run', JSON.parse(bound.stdout).runId, '--file', note);
+  assert.equal(posted.status, 0, posted.stdout + posted.stderr);
+  assert.equal(JSON.parse(posted.stdout).posted.from, 'unit behavior');
+  assert.equal(JSON.parse(cli('queue', 'status').stdout).board.messages, 1);
 });

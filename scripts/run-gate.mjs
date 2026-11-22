@@ -189,7 +189,7 @@ const unfinished = (run, now) => run.status !== 'complete' && !(run.status === '
 const endedAs = run => run.status === 'running' ? 'past its time budget' : run.status;
 // Why a run stopped, in the controller's record: the reason and files logged by the latest status
 // change. Pause and stop log no reason, and a resume clears an earlier one.
-function stopReason(run) {
+export function stopReason(run) {
   const event = run.history?.findLast(item => ['blocked', 'guard-halt', 'exhausted', 'pause', 'stop', 'resume'].includes(item.type));
   if (!event || event.type === 'resume') return null;
   const files = [...(event?.protectedChanges ?? []), ...(event?.outOfScope ?? [])];

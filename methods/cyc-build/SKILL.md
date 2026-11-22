@@ -13,7 +13,7 @@ Write the smallest coherent slice. Features/bugs need meaningful red/green check
 
 Trace state, storage, interfaces and consumers. Use focused feedback then broad checks. Review diffs; run git diff --check, preserve encoding and log actual failed fixes.
 
-New composed frontend work must follow [frontend gates](../cyc-design/frontend-design/SKILL.md) before expansion; narrow repairs preserve existing identity.
+New composed frontend work must follow [frontend gates](../cyc-design/frontend-design/SKILL.md) before expansion. On a new build or handoff read the study decision in the project’s `design/decisions.md` (or its recorded run-local path). Build the named material and its next state as one slice; check that slice before repeating it. Narrow repairs preserve existing identity.
 
 Read/acknowledge current [unified task context](../../docs/task-context.md) before dependent work. Workers are bounded/read-only; reconcile evidence, disagreements and failed approaches. Worker success does not complete the parent.
 

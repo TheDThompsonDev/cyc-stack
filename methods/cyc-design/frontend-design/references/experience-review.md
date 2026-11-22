@@ -4,9 +4,13 @@ Use the project's existing browser or preview tooling. Adapt checks to the chang
 
 ## Visual pass
 
-Score the view first with the [generic-tells score sheet](generic-tells.md#score-sheet) at desktop and phone width and record the numbers. Three or more tells is a fail whatever the rest of this pass finds, and the repair is a changed decision in `design/decisions.md`, not a color swap. Then read the sheet's rejection condition and judge the render against it.
+Read the decision sheet's line “Without this method I would have built” and look at the first screen and its next meaningful page or in-place state without rereading the reasons written in the sheet. Could that line describe what was delivered? If so, return to [Step 2](../SKILL.md#step-2-choose-the-site-model-and-its-patterns-by-the-visitors-job), even when the page passed every tell and accessibility check. Then name what a visitor can do on the delivered site that they could not do on that page, and do it in the browser. Keep owner-fixed compositions and conventional interactions within their brief.
 
-Read the visual criterion before judging the screenshot. If it only names colors, an illustration and readable layout, it cannot establish the intended design quality. Refer back to the decision sheet's premise and rejection condition to make its intended effect and rejection condition explicit. Preserve the user's ambition and criterion count; do not rewrite a failed criterion to match the result.
+Use the measurement scope selected before implementation in Step 4. For a visual public homepage read the [first-screen judge](../SKILL.md#step-4-build-the-first-screen-and-the-journey-then-measure) result for the finished home page at desktop and phone width. A FAIL keeps the work open. A pass says only that the site is neither a brochure nor bare. It does not say the page looks good.
+
+Then use the [generic-tells score sheet](generic-tells.md#score-sheet) at desktop and phone width. Record the numbers, apply its failing check and test the decision sheet's rejection condition. Keep the visual judgment even when the count is zero.
+
+Read the visual criterion before judging the screenshot; when the brief states none, use the decision sheet's rejection condition. If it only names colors, an illustration and readable layout, it cannot establish the intended design quality. Refer back to the decision sheet's model and rejection condition to make the intended effect explicit. Preserve the user's ambition and criterion count; do not rewrite a failed criterion to match the result.
 
 Inspect a representative desktop and phone view. Also inspect the narrowest supported width for a new layout or a suspected breakpoint defect; include a middle width when the transition itself is in question. Choose dimensions from the project; 1440, 390 and 320 CSS pixels are possible samples, not a universal support contract.
 
@@ -24,6 +28,8 @@ Apply the relevant [UX foundations](ux-foundations.md) to the chosen visual mech
 
 ## Primary-task pass
 
+Start from the study decision saved in the project sheet. On the recorded route, identify the actual item, time, filter or variant. Follow it to the destination and back at desktop and phone widths. Check the label, unit, selected state and return focus that matter to that task. On a one-view tool, inspect the in-place change and how someone reverses it. Add the observed outcome or the remaining evidence gap to the same sheet. A cited practice or a screenshot alone cannot demonstrate continuity.
+
 Follow the promised action to its outcome. A modal opening is not a completed booking, a submit click is not a saved record, and a toast alone is not persistence evidence. Where the feature promises saving, check the displayed result and reload or revisit it. Check cancellation and an applicable failure/recovery path using permitted test fixtures, not consequential live submissions.
 
 Use honest first-use state, representative populated state, and an edge state that could break this layout. Depending on the feature, that might mean a long name, missing photo, large value, many rows, narrow locale, delayed response or validation error. Exercise only states relevant to the feature. Avoid filling production screens with invented success, progress, testimonials or personal records to make them look complete.
@@ -31,6 +37,8 @@ Use honest first-use state, representative populated state, and an edge state th
 In a prototype, local state and example data can be the intended outcome. Label that boundary where users might mistake it for a real save or external action. Prefer a working local demonstration or honest unavailable control to a fake success alert. Report the precise missing integration.
 
 ## Access and comfort pass
+
+The [judge](../SKILL.md#step-4-build-the-first-screen-and-the-journey-then-measure) has already counted, on each page you measured, the language and title, alt attributes, field labels, link and button names, tap-target size, a visible change on focus and contrast on solid backgrounds and, from the two screenshots, behind text on photographs. It cannot tell whether an alt describes the picture, whether the tab order makes sense, whether an error is announced, or whether text stays readable on a video, a slideshow or an animation. This pass is those.
 
 Scan the rendered page with axe-core or an equivalent at desktop and phone widths. Exercise the relevant opened, error or success state and scan changed controls there too. Investigate incomplete results, particularly text over photos or translucent surfaces. Measure the actual foreground/background at the least legible part under the text, or give it a known surface and retest. Record the state and result. Leave an uncheckable item visibly unverified.
 

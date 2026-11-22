@@ -1,72 +1,64 @@
 # Color
 
-A palette is derived from the subject, then expressed as eight tokens with roles, then checked with a contrast script before any markup. A palette chosen from a swatch of pleasant blues is tell 11 on the [generic list](generic-tells.md). An accent that reads well as a 100 px word and fails as a 16 px label is the most common way a good palette ships inaccessible text, so the accent has two values.
+On the eight studied sites, color is decided twice: what the page sits on, and where its color comes from. Five sit on white, one on a warm cream and two on near-black. Every one gives a single color the job of the main action. Beyond that they differ on purpose, and that difference is much of why no two look alike.
 
-## Derive it from the subject
+An existing brand's colors come first. Use them, record them, and let nothing below override them.
 
-Name two materials and one place or time that belong to this business, then take the colors from them.
+## Canvas
 
-| Subject | Materials and place | What falls out |
-| --- | --- | --- |
-| Café | Espresso, crema, cream paper, a wooden counter in morning light | Deep brown brand, warm cream canvas, a caramel accent |
-| Photographer | Darkroom, silver print, matte black paper, one warm safelight | Near-black canvas or warm white, silver-gray muted ink, one brass accent |
-| Catalog | Paper stock, ink, one signal color for "in stock" or "selected" | Paper-white canvas, true ink, one vermilion or cobalt signal, nothing else |
-| Event | The venue at night, stage light, the wristband | Deep night canvas, one hot accent, warm white ink |
-| Home repair | Workwear navy, safety orange, plaster white, galvanized steel | Navy brand, warm off-white canvas, orange accent, steel line color |
-| Careers or finance | Forest green, aged paper, gold leaf | Deep green brand, cream canvas, gold accent (observed at Undersold.ai) |
-| Daily health tool | Sage, linen, morning light | Sage-tinted canvas, forest brand, muted green ink (observed in Rep & Plate) |
+Choose one from the subject.
 
-Keep the supplied brand identity. When a brand color is too faint for a label or focus indicator, give the color a different role or pair it with an accessible ink. Record the pairing.
+- **White.** `#ffffff` with near-black text (`#111827`, `#1c1917`, `#222222`) and one gray for secondary facts (`#4b5563` on white measures 7.5:1). Fits a catalog, a finder, money, software: wherever photographs or the product supply the color. Use a pale gray (`#f4f4f4` to `#f7f7f7`) for bands and panels.
+- **Warm tint.** A cream or paper canvas (`#fbfaf7`, `#f8f5ee`) with a near-black that leans toward the brand hue (`#171b18`) and a muted secondary text (`#5c625d` on `#fbfaf7` measures 5.9:1). Fits a personal service, craft, food, hospitality, heritage. It needs a deep color for buttons and for one or two full dark sections, so the page has contrast and does not read as beige. Do not set it with a serif headline unless a brand you were given does: that pair is the look builds without this method chose ([tell 40](generic-tells.md#the-unchosen-look)), and the judge fails it.
+- **Dark.** Near-black (`#0b1318`, `#121212`) with off-white text (`#f7f7f1`) and a light gray for secondary text (`#b3b3b3`, `#cbd2d7`). Fits media, events, nightlife, developer tools, anything used in the evening or built around covers and photographs. Panels are one step lighter than the page (`#121212` on `#000000`).
 
-## Eight roles
+A tinted canvas is a choice like any other. It is wrong only when nothing about the subject asked for it.
+
+## Where the color comes from
+
+Choose one. This is the decision that most separates one site from another.
+
+- **One brand color, used in fields.** A single saturated hue on the main button, the selected state and the mark, and also in larger areas: a highlight block behind a key word, a band, an offset shadow, numbers. Seen as a yellow on a dark canvas, a red and a blue on white.
+- **The photographs.** The interface stays black, white and gray, and the brand color appears only on the mark and the one main button. Every other color on the page is in the pictures, so there must be many of them and they must be good.
+- **The content.** Covers, product shots or category tiles in many saturated colors on a neutral or dark page. The interface adds one accent, saved for the paid or primary offer.
+- **Artwork.** A page with no brand color at all: black buttons on white, with color only in illustrations, painted backdrops behind product frames, and partner marks.
+- **A two-color palette.** A deep color and a warm accent used together everywhere: deep green with mustard, navy with coral. The deep color fills buttons and whole sections; the accent marks the one emphasized phrase, the highlighted plan and small labels.
+- **A campaign palette over a plain shop.** The shop itself is white with near-black text. The current campaign brings three or four colors of its own for banners, buttons on photographs and bands, and can be replaced without touching the shop.
+
+## Rules that held across all of them
+
+- **One color does the main action** on every screen. Count the filled buttons in the action color in one view: more than one or two means nothing is leading.
+- **The second button is quiet:** outlined, pale gray or plain text. Never a second saturated color.
+- **Status has its own hue** (error, success, sale) plus an icon or words, never color alone.
+- **A dark or colored band marks a real change of content**, and its text, links and focus ring are chosen and measured for that surface.
+- **A brand color too light for text**, such as a yellow, becomes a background with dark text on it.
+
+## Roles
 
 ```css
 :root {
-  --canvas: ...;      /* page background, tinted, never #ffffff */
+  --canvas: ...;      /* the page */
   --surface: ...;     /* cards, inputs, panels; one step off the canvas */
-  --ink: ...;         /* body text, tinted toward the brand hue, never #000000 */
-  --ink-muted: ...;   /* secondary text; still 4.5:1 on canvas and surface */
-  --brand: ...;       /* the deep color: primary buttons, the dark section, the mark */
-  --accent: ...;      /* marks, underlines, rules, display words of 24 px or more, text on the dark band */
-  --accent-ink: ...;  /* the accent darkened (or lightened on a dark canvas) until it reaches 4.5:1; every accent-colored text under 24 px, and the background of an accent button */
-  --line: ...;        /* hairline rules and borders, derived from canvas, not gray */
+  --ink: ...;         /* primary text */
+  --ink-muted: ...;   /* secondary facts; still 4.5:1 on canvas and surface */
+  --brand: ...;       /* the main action, the selected state, the mark */
+  --on-brand: ...;    /* text and icons on the brand color */
+  --accent: ...;      /* only for a two-color or campaign palette */
+  --line: ...;        /* hairline rules and borders */
+  --focus: ...;       /* focus ring; 3:1 against what it sits on */
 }
 ```
 
-Rules:
-
-- The canvas is tinted. Cream `#f8f5ee`, bone `#f5f2ec`, sage `#f3f8f5`, cool paper `#f4f5f7`, charcoal `#141414`. Pure white is for a surface sitting on a tinted canvas, if at all.
-- Ink carries the brand hue: `#171b18` on a green site, `#2a1f16` on a brown site, `#101828` on a blue site. Gray-on-white text is the default page.
-- One accent, under 10 percent of the view. The brand color does the heavy lifting (buttons, the dark section). The accent marks the two words that matter, a rule under them, one number, one state.
-- `--accent` touches text only at display size (24 px and up, or 19 px bold), where 3:1 is the requirement, and only when the script's "accent display" line passes; on a light canvas most accents do not, and the display word then uses `--accent-ink` too. Index numerals, dates, prices, eyebrow labels, links and button labels in the accent hue use `--accent-ink`. Undersold.ai does exactly this: bright gold `#e5a128` for the underline and for text on the green band, dark gold `#805000` for the handwritten phrase on cream.
-- Use a dark or brand-colored band when the content calls for a change of emphasis. Choose readable text, links and focus colors for that surface and measure each pairing.
-- Surfaces come from mixing, not from a gray scale: `color-mix(in oklab, var(--brand) 6%, var(--canvas))` gives a surface that belongs to the palette.
-- Status (error, success, warning) gets its own hue and an icon or text; never color alone.
+White text on these was measured with the calculator below: `#1d4ed8` blue 6.7:1, `#b91c1c` red 6.4:1, `#047857` green 5.4:1, `#7c3aed` violet 5.6:1, `#c2410c` orange 5.1:1, `#104034` deep green 11.6:1. Dark ink `#111827` on `#f59e0b` amber measures 8.2:1. They are examples of a workable action color, not a palette to reuse. Take the hue from something the business owns, such as its sign, its uniform or its packaging. When nothing is supplied, choose a hue the neighboring businesses in its category are not all using.
 
 ## Check it before writing markup
 
-Run the bundled [contrast calculator](../scripts/contrast.mjs) with Node before committing to a palette. Quote each hex color. Give it eight colors in decision-sheet order to inspect possible pairings. Use two colors for a specific use, such as the lettering on an accent button or a required control outline against its adjacent surface. Run this example from the frontend method directory.
+Run the bundled [contrast calculator](../scripts/contrast.mjs) with Node before committing to a color. Quote each hex value. Give it two colors, foreground then background, for a specific use such as the label on the primary button or a control outline against its surface. Run this from the frontend method directory.
 
 ```sh
-node scripts/contrast.mjs "#995d25" "#f6efe4"
+node scripts/contrast.mjs "#ffffff" "#1d4ed8"
 ```
 
-Read the verdict for the role you intend to use. The tool compares the full ratio and truncates only the printed value. A pale brand accent can work as a background with dark lettering even when it fails as small text. Resolve failing combinations used by the page and check the actual rendered states, including focus, captions over photographs, and translucent surfaces. The calculator takes opaque sRGB hex colors. Use the [experience review](experience-review.md#access-and-comfort-pass) for those browser checks. [W3C text contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+Read the verdict for the role you intend. The tool compares the full ratio and truncates only the printed value. Resolve failing combinations the page uses and check the rendered states too, including focus, text over photographs and translucent surfaces. The calculator takes opaque sRGB hex colors. Use the [experience review](experience-review.md#access-and-comfort-pass) for the browser checks. [W3C text contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 
-## Example palettes
-
-Starting points to adapt. Eight values in the order canvas, surface, ink, ink-muted, brand, accent, accent-ink, line. Check each accent against the surface where you use it. The café accent works as a mark on cream. For a word on cream, the darker accent ink works at body size.
-
-| Subject | Values |
-| --- | --- |
-| Café, espresso | `#f6efe4` `#fff9ef` `#2a1f16` `#6d5d50` `#3b2419` `#c9772b` `#995d25` `#e4d6c3` |
-| Photographer, dark | `#111111` `#1a1a1a` `#f2efe9` `#9a9690` `#f2efe9` `#d9c58b` `#d9c58b` `#2a2a2a` |
-| Photographer, light | `#f7f5f0` `#ffffff` `#161616` `#6a6660` `#161616` `#b8952e` `#846c26` `#e2ddd3` |
-| Catalog, paper and signal | `#f4f4f1` `#ffffff` `#121417` `#5b6066` `#121417` `#e8412c` `#c83a29` `#d9d9d4` |
-| Event, night | `#0f0e17` `#1b1930` `#fffffe` `#a7a9be` `#ff8906` `#e53170` `#e84880` `#2e2b4a` |
-| Home repair, workwear | `#f3f4f1` `#ffffff` `#15202b` `#55606b` `#1f3a5f` `#e4572e` `#b94b2d` `#d6dad3` |
-| Careers, green and gold | `#f8f5ee` `#fffaf0` `#171b18` `#5c625d` `#104034` `#e5a128` `#8e6921` `#e3ddd0` |
-| Daily tool, sage | `#f8faf7` `#ffffff` `#102333` `#5f6b66` `#17674e` `#c9a24a` `#817041` `#d5e1dd` |
-| Software, restrained | `#fbfbf9` `#ffffff` `#101828` `#5d6675` `#0c4a3a` `#ffb000` `#936c12` `#e3e5e0` |
-
-For a set of sites, no two palettes share a temperature and a brand hue family. Two warm-cream sites with brown and green brands are still two cream sites; make one of them dark or cool.
+The two-color form is the one to use. Given eight colors in the order canvas, surface, ink, ink-muted, brand, accent, accent-ink, line, the calculator prints a fixed set of pairings for a brand that has a second accent color. Some of those pairings a page never uses, such as canvas-colored text on a light brand color; read only the lines for pairings in use.

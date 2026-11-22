@@ -19,6 +19,8 @@ Start with the guide for the task at hand. Current operating guidance lives here
 | Need | Guide |
 | --- | --- |
 | Controller state, commands and source-bound evidence | [Runtime](runtime.md) |
+| Run a plan's units in order, one verified run at a time | [Work queue](work-queue.md) |
+| Watch a queue being worked: the line, what the agents say, what waits on you | [The hub](work-queue.md#the-hub) |
 | Stage handoffs and evidence labels | [Skill contract](skill-contract.md) |
 | Required work assessments | [Work assessments](work-assessments.md) |
 | Impact investigation | [Impact analysis](impact-analysis.md) |

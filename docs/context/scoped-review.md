@@ -24,6 +24,14 @@ Delegated token usage is reporting only; it cannot stop workers or refuse assign
 
 Automatic semantic review checks returned worker claims against scoped source and preserves uncertainty as conflicts; it is separate from required fresh source review. Findings retain worker origins/evidence and judgment labels, not independent certification. Prior knowledge and negative evidence cannot be overwritten by a merge proposal. Review/source freshness and receipt-scoped findings continue to apply to this implementation.
 
+Work queue (2026-11-19): no rule change. scripts/runtime.mjs gained the queue binding in startRun, the completed-source record in completeRun and the queue file access; captureReview, recordReview and review coverage are untouched. The entry skill gained a Work queue section. Its frontend paragraph was reworded on 2026-11-19 (commit 22ebed5) outside a run; the Rigor section this record describes was not changed by either edit, and was reread for this run. One thing this run relearned: a whole-source receipt goes stale on any edit, including a context doc, so nothing may be edited between review-capture and review-record. The first review of the queue could not be recorded for that reason, and its findings are kept in the ledger as QUEUE-001.
+
+Queue board (2026-11-20): recordBoardReview (run review-record --from-board) builds one peer receipt for a review that a seat led on the queue board: it checks the board, captures with reviewer peer over the whole source, checks again against the captured hash and records, in one call. The receipt carries led: {by: queue-board, queue, seat, session, signedOff, findings} and one finding per board finding, resolved for fixed and dismissed otherwise. It is refused unless the reviewer's standing review-done names the same source hash, which the reviewer supplies and the controller checks against the source at posting, so context records are settled before the review is asked for; it is also refused for a sign-off already recorded and when the guard halts the capture. The receipt's independence is what the board was told: a session that differs from the builder's. captureReview, the file form of recordReview, coverage and staleness rules are unchanged; the CLI's file input still cannot supply led.
+
+After the live trials (2026-11-20): no rule change in this run; the record was read against the code again. The second live trial recorded one peer receipt from the queue board in a real two-session review.
+
+The hub (2026-11-20): no rule change in this run; the record was read against the code again. The entry skill's new paragraph is about the hub, not about reviews.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.

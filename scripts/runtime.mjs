@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,8 @@ import { strictObject, contextPolicy, initializeContext, contextView, contextHas
 import { delegationPolicy, initializeDelegation, decideDelegation, assignWorker, recordWorker, cancelWorker, reconcileWorkers } from './delegation.mjs';
 import {startSwarm,swarmPhase,applySwarmPlan,assignSwarm,commitSwarm,cancelSwarm} from './swarm.mjs';
 import { planRetention, retentionOf, prepareRetention, checkRetention, contextLocation, isComponentDoc, parseDoc, publishChange } from './context-review.mjs';
+import { queueFolder, queuePath, createQueue, queueStatus, queueNext, decideQueue, bindUnit, noteStart, dropStart, queueAdvice, lineOf } from './queue.mjs';
+import { postMessage, deliver, callerKeys, boardHolds, hasBoard, boardSummary, assumptions, readBoard, seatView, takeSeat, releaseSeat, boardReview } from './queue-board.mjs';
 export { sourceSnapshot } from './source-snapshot.mjs';
 
 const text = value => typeof value === 'string' && value.trim().length > 0;
@@ -1112,19 +1114,39 @@ export function proveRun(root, id, { tests, measureOriginal = false } = {}) {
       return [...now.failing].filter(([key, entry]) => entry.count > (then.failing.get(key)?.count ?? 0) && inChangedTests(entry.file)
         && !old.some(item => item.file === entry.file && item.leaf === entry.leaf)).map(([, entry]) => entry.path.join(' > '));
     };
-    const named = mode === 'red' ? added ?? Object.fromEntries(treatment.map(result => [result.id, newlyFailing(result)]).filter(([, names]) => names.length)) : {};
+    // A control can also fail without running a test. A proof command that names only test files
+    // this change adds finds no file on the run-start code, and the runner exits non-zero for want
+    // of one. That exit says nothing about the code, so it is read as nothing to run, not as an
+    // earlier failure, when the control printed no test results at all and every failing test with
+    // the new tests added is in a test file this change added: those tests did not exist at run
+    // start. Excluded: a change that deletes or moves a test file, because a test that already
+    // failed at its old path would look new; a control that timed out or could not start; and a
+    // control whose output was cut off, which may have lost its results. Maps such a check to its
+    // failing tests (testsOf gives none for a treatment whose results are incomplete).
+    const addedTestFiles = testFiles.filter(path => originals.get(path) === null && currentBytes.get(path) !== null);
+    const nothingToRun = Object.fromEntries(mode === 'red' && control && !testsDeleted ? treatment.flatMap(result => {
+      const before = control.find(item => item.id === result.id);
+      if (result.passed || !before || before.passed || before.errorCode || cutOff(before) || testsOf(before)) return [];
+      const entries = [...(testsOf(result)?.failing.values() ?? [])];
+      return entries.length && entries.every(entry => addedTestFiles.includes(projectRelative(entry.file))) ? [[result.id, entries]] : [];
+    }) : []);
+    const named = mode === 'red' ? added ?? Object.fromEntries(treatment.map(result => [result.id, nothingToRun[result.id]?.map(entry => entry.path.join(' > ')) ?? newlyFailing(result)]).filter(([, names]) => names.length)) : {};
     const caught = mode === 'red' ? added ? Object.keys(added) : treatment.filter(result => !result.passed && (control.find(item => item.id === result.id)?.passed || named[result.id])).map(result => result.id) : [];
     const passed = mode === 'red' ? caught.length > 0 : treatment.every(result => result.passed);
     const alreadyFailing = mode === 'red' && treatment.some(result => !result.passed) && !caught.length;
     const failingNames = caught.flatMap(check => named[check] ?? []);
     const listed = failingNames.length ? `${failingNames.slice(0, 5).join('; ')}${failingNames.length > 5 ? `; and ${failingNames.length - 5} more` : ''}` : null;
-    const preexisting = added ? [] : caught.filter(check => !control.find(item => item.id === check)?.passed);
+    const preexisting = added ? [] : caught.filter(check => !nothingToRun[check] && !control.find(item => item.id === check)?.passed);
+    const ranNothing = Object.keys(nothingToRun).length ? ` On the run-start code alone, check ${Object.keys(nothingToRun).join(', ')} printed no test results, so no test failed there before and its exit is read as nothing to run; why it exited non-zero was not examined. Its failing tests with the new tests added are all in test files this change added.` : '';
+    // A control that printed no test results and still could not be read as nothing to run: say what would settle it.
+    const unread = alreadyFailing ? treatment.filter(result => { const before = control.find(item => item.id === result.id); return !result.passed && before && !before.passed && !before.errorCode && !cutOff(before) && !testsOf(before); }).map(result => result.id) : [];
+    const unreadHint = unread.length ? ` On the run-start code alone, check ${unread.join(', ')} printed no test results the proof can read. That is read as nothing to run only when every failing test with the new tests added is named and is in a test file this change added, and no test file was deleted or moved (TAP, Jest or Mocha output; for node, --test-reporter=tap).` : '';
     const verdict = mode === 'red'
       // State only what the proof shows. Agents repeat this sentence; "the new tests fail" was
       // reported as "every new test fails", which a check-level result cannot establish.
-      ? (passed ? listed ? `With the new tests added, these tests fail on the run-start code: ${listed} (check ${caught.join(', ')}).${preexisting.length ? ` Check ${preexisting.join(', ')} already failed there for other tests, which still fail and are not attributed to this change.` : ''} Other new tests pass there; they may guard existing behavior.`
+      ? (passed ? listed ? `With the new tests added, these tests fail on the run-start code: ${listed} (check ${caught.join(', ')}).${preexisting.length ? ` Check ${preexisting.join(', ')} already failed there for other tests, which still fail and are not attributed to this change.` : ''} New tests not named here did not fail there; they may guard existing behavior.${ranNothing}`
         : `With the new tests added, check ${caught.join(', ')} fails on the run-start code, which otherwise passes it, so at least one new test catches this change. This does not show that every new test fails there; some may guard existing behavior. Report it as "at least one new test fails without the fix" unless you ran the tests individually.`
-        : alreadyFailing ? `Inconclusive: the run-start code already fails ${treatment.filter(result => !result.passed).map(result => result.id).join(', ')}, so the failure cannot be attributed to the new tests. The proof needs a check that passes on the run-start code, such as the test runner on its own.`
+        : alreadyFailing ? `Inconclusive: the run-start code already fails ${treatment.filter(result => !result.passed).map(result => result.id).join(', ')}, so the failure cannot be attributed to the new tests. The proof needs a check that passes on the run-start code, such as the test runner on its own.${unreadHint}`
         : 'The new tests pass on the run-start code, so they would not catch a regression of this change. Strengthen them.')
       : (passed ? 'The tests pass on the run-start code, so they pin behavior the original already had.'
         : 'The tests fail on the run-start code, so they assert new behavior. A refactor must preserve behavior; fix the tests or reclassify the work.');
@@ -1155,7 +1177,7 @@ export function proveRun(root, id, { tests, measureOriginal = false } = {}) {
       });
     });
     const commandPlanHash = digest(JSON.stringify(proofCommands)), broadCommandsHash = digest(JSON.stringify(state.commands));
-    atomicJSON(projectFile(root, receiptPath), { mode, passed, verdict, claim, failures, roles: { treatment: 'original-plus-new-tests', control: control ? 'original-only' : 'not-executed', broadControl: broadControl ? 'original-only-broad' : 'not-executed' }, commandPlanHash, broadCommandsHash, focused: commandPlanHash !== broadCommandsHash, inputs: proofInputs, broadInputs, broadControl, ...(reusedTreatmentFrom ? { reusedTreatmentFrom } : {}), base: state.base?.commit ?? null, originalSourceHash: state.initialSource.hash, testFiles, sourceFiles, treatment, control, ...(controlSource ? { controlSource } : {}), checkedAt: new Date().toISOString() });
+    atomicJSON(projectFile(root, receiptPath), { mode, passed, verdict, claim, failures, roles: { treatment: 'original-plus-new-tests', control: control ? 'original-only' : 'not-executed', broadControl: broadControl ? 'original-only-broad' : 'not-executed' }, commandPlanHash, broadCommandsHash, focused: commandPlanHash !== broadCommandsHash, inputs: proofInputs, broadInputs, broadControl, ...(reusedTreatmentFrom ? { reusedTreatmentFrom } : {}), base: state.base?.commit ?? null, originalSourceHash: state.initialSource.hash, testFiles, sourceFiles, treatment, control, ...(controlSource ? { controlSource } : {}), ...(Object.keys(nothingToRun).length ? { controlWithoutTests: Object.fromEntries(Object.entries(nothingToRun).map(([check, entries]) => [check, [...new Set(entries.map(entry => projectRelative(entry.file)))]])) } : {}), checkedAt: new Date().toISOString() });
     state.testProof = { mode, passed, verdict, claim, failures, commandPlanHash, inputs: proofInputs, testFiles: Object.fromEntries(testFiles.map(path => [path, before.files[path]])), sourceFiles, receiptPath, receiptHash: digest(readFileSync(projectFile(root, receiptPath))), checkedAt: new Date().toISOString() };
     log(state, 'test-proof', { mode, passed, receipt: receiptPath });
     return { runId: id, mode, passed, verdict, failures, ...(state.evidenceVersion === 1 && passed && mode === 'red' ? { proofReviewTemplate: { receipt: 'current-proof', cases: failures.map(f => ({ id: f.id, category: 'behavioral | new-interface | setup | unclassified', reason: '<why this failure establishes the selected category>', boundary: '' })) } } : {}), ...(claim ? { proofClaim: claim } : {}), testFiles, sourceFiles, treatment: summary(treatment), control: summary(control), receiptPath };
@@ -1231,7 +1253,7 @@ function declaredChecks(root) {
   return { source: commands.length > 1 ? `${found[0].source}, run as ${commands.map(command => command.id).join(', ')}` : found[0].source, commands };
 }
 
-export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background', evidenceVersion, requirements, reviewPolicy, executionMode, conversationId, proofCommands, contextRetention, taskContext: taskPolicy, delegation }) {
+export function startRun(root, { goal, playbook, criteria, allowedPaths = [], session, scout, plan, baselineMode = 'background', evidenceVersion, requirements, reviewPolicy, executionMode, conversationId, proofCommands, contextRetention, taskContext: taskPolicy, delegation, queue: binding }) {
   root = realpathSync(root);
   if (!text(goal)) throw new Error('A nonempty goal is required.');
   const selected = getPlaybook(playbook ?? routeTask(goal).playbook);
@@ -1259,6 +1281,8 @@ export function startRun(root, { goal, playbook, criteria, allowedPaths = [], se
   // creates nothing and the agent fixes one file instead of repairing a half-started run.
   const workContractVersion = selected.stages.includes('build') ? 1 : null;
   allowedPaths = normalizePaths(root, allowedPaths, 'allowedPaths');
+  // A queue unit limits what the agent asked for; the context docs added below are the controller's.
+  const requestedPaths = allowedPaths;
   const retention = planRetention(root, { goal, build: !!workContractVersion, allowedPaths, explicit: contextRetention ?? scout?.context?.retention });
   const contextScope = retention.disposition === 'required' ? [retention.index, ...retention.features.map(f => f.doc)] : [];
   const protectedContext = contextScope.filter(path => protectedPathMatcher(root, config.protectedPaths)(path));
@@ -1276,6 +1300,8 @@ export function startRun(root, { goal, playbook, criteria, allowedPaths = [], se
   if (protectedPath(`.cyc/runs/${id}`)) throw new Error('Run storage is protected; error history and original-source capture cannot be written.');
   const mode = process.env.CYC_BASELINE_MODE ?? baselineMode;
   const state = withWorkspaceLock(root, `start run ${id}`, config.protectedPaths, () => {
+    // The start rules of a queue unit are checked under the lock, before anything is written.
+    const bound = binding === undefined ? null : bindUnit(queueIO(root), binding, { playbook: selected.id, criteria, inferredCriteria, allowedPaths: requestedPaths });
     const ledger = selectLedger(root, id, config, allowedPaths, protectedPath);
     const { snapshot: initialSource, recoverableTracked } = inspectSource(root);
     const base = gitBase(root);
@@ -1294,15 +1320,23 @@ export function startRun(root, { goal, playbook, criteria, allowedPaths = [], se
       schemaVersion: 1, engineVersion, id, goal, playbook: selected.id, stages: selected.stages, requiresChecks: selected.requiresChecks,
       ...(taskContextPolicy ? { taskContextPolicy } : {}), ...(workerPolicy ? { delegation: initializeDelegation(workerPolicy) } : {}),
       workContractVersion, contextRetention: retention, ...(evidenceVersion === 1 ? { evidenceVersion, reviewPolicy: reviewPolicy ?? 'self-allowed', requirements: { text: requirements, sha256: digest(requirements) }, criteriaHash: digest(JSON.stringify(criteria)) } : {}), ...ledger,
-      criteria, inferredCriteria, session: session ?? null, ...(execution ? { execution } : {}), status: 'running', stageIndex: 0, attempt: 1, failures: 0, noProgress: 0,
+      criteria, inferredCriteria, session: session ?? null, ...(execution ? { execution } : {}), ...(bound ? { queue: { ...bound.binding, drift: bound.drift(initialSource) } } : {}), status: 'running', stageIndex: 0, attempt: 1, failures: 0, noProgress: 0,
       startedAt: new Date().toISOString(), limits: config.limits, commands, ...(declared ? { verificationSource: `declared by ${declared.source}` } : {}),
       ...(proofCommands ? { proofCommands: structuredClone(proofCommands) } : {}),
       protectedPaths: config.protectedPaths, protectedFiles: protectedSnapshot(root, config.protectedPaths), allowedPaths,
       initialSource, base, ...(capture ? { sourceCapture: capture.metadata } : {}), testProof: null, baseline, acceptedFailures: [], handoffs: [], verification: null, history: []
     };
-    log(state, 'started', { playbook: selected.id, inferredCriteria, session: state.session, baseline: baseline ? (baseline.reused ? 'reused' : 'measuring') : 'none', ...(declared ? { verificationSource: state.verificationSource } : {}) });
+    log(state, 'started', { playbook: selected.id, inferredCriteria, session: state.session, baseline: baseline ? (baseline.reused ? 'reused' : 'measuring') : 'none', ...(declared ? { verificationSource: state.verificationSource } : {}), ...(bound ? { queue: bound.binding.id, unit: bound.binding.unit } : {}) });
     if (capture) storeOriginals(root, id, capture);
-    atomicJSON(runPath(root, id), state);
+    // The queue notes the run before its record exists, so a record lost later still holds its unit.
+    // A start whose record cannot be written takes the note back; if that fails too, the unit reads
+    // halted with a missing run, which a person can decide about.
+    if (bound) noteStart(queueIO(root), state.queue, id);
+    try { atomicJSON(runPath(root, id), state); }
+    catch (error) {
+      if (bound) { try { dropStart(queueIO(root), state.queue, id); } catch { error.message += ` The queue's note of this start could not be removed either, so unit ${state.queue.unit} reads halted with a missing run; a retry decision lets it start again.`; } }
+      throw error;
+    }
     writeReview(root, state);
     return state;
   });
@@ -1868,9 +1902,15 @@ export function completeRun(root, id) {
     if (delivery?.stage !== 'deliver' || delivery.status !== 'passed' || delivery.criteria.some(item => item.result !== 'passed')) throw new Error('A passing delivery handoff covering every criterion is required.');
     assertArtifacts(root, delivery.artifacts);
     // Completion is evidence: every file is read, not taken from the cache.
-    if (sourceSnapshot(root).hash !== delivery.sourceHash) throw new Error('Project changed after the delivery review. Retry the affected stage.');
+    const snapshot = sourceSnapshot(root);
+    if (snapshot.hash !== delivery.sourceHash) throw new Error('Project changed after the delivery review. Retry the affected stage.');
     requireVerification(root, state);
+    // An item that lands after this check finds the unit done and goes to the person.
+    const held = completionHolds(root, state);
+    if (held.length) throw new Error(`The queue board holds this unit: ${holdText(held)}. Clear each with queue post, then finish again.`);
     state.status = 'complete';
+    // Where a queue's line stood when this unit completed, so the next unit can name later edits.
+    if (state.queue) state.queue.completed = { hash: snapshot.hash, files: snapshot.files };
     log(state, 'complete', { verification: state.requiresChecks ? 'recorded-command-results-and-agent-review' : 'agent-reviewed-evidence', sourceHash: delivery.sourceHash, acceptedPreexistingFailures: (state.acceptedFailures ?? []).map(item => item.id) });
     return state;
   }));
@@ -1976,6 +2016,9 @@ export function finishRun(root, id, { summary, artifacts, passedEvidence, criter
   let state = readRun(root, id);
   assertRunOwner(root, state);
   requireTaskReady(root, state);
+  // Asked before any check is spent: the unit cannot complete while the board holds it.
+  const held = state.status === 'running' ? completionHolds(root, state) : [];
+  if (held.length) return { runId: id, status: 'needs-answer', finished: false, steps: [], board: { hold: held }, nextAction: { action: 'answer', command: `queue post --queue ${state.queue.id} --run ${id} --file MESSAGE.json`, instruction: 'Clear each hold, then run finish again. Nothing was checked or recorded.' } };
   if (current(state) === null && ['running', 'complete'].includes(state.status)) {
     const delivery = state.handoffs.at(-1);
     if (delivery?.stage !== 'deliver' || delivery.status !== 'passed') throw new Error('No confirmed delivery to resume.');
@@ -2239,7 +2282,7 @@ function checkedReview(root, state, id, sourceHash) {
   return record;
 }
 
-export function recordReview(root, id, { reviewId, evidence, identity = null, findings = [] } = {}) {
+export function recordReview(root, id, { reviewId, evidence, identity = null, findings = [], led } = {}) {
   const invalid = !text(evidence) || /^<.*>$/.test(evidence.trim()) ? 'evidence' : identity !== null && (!text(identity) || /^<.*>$/.test(identity.trim())) ? 'identity' : null;
   if (invalid) { const error = new Error(`Review ${invalid} needs ${invalid === 'identity' ? 'observed text or null' : 'actual non-placeholder evidence'}.`); error.field = invalid; error.repairTemplate = `.cyc/runs/${id}/reviews/${reviewId}-record.json`; throw error; }
   return transact(root, id, state => {
@@ -2249,7 +2292,8 @@ export function recordReview(root, id, { reviewId, evidence, identity = null, fi
     if (!text(evidence) || (identity !== null && !text(identity))) throw new Error('Review needs actual evidence; identity is text or null when unknown.');
     if (!Array.isArray(findings) || new Set(findings.map(f => f?.id)).size !== findings.length || findings.some(f => !text(f?.id) || !text(f.evidence) || !['resolved', 'dismissed', 'open'].includes(f.status))) throw new Error('Review findings need unique ids, status and evidence.');
     if (record.status === 'recorded') throw new Error('Review already recorded; capture a new receipt for another review.');
-    const { sha256, ...receipt } = { ...record, status: 'recorded', evidence, identity, findings, recordedAt: new Date().toISOString() };
+    // `led` marks a review that a seat led on the queue board; only recordBoardReview supplies it.
+    const { sha256, ...receipt } = { ...record, status: 'recorded', evidence, identity, findings, ...(led ? { led } : {}), recordedAt: new Date().toISOString() };
     atomicJSON(projectFile(root, record.path), receipt);
     Object.assign(record, receipt, { sha256: digest(readFileSync(projectFile(root, record.path))) });
     log(state, 'review-recorded', { reviewId, reviewer: receipt.reviewer });
@@ -2426,3 +2470,194 @@ export function workerHost(root, id, action, input) {
     return {runId:id,assignment:structuredClone(a)};
   });
 }
+
+// Work queue (scripts/queue.mjs, docs/work-queue.md): the controller supplies files and the
+// project lock. A unit's status always comes from the runs that carry its binding.
+function queueIO(root, given) {
+  const folder = projectFile(root, queueFolder), runsFolder = projectFile(root, '.cyc/runs');
+  const folders = directory => existsSync(directory) ? readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name) : [];
+  let bound;
+  return {
+    engineVersion, session: callerSession(), given,
+    read: id => json(projectFile(root, queuePath(id))),
+    write: (id, queue) => {
+      // The folder ignores itself, so queues stay local without editing the project's ignore file.
+      if (!existsSync(resolve(folder, '.gitignore'))) { mkdirSync(folder, { recursive: true }); writeFileSync(resolve(folder, '.gitignore'), '*\n'); }
+      atomicJSON(projectFile(root, queuePath(id)), queue);
+    },
+    list: () => folders(folder).filter(name => existsSync(resolve(folder, name, 'queue.json'))),
+    runs: () => bound ??= folders(runsFolder).filter(name => /^[a-z0-9-]{1,80}$/.test(name)).map(name => { try { return json(resolve(runsFolder, name, 'state.json')); } catch { return null; } }).filter(run => run?.queue),
+    normalize: paths => normalizePaths(root, paths, 'paths'),
+    source: () => cachedSnapshot(root),
+    exists: path => existsSync(projectFile(root, path)),
+    put: (path, value) => atomicJSON(projectFile(root, path), value),
+    readBoard: id => readBoardFile(root, id),
+    writeBoard: (id, board) => atomicJSON(resolve(boardFolder(root, id), 'board.json'), board),
+    lockBoard: (id, work) => withBoardLock(root, id, work),
+    now: () => Date.now(),
+    keysOf: id => [id, gateSession(root, id)],
+    sourceHash: () => cachedSnapshot(root).hash
+  };
+}
+// Found through the queue's folder: looking up the lock file itself races with its removal.
+const boardFolder = (root, id) => { queuePath(id); return projectFile(root, `${queueFolder}/${id}`); };
+const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Held for one read and one write. A caller gives up after five seconds; a lock older than ten
+// is cleared by the one waiter that holds the claim; a holder removes only its own.
+function withBoardLock(root, id, work) {
+  const path = resolve(boardFolder(root, id), 'board.lock'), deadline = Date.now() + 5000, mark = randomUUID();
+  let fd;
+  for (;;) {
+    try { fd = openSync(path, 'wx', 0o600); break; } catch (error) {
+      // Windows reports a lock file that is being removed as EPERM or EBUSY.
+      if (!['EEXIST', 'EPERM', 'EBUSY', 'EACCES', 'EISDIR'].includes(error.code)) throw error;
+      if (Date.now() > deadline) { const busy = new Error('The queue board is busy. Try again.'); busy.code = 'CYC_BOARD_BUSY'; throw busy; }
+      let age = 0;
+      try { age = Date.now() - statSync(path).mtimeMs; } catch { /* gone or going */ }
+      if (age > 10000) {
+        const claim = `${path}.claim`;
+        try {
+          const held = openSync(claim, 'wx', 0o600);
+          try { if (Date.now() - statSync(path).mtimeMs > 10000) rmSync(path, { recursive: true, force: true }); } catch { /* gone */ } finally { closeSync(held); unlinkSync(claim); }
+          continue;
+        } catch { try { if (Date.now() - statSync(claim).mtimeMs > 10000) unlinkSync(claim); } catch { /* another waiter has it */ } }
+      }
+      pause(25);
+    }
+  }
+  try { writeFileSync(fd, mark); return work(); }
+  finally { closeSync(fd); try { if (readFileSync(path, 'utf8') === mark) unlinkSync(path); } catch { /* claimed as left behind */ } }
+}
+// On Windows a reader can briefly be refused while a writer replaces the file.
+function readBoardFile(root, id) {
+  for (let attempt = 0; ; attempt++) {
+    try { return json(resolve(boardFolder(root, id), 'board.json')); } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt >= 4) throw new Error(`The board of queue ${id} cannot be read: ${error.message}`);
+      pause(15 * (attempt + 1));
+    }
+  }
+}
+// A run with no execution record passes assertRunOwner for anyone; here it is held to its session.
+function speaksFor(root, state, io) {
+  assertRunOwner(root, state);
+  // The queue noted which session its host reported when the run started: a run started under a
+  // label of its own is still its starter's.
+  let starter;
+  try { starter = state.queue && io.read(state.queue.id).started?.find(entry => entry.runId === state.id)?.by; } catch { /* the queue cannot be read; its own check says so */ }
+  if (!state.execution && state.session && !callerKeys(io).some(key => [state.session, starter].includes(key))) throw new Error(`Run ${state.id} belongs to conversation ${state.session}; another conversation does not speak for it.`);
+}
+// Who speaks: a bound run, a review seat, or neither: the person.
+function boardAuthor(root, io, input) {
+  if (input.run !== undefined && input.seat !== undefined) throw new Error('Pass --run or --seat, not both.');
+  if (input.run === undefined) {
+    const line = lineOf(io, input.queue);
+    return input.seat === undefined ? { line, author: {} } : { line, author: { seat: input.seat }, who: seatView(io, line, input.seat).who };
+  }
+  const state = readRun(root, input.run);
+  speaksFor(root, state, io);
+  if (!state.queue) throw new Error(`Run ${state.id} is not bound to a queue, so it has no board.`);
+  if (input.queue !== undefined && input.queue !== state.queue.id) throw new Error(`Run ${state.id} is bound to queue ${state.queue.id}, not ${input.queue}.`);
+  return { line: lineOf(io, state.queue.id), author: { run: state }, who: { unit: state.queue.unit, runId: state.id } };
+}
+const withSeat = (io, line, author, result) => author.seat === undefined ? result : { ...result, seat: seatView(io, line, author.seat).seat };
+const boardActions = {
+  post(root, io, input) {
+    const { line, author, who } = boardAuthor(root, io, input), result = postMessage(io, line, input.message, author);
+    const board = who ? deliver(io, line, who, { mark: true, run: author.run }) : null;
+    return withSeat(io, line, author, board ? { ...result, board } : result);
+  },
+  board(root, io, input) {
+    const line = lineOf(io, input.queue), result = readBoard(io, line, { unit: input.unit, open: input.open });
+    if (input.seat === undefined) return result;
+    const author = { seat: input.seat }, board = deliver(io, line, seatView(io, line, input.seat).who, { mark: true });
+    return withSeat(io, line, author, board ? { ...result, board } : result);
+  },
+  // How an agent waits for an answer, for at most a minute.
+  wait(root, io, input) {
+    if (input.run === undefined && input.seat === undefined) throw new Error('queue wait needs --run or --seat: whose messages to wait for.');
+    const limit = waitLimit(input.waitMs, 55000), deadline = Date.now() + limit;
+    const { line, author, who } = boardAuthor(root, io, input);
+    let board = deliver(io, line, who, { mark: true, run: author.run }), now = line;
+    const gone = () => author.seat !== undefined && !['active', 'done'].includes(seatView(io, now, author.seat).seat.state);
+    while (!board?.new && !gone() && Date.now() < deadline) {
+      pause(Math.min(500, Math.max(1, deadline - Date.now())));
+      now = { queue: line.queue, view: lineOf(queueIO(root), line.queue.id).view };
+      if (author.seat !== undefined && !['active', 'done'].includes(seatView(io, now, author.seat).seat.state)) break;
+      if (deliver(io, now, who, { run: author.run })?.new) board = deliver(io, now, who, { mark: true, run: author.run });
+    }
+    if (!board?.new) board = deliver(io, now, who, { run: author.run && readRun(root, author.run.id) });
+    return withSeat(io, now, author, { queueId: line.queue.id, waited: limit - Math.max(0, deadline - Date.now()), board, ...(board?.new ? {} : { note: 'Nothing new arrived. Wait again, or go on with other work.' }) });
+  },
+  release(root, io, input) {
+    if (input.seat === undefined) throw new Error('queue release needs --seat ID.');
+    return releaseSeat(io, lineOf(io, input.queue), { seat: input.seat });
+  }
+};
+function waitLimit(value, fallback) {
+  const limit = value === undefined ? fallback : /^\d+$/.test(String(value)) ? Number(value) : NaN;
+  if (!Number.isInteger(limit) || limit > 60000) throw new Error('--wait-ms is a whole number of milliseconds up to 60000.');
+  return limit;
+}
+function withBoard(io, result) {
+  if (!result?.queueId) return result;
+  try {
+    const line = lineOf(io, result.queueId), board = boardSummary(io, line);
+    const assumed = result.dependencies?.length ? assumptions(io, line, result.dependencies.map(entry => entry.unit)) : [];
+    return { ...result, ...(assumed.length ? { assumed } : {}), ...(board ? { board } : {}) };
+  } catch (error) { return { ...result, board: { error: error.message } }; }
+}
+const queueActions = { create: createQueue, status: queueStatus, next: queueNext, decide: decideQueue };
+export function queueCommand(root, action, input = {}) {
+  root = realpathSync(root);
+  if (Object.hasOwn(boardActions, action)) return boardActions[action](root, queueIO(root, input.session), input);
+  if (!Object.hasOwn(queueActions, action)) throw new Error('Use queue create, status, next or decide; the board takes queue post, board, wait and release.');
+  if (action === 'next' && input.seat !== undefined) {
+    // A reviewer may arrive before the unit starts.
+    for (const deadline = Date.now() + waitLimit(input.waitMs, 0); ;) {
+      const io = queueIO(root);
+      try { return takeSeat(io, lineOf(io, input.queue), { seat: input.seat, session: input.session }); }
+      catch (error) { if (error.code !== 'CYC_NO_UNIT' || Date.now() >= deadline) throw error; }
+      pause(Math.min(500, Math.max(1, deadline - Date.now())));
+    }
+  }
+  if (input.waitMs !== undefined) throw new Error('--wait-ms goes with queue wait, or with queue next --seat review.');
+  // Reading the line takes no lock, so it still answers while a long check holds the project lock.
+  if (['status', 'next'].includes(action)) { const io = queueIO(root); return withBoard(io, queueActions[action](io, { queue: input.queue })); }
+  return withWorkspaceLock(root, `queue ${action}`, configuration(root).protectedPaths, () => queueActions[action](queueIO(root), input));
+}
+// A bound run's board entry. The mark moves only at a checkpoint, for its own conversation.
+export function boardOf(root, id, checkpoint = true, session) {
+  let state;
+  try { state = readRun(root, id); } catch { return null; }
+  if (!state?.queue) return null;
+  try {
+    const io = queueIO(root, session);
+    let owner = true;
+    try { speaksFor(root, state, io); } catch { owner = false; }
+    return deliver(io, lineOf(io, state.queue.id), { unit: state.queue.unit, runId: state.id }, { mark: owner && checkpoint, run: state });
+  } catch (error) { return { error: error.message }; }
+}
+// With a board, a queue or board that cannot be read is an error: what is held is unknown.
+function completionHolds(root, state) {
+  if (!state.queue) return [];
+  const io = queueIO(root);
+  if (!hasBoard(io, state.queue.id)) return [];
+  return boardHolds(io, lineOf(io, state.queue.id), state);
+}
+const holdText = held => held.map(entry => entry.message ? `${entry.kind} ${entry.message} from ${entry.from}` : `review seat ${entry.seat}`).join('; ');
+// One peer receipt for a review a seat led, captured and recorded in one call.
+export function recordBoardReview(root, id, session) {
+  const state = readRun(root, id), io = queueIO(root, session);
+  speaksFor(root, state, io);
+  if (!state.queue) throw new Error(`Run ${id} is not bound to a queue, so it has no board.`);
+  const line = lineOf(io, state.queue.id);
+  const review = boardReview(io, line, state, cachedSnapshot(root).hash);
+  if ((state.reviewReceipts ?? []).some(item => item.status === 'recorded' && item.led?.seat === review.led.seat && item.led.signedOff === review.led.signedOff)) throw new Error(`The review that seat ${review.led.seat} signed off as message ${review.led.signedOff} is already recorded for run ${id}.`);
+  const capture = captureReview(root, id, { reviewer: 'peer' });
+  // A run the guard halted returns its state, not a capture.
+  if (!capture.sourceHash) throw new Error(`Run ${id} is ${capture.status}; the review was not captured.`);
+  return recordReview(root, id, { reviewId: capture.id, ...boardReview(io, line, state, capture.sourceHash) });
+}
+// Where the line stands, for a bound run's results. Presentation only; null for an unbound run.
+export const queueOf = (root, state) => state?.queue ? queueAdvice(queueIO(root), state.queue) : null;

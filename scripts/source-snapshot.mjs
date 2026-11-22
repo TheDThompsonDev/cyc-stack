@@ -9,7 +9,7 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 // Defaults for the selected source; a project can set its own in source.maxFiles and source.maxBytes.
 export const sourceLimits = Object.freeze({ maxFiles: 200000, maxBytes: 2 * 1024 * 1024 * 1024 });
 const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage']);
-const internal = ['.cyc/runtime', '.cyc/runs', '.cyc/engine'];
+const internal = ['.cyc/runtime', '.cyc/runs', '.cyc/engine', '.cyc/queues'];
 const within = (path, parent) => path === parent || path.startsWith(`${parent}/`);
 // Controller bookkeeping inside the project, never project source.
 export const controllerPath = path => internal.some(p => within(path, p));

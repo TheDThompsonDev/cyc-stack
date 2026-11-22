@@ -20,4 +20,12 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 
 Early nextRun guidance supplies the automatic swarm command and versioned input template only for an available frozen auto policy. CYC chooses/decomposes inside that command; users need not handcraft worker assignments. CLI exposes swarm/cancel-swarm alongside the existing manual path. Guidance preserves explicit limits, solo decisions, unresolved conflicts and actual capability limits; it does not claim native hook activation or measured savings.
 
+Work queue (2026-11-19): bin/cyc.mjs adds a `queue` entry to the compact results of a run bound to a queue unit, and the help text lists the queue commands. An unbound run's output is unchanged, so the ordinary record-status budget and the explicit-next advice described above still hold; test/queue.test.mjs asserts an unbound run carries no `queue` key, and an independent probe found 898 normalized output lines of unbound start, next, record, complete, pause, resume and stop identical to the previous commit. The entry appears after the existing fields, so what an agent reads first is unchanged.
+
+Queue board (2026-11-20): for a run bound to a queue unit, bin/cyc.mjs places a board entry first in the result of a run command when there is something new for the unit or something holds it, also with --verbose. run status, recover, list and review show it without moving the read mark. A needs-answer result carries no advice about a failed check, since nothing was checked. An unbound run's output is unchanged, and so is a bound run's when the board is quiet. The help text lists the board commands.
+
+After the live trials (2026-11-20): no change to what a run command returns. The queue command accepts --session on every action.
+
+The hub (2026-11-20): the help text lists cyc hub. No run command's result changes.
+
 ## Lessons

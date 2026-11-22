@@ -26,6 +26,14 @@ Delegated token usage is reporting only; it cannot stop workers or refuse assign
 
 CYC now freezes auto policy for available Codex dispatch unless off/recommend or another host was chosen. Follow early swarmAction for one plan/parallel/review/merge call; explicit one-worker policies stay solo. Inspect conflicts/recovery and the acknowledged shared context before dependent work. Usage stays advisory; models do not waive required source review, proof, retention or checks.
 
+Work queue (2026-11-19): the entry skill has a Work queue section: on "next", or when a result carries a `queue` entry, call `queue next`; for a ready unit read the listed dependency change records, recheck drifted files, tell the user about files changed outside the unit's paths, follow the returned instruction for how the unit's playbook starts, and start the file with its criteria, playbook and queue field as written; report a halted unit and its recorded reason to the user and record a decision only after they choose; never start a queue's work as an unbound run. The plan playbook says a plan's increments can be saved as queue units that state outcomes, not steps. Scout, Build, Verify and Deliver and the context lifecycle described above are unchanged for a unit's run. A test checks these instructions are present; whether an agent follows them is unobserved. The entry skill's frontend paragraph was reworded on 2026-11-19 (commit 22ebed5) outside a run; it does not touch the lifecycle this record describes.
+
+Queue board (2026-11-20): the entry skill's Work queue section gained one paragraph: read a leading board entry before anything else, ask only what another unit or the person owns, wait with queue wait or close an own question with assumed, answer findings fixed or declined when run finish returns needs-answer, never post as the person, and how to review from queue next --seat review and how a builder under review asks for it and records the receipt. Whether agents act on it is what the live two-session trial after this run observes.
+
+After the live trials (2026-11-20): two live trials showed fresh sessions following the skill's Work queue section with no other instruction. The section now also says that an answer given after an assumption still reaches the agent, that what holds a unit shows the message to post, and that sessions sharing a folder draft their reply in a file of their own under .cyc/runtime and give that file to check-reply.
+
+The hub (2026-11-20): the entry skill's Work queue section now ends with the hub: an agent that starts working a queue runs cyc hub in the background and gives the user the address, and says the page is there instead of assuming it is being watched. It exists because a person cannot see a board from a chat.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.

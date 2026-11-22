@@ -47,7 +47,7 @@ export function validateProofReview(state, review) {
     requireChoice(item.category, ['behavioral', 'new-interface', 'setup', 'unclassified'], 'Proof category');
     requireText(item.reason, 'Proof reason');
     if (/^<.*>$/.test(item.reason.trim())) throw new Error('Replace the proof reason placeholder with actual evidence.');
-    if (item.category === 'behavioral') requireText(item.boundary, 'Existing observable boundary');
+    if (item.category === 'behavioral' && !text(item.boundary)) throw new Error('A behavioral proof case needs boundary: the thing that already existed and answered wrongly, such as a function or command and what it returned. If what the test calls did not exist before this change, the category is new-interface, which needs no boundary.');
     if (item.category === 'behavioral' && state.testProof.failures.find(f => f.id === item.id)?.hint === 'module-load') throw new Error('A module-load failure cannot establish an existing behavioral boundary; classify the absent interface or setup honestly.');
     if (item.category === 'behavioral' && state.testProof.failures.find(f => f.id === item.id)?.error === 'test failed') throw new Error('A generic test-file failure has no decisive behavioral assertion; retain diagnostic uncertainty or provide focused evidence.');
   }

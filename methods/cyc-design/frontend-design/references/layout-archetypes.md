@@ -1,6 +1,6 @@
 # Layout archetypes
 
-Nine compositions, each with a sketch, a CSS skeleton, when it fits and how it recomposes on a phone. Pick one by name in the decision sheet. Archetype 0 is the default a model produces unprompted; it is not available unless an existing brand system requires it.
+Use these sketches and CSS examples to compose a section once the [site model](reference-standards.md) and its content are decided. They arrange content; they do not supply it, and none of them is a site. Retain established layouts when the brief calls for them.
 
 Column widths below assume a 12-column grid on a 1280 px content width with full bleed allowed outside it.
 
@@ -52,7 +52,7 @@ Fits: a service with one strong photograph of the work or the person. Phone: ima
 .next { margin-top: -4rem; position: relative; }
 ```
 
-The scrim covers only the text half; the subject keeps its detail. Fits: a product with a person in it, hospitality, anything where atmosphere is the promise. Phone: change `object-position` to keep the subject, scrim from the bottom, text at the bottom of the scene. Observed at Undersold.ai.
+The scrim covers only the text half; the subject keeps its detail. Fits: a product with a person in it, hospitality, anything where atmosphere is the promise. Phone: change `object-position` to keep the subject, scrim from the bottom, text at the bottom of the scene. Seen on a studied service site.
 
 ## 3. Typographic poster
 
@@ -91,7 +91,7 @@ No image in the opening; a full-bleed photograph or rendered object must arrive 
 .tool form { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; }
 ```
 
-The main action is the opening; explanation follows. Fits: catalogs, registrations, quote finders, anything the visitor came to use. Phone: the card fills the width with 16 px gutters; the input and button stack. Observed at ahs.com (zip-code input beside the primary action).
+The main action is the opening; explanation follows. Fits: catalogs, registrations, quote finders, anything the visitor came to use. Phone: the card fills the width with 16 px gutters; the input and button stack. Seen with a postal-code input beside the primary action.
 
 ## 5. Editorial grid
 
@@ -129,7 +129,7 @@ One item leads; the others are secondary on purpose. Fits: portfolios, menus wit
 .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
 ```
 
-Cards differ in content shape (a chart, a photo with a button, a number with a sentence); same-shaped cards are tell 2. Fits: dashboards, daily tools. Phone: the sidebar becomes a five-item bottom bar, rows stack, the greeting stays in the display face. Observed in Rep & Plate.
+In one studied fitness product, a chart, a workout photo and a short progress note each get space suited to their content. Its phone layout uses a bottom bar. For comparable records, consistent crops, labels or aligned rows help the eye find the differences. Reserve the [equal-card tell](generic-tells.md) for the repeated icon-and-blurb treatment that hides those differences.
 
 ## 7. Stacked bands
 
@@ -185,4 +185,4 @@ The list is the design; no cards. Fits: menus, services, schedules, specificatio
 
 ## Combining
 
-A page uses one opening archetype (1 to 4) and one or two content archetypes (5 to 9). Changing archetype between sections is the rhythm; repeating one archetype with different content is tell 3.
+An opening can grow directly from the subject, including a collection, map or working interface. Describe the relationship in the decision sheet. Carry a recognizable alignment, material or type treatment into the next section and change the density when the visitor’s job changes.

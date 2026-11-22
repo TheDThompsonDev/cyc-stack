@@ -24,8 +24,10 @@ try {
   for (const path of ['package.json', 'plugin.json', 'LICENSE', 'INSTALL.md', 'bin/cyc.mjs', 'scripts/install.mjs', 'scripts/response-hook.mjs', 'skills/cyc/SKILL.md', 'methods/cyc-setup/SKILL.md', 'hooks/codex.json', 'hooks/claude.json', 'hooks/cursor.json', 'rules/cyc-delivery.mdc', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json', '.cursor-plugin/plugin.json', '.agents/plugins/marketplace.json']) {
     if (!files.has(path)) throw new Error(`Archive is missing ${path}.`);
   }
-  // Raised from 1 MiB by the owner on 2026-11-11, when change records needed about 7.5 KB more.
-  if (packed.unpackedSize >= 1.1 * 1024 * 1024) throw new Error('Archive exceeds the 1.1 MiB unpacked release budget.');
+  // Raised by the owner from 1 MiB to 1.1 MiB on 2026-11-11 for change records, to 1.2 MiB on
+  // 2026-11-20 for the work queue and its board, and to 1.3 MiB on 2026-11-21 for the frontend
+  // method's access checks.
+  if (packed.unpackedSize >= 1.3 * 1024 * 1024) throw new Error('Archive exceeds the 1.3 MiB unpacked release budget.');
   for (const path of files) {
     if (/^(?:test(?:-support)?\/|evals\/|docs\/(?:context|maintainers)\/|\.cyc\/|node_modules\/|release-assets\/)/.test(path)) throw new Error(`Development-only file in archive: ${path}.`);
   }

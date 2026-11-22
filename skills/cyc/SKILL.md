@@ -82,6 +82,14 @@ Use the [project tools](../../docs/project-tools.md) automatically when relevant
 | Extract supported lessons | [Reflect](references/playbooks/reflect.md) |
 | Compare skill or workflow effectiveness | [Evaluate](references/playbooks/evaluate.md) |
 
+## Work queue
+
+A plan with several ordered units can run as a [work queue](../../docs/work-queue.md). When the user says "next" or "continue the queue", or `run next`/`run finish` shows a `queue` entry, call `queue next`. For a ready unit: read the listed dependency change records, recheck any drifted file, and tell the user about files under `drift.outsideUnit` before building on them. Follow the returned instruction: a Scout playbook adds scout and plan to the start file, another playbook starts it as written. Then `run start --file` it; keep its criteria, playbook and queue field as written. Work one unit per run, and after it completes tell the user which unit is next. A halted line needs the user: report the unit, its recorded reason and the files under `drift`, and record retry, skip or cancel with `queue decide` only after they choose. Never start a queue's work as an unbound run to get around a refusal.
+
+The queue's [board](../../docs/work-queue.md#the-board) carries messages between agents and the user. When a `run` result starts with `board`, read it first. Read the code before asking; ask with `queue post --run ID` only what another unit or `person` owns. Wait with `queue wait`, or close your own question with disposition `assumed`; an answer given later still reaches you, so act on it or tell the user. `run finish` returning `needs-answer` lists what holds the unit: answer each finding `fixed` or `declined`. Never post as the person: show the user what waits for them and post only their answer. To review a unit another session builds: `queue next --seat review --session ID`, change no file, post findings, end with `review-done`. Under review: settle context records, post `ready-for-review`, wait, then `run review-record --from-board`. What holds a unit shows the message to post. When several sessions share a folder, draft your reply in a file of your own under `.cyc/runtime` and give that file to `check-reply`.
+
+A person cannot see any of this from a chat. When you start working a queue, run `cyc hub` in the background and give the user the address it prints: the page shows the line, what the agents say to each other and what waits on the user, as it happens. Say that it is there; do not assume they are watching it.
+
 ## Autonomy
 
 Just do: read, search, run tests, edit files in scope, build prototypes. Always ask first: commits and pushes (unless asked), publishing, deleting user data, global installs, sending messages. The delivery gate won't let you finish while your run is still open; a run that ends blocked is reported as blocked, never as done.

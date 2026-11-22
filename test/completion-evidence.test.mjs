@@ -60,6 +60,10 @@ test('foreign/stale continuation and inadequate proof classification cannot run 
   assert.throws(() => runtime.finishRun(root, id, { ...remaining, continuation: { ...remaining.continuation, token: 'foreign' } }), /stale or foreign/);
   remaining.assessment.proofReview.cases = [{ id: first.proof.failures[0].id, category: 'setup', reason: 'The setup outcome remains diagnostic.' }];
   assert.throws(() => runtime.finishRun(root, id, remaining), /No decisive behavioral proof/);
+  // A behavioral case with nothing named is refused with what to name, and with the other category
+  // it may belong to: a live session once had to read the engine to learn that.
+  remaining.assessment.proofReview.cases = [{ id: first.proof.failures[0].id, category: 'behavioral', reason: 'The assertion fails on the original code.', boundary: '' }];
+  assert.throws(() => runtime.finishRun(root, id, remaining), /A behavioral proof case needs boundary: the thing that already existed and answered wrongly.*the category is new-interface/);
   assert.equal(runtime.readRun(root, id).verification, null);
   put(root, 'feature.mjs', 'export const feature = () => 2;');
   assert.throws(() => runtime.finishRun(root, id, remaining), /stale or foreign/);

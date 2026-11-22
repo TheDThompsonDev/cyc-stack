@@ -26,6 +26,14 @@ Automatic Codex execution is an additive parent-owned path: atomic assignment cl
 
 Private planner/worker/merge transports keep events correlated; parallel batches share one acknowledged snapshot and allSettled drains siblings after failure. Cancellation needs matching terminal acknowledgment. Unknown transport keeps claims, no silent redispatch. Explicit retries retain cycles/usage/failures/assignment totals. Windows transient publication retries only the same staged rename; committed merge plus ack failure returns pending read/ack without generation retry.
 
+Work queue (2026-11-19): no rule change to operations, progress or cancellation. `queue status` and `queue next` take no project lock, so they still answer while a long check holds it; `queue create` and `queue decide` take the existing workspace lock and report the same busy error as any other operation. bin/cyc.mjs adds a `queue` entry to a bound run's operation, finish and next results without changing their existing fields.
+
+Queue board (2026-11-20): no rule change to operations, progress or cancellation. Board commands take only the board's own short lock, so a post succeeds while a long check holds the project lock. queue wait blocks for at most 60000 ms, re-reading the line every half second, and returns the new messages or says nothing arrived; it is not an operation and has no handle.
+
+After the live trials (2026-11-20): no rule change in this run; the record was read against the code again.
+
+The hub (2026-11-20): cyc hub is the one command that stays running after it prints its result: the server keeps the process alive until it is stopped. It is not an operation, has no handle and no progress record, and takes neither the project lock nor the board lock, so it reads while a long check holds the project lock.
+
 ## Lessons
 
 - 2026-11-06 · current maintenance: A finished worker or passing check is distinct from workflow completion. CLI guidance retains the exact wait handle and exposes failed delivery publication without claiming activation.

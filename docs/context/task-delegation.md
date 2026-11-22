@@ -30,4 +30,10 @@ Actual local qualification 2daa0bf7-f48d-43d9-8a09-1370b1d880bb completed two re
 
 scripts/swarm.mjs owns automatic rules; docs/maintainers/codex-delegation.md retains interfaces, state/guard contracts, qualification and recovery. Installed guides retain operational semantics; full source-only reference snapshots retain their original detailed explanations.
 
+Work queue (2026-11-19): package.json ships scripts/queue.mjs and docs/work-queue.md, and docs/runtime.md gains one paragraph pointing to the work queue. Delegation and task context are unchanged. A queue orders whole runs and dispatches nothing; a unit's run can still use delegation inside it under the rules above. package.json also carries version 0.10.0 from the 2026-11-19 release commit, which changed no delegation contract.
+
+Queue board (2026-11-20): package.json ships scripts/queue-board.mjs. Delegation and task context are unchanged: workers are still read-only and report to their lead. The queue board is a separate channel between the conversations working a queue and the person, and does not carry worker results.
+
+The hub (2026-11-20): package.json ships scripts/hub.mjs and scripts/hub-page.mjs. Delegation is unchanged.
+
 ## Lessons

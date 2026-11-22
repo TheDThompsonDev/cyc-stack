@@ -26,6 +26,14 @@ Parent readiness now includes active/planned automatic phases before any worker 
 
 Completion also publishes the run's change record (publishRunChange in scripts/runtime.mjs) after the complete event, with the observed check results. The record is outside the source snapshot, so the delivery source hash, the artifacts and the review packet are unaffected; a failed write is stored as changeRecord.error and retried by the next finish without undoing completion. Publication happens only while the source snapshot still equals the delivered source hash; a file changed in the gap after completion is recorded as a failed publication, not bound. Finish returns changeRecord and review.md prints its path.
 
+Work queue (2026-11-19): for a run bound to a queue unit only, completeRun stores the source hash and file hashes it completed at (state.queue.completed), taken from the same full snapshot completion already compares with the delivery review. The next unit of the queue computes its drift from that map. It is a record of bytes, not evidence of correctness, and an unbound run stores nothing new. Finish, proof judgment, delivery evidence and the review packet are unchanged; the CLI adds a `queue` entry beside the unchanged finish result for a bound run, which test/queue-journey.test.mjs reads from the CLI run finish.
+
+Queue board (2026-11-20): for a run bound to a queue unit only, completeRun now asks the queue board before it marks the run complete and refuses while an item for the unit, a question of its own or a held review seat is open (completionHolds). finishRun asks the same thing first, for a running run, and returns status needs-answer with finished false and no steps, so no check, proof or handoff is spent on a unit the board holds. With a board present, a board or a queue that cannot be read is an error; a unit with no board is held by nothing. An unbound run takes none of this. Completion evidence itself is unchanged.
+
+After the live trials (2026-11-20): scripts/work-review.mjs validateProofReview refuses a behavioral proof case with no boundary with a message that says what a boundary is (the thing that already existed and answered wrongly) and that an interface which did not exist before the change is new-interface, which needs none. The rule is unchanged; a live session had read the engine source to understand the earlier message. test/completion-evidence.test.mjs asserts the message.
+
+The hub (2026-11-20): no rule change in this run; the record was read against the code again. The hub reads run histories through readRun and writes nothing.
+
 ## Lessons
 
 - 2026-11-05 · run ed2b9913: Retained current execution/progress/proof/review boundaries and development-evidence limits in existing component/context docs before final verification.

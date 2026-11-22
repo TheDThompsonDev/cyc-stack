@@ -20,6 +20,8 @@ Bind --run ID. next/status inspect; record submits a handoff; finish orchestrate
 
 Use --wait-ms 30000 for long checks and run wait with the returned operation ID. Silence/operation completion is not workflow success. Honor interruption and restoration acknowledgment.
 
+A [work queue](work-queue.md) orders several runs: queue create/status/next/decide, with the start file's queue field binding a run to its unit. Start rules reject a unit out of order, changed criteria or paths outside the unit; a run that ends short of complete halts the line until a recorded decision. Unit status is read from the runs, never stored. Its board (`queue post`, `board`, `wait`) carries messages between the agents on a queue and the person; a bound run cannot complete while the board holds it, and a second conversation can review a unit from `queue next --seat review`.
+
 Verify/Deliver needs criterion evidence: --criteria-passed for one or --criterion-evidence for multiple. Worker/model reports cannot replace configured checks, original proof or semantic review.
 
 ## Context and delegation
@@ -35,6 +37,8 @@ Configure meaningful executable/argv checks before start. No shell interpolation
 Failed attempts share maxAttempts (default 3) and maxNoProgress (default 2); recovery never resets them. Baselines default off. Reuse requires explicitly bounded local-deterministic inputs covering source, config, dependencies, environment and toolchain; CODEX_TOOL_CALL_ID is excluded. Unknown inputs rerun.
 
 Proof separates original control, originals with new tests and candidate. Features may prove a missing interface; bugs need existing behavior. Only compatible measured broad originals can excuse broad candidate failures. Matching diagnostics/passing evidence and reasons are required; changed causes, new/lost failures, cutoff and unknowns stay blocking. Disclose accepted failures.
+
+A proof command may name only test files the change adds. On the run-start code it finds no file and exits before any test runs. The control still runs; when it prints no test results and every failing test with the new tests added is in a test file the change added, that exit is read as nothing to run, and the receipt records `controlWithoutTests`. A mistyped or never-created file, output without test names, or a deleted or moved test file stays inconclusive.
 
 <a id="run-start-originals"></a>
 

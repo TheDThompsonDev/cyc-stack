@@ -5,19 +5,19 @@ import { resolveExecution, artifactFiles } from '../scripts/execution.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { catalog, routeTask } from '../scripts/catalog.mjs';
 import { completionGuidance } from '../scripts/recovery.mjs';
-import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun, captureReview, recordReview, startOperation, waitOperation, prepareRunContext, taskContext, delegateRun } from '../scripts/runtime.mjs';
+import { acceptFailure, activeRun, callerSession, inputPath, completeRun, controlRun, finishRun, nextRun, projectFile, proveRun, quickHandoff, readRun, recordHandoff, recoverRun, retryRun, reviewRun, startRun, verifyRun, captureReview, recordReview, startOperation, waitOperation, prepareRunContext, taskContext, delegateRun, queueCommand, queueOf, boardOf, recordBoardReview } from '../scripts/runtime.mjs';
 
 const args = process.argv.slice(2);
 const positionals = [];
 const options = {};
-const flags = new Set(['dry-run', 'help', 'verbose', 'verify', 'reviewed', 'write', 'all', 'expanded', 'json']);
+const flags = new Set(['dry-run', 'help', 'verbose', 'verify', 'reviewed', 'write', 'all', 'expanded', 'json', 'open', 'from-board']);
 try {
   for (let i = 0; i < args.length; i++) {
     if (!args[i].startsWith('--')) { positionals.push(args[i]); continue; }
     const name = args[i].slice(2);
     if (flags.has(name)) { options[name] = true; continue; }
     if (['mode', 'conversation', 'wait-ms', 'operation'].includes(name)) { const value = args[++i]; if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`); options[name] = value; continue; }
-    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc', 'update-run', 'before'].includes(name)) throw new Error(`Unknown option --${name}`);
+    if (!['project', 'hosts', 'host', 'token', 'goal', 'playbook', 'criteria', 'run', 'file', 'scope', 'stage', 'reason', 'session', 'since', 'check', 'status', 'summary', 'artifact', 'criteria-passed', 'criterion-evidence', 'next', 'criterion', 'verbose', 'assessment', 'response', 'blocker', 'advisory', 'passed', 'unmet', 'tests', 'path', 'limit', 'recipe', 'kind', 'plan', 'scout', 'new', 'doc', 'update-run', 'before', 'queue', 'seat', 'unit', 'port'].includes(name)) throw new Error(`Unknown option --${name}`);
     const value = args[++i];
     if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`);
     if (['scope', 'artifact', 'criterion', 'passed', 'unmet', 'tests', 'path'].includes(name)) {
@@ -32,6 +32,10 @@ try {
   if (options.since !== undefined && command !== 'readiness' && command !== 'context') throw new Error('--since is only supported by readiness and context review.');
   if (options['update-run'] !== undefined || options.new !== undefined) throw new Error('--new and --update-run were removed: context review --write publishes change records and never edits a doc');
   if ((options.write || options.all || options.doc !== undefined || options.before !== undefined) && command !== 'context') throw new Error('--write, --all, --doc and --before are only supported by context.');
+  if (options.queue !== undefined && command !== 'queue') throw new Error('--queue is only supported by the queue command. A run joins a queue through the queue field of its start file.');
+  if ((options.seat !== undefined || options.unit !== undefined || options.open) && command !== 'queue') throw new Error('--seat, --unit and --open are only supported by the queue command.');
+  if (options.port !== undefined && command !== 'hub') throw new Error('--port is only supported by hub.');
+  if (options['from-board'] && (command !== 'run' || action !== 'review-record')) throw new Error('--from-board is only supported by run review-record.');
   if (options.verify && command !== 'onboard') throw new Error('--verify is only supported by onboard. Use run verify for task verification.');
   if (options.verify && options['dry-run']) throw new Error('Do not combine --verify with --dry-run. Plain onboard performs read-only inspection.');
   if (!command || command === 'help' || options.help) {
@@ -95,6 +99,20 @@ Execute through your existing AI host:
   cyc run review-capture --run ID --file CAPTURE.json   (reviewer, optional scope)
   cyc run review-record --run ID --file REVIEW.json   (reviewId, evidence, identity or null, findings)
   cyc run pause|resume|stop --run ID
+
+Work queue (ordered units, each an ordinary run; docs/work-queue.md):
+  cyc queue create --file QUEUE.json   (version, goal, requirements, units: id, outcome, playbook, criteria, paths, dependsOn)
+  cyc queue status [--queue ID]   (each unit's status, read from its runs)
+  cyc queue next [--queue ID]   (the ready unit and its start file, or the halted unit and why)
+      (start it with run start --file; the start file's queue field binds the run to the unit)
+  cyc queue decide [--queue ID] --file DECISION.json   (version, action retry|skip|cancel, reason; unit for retry and skip)
+  cyc queue post [--queue ID] [--run ID | --seat ID] --file MESSAGE.json   (kind question|finding|answer|notice; neither option: the person)
+  cyc queue board [--queue ID] [--unit ID] [--open] [--seat ID]   (--open: unanswered items)
+  cyc queue wait [--queue ID] (--run ID | --seat ID) [--wait-ms N]   (until a message arrives; at most 60000)
+  cyc queue next [--queue ID] --seat review --session ID [--wait-ms N]   (review the unit in progress)
+  cyc queue release [--queue ID] --seat ID
+  cyc run review-record --run ID --from-board   (a peer receipt from that review)
+  cyc hub [--project PATH] [--port N]   (a page on this machine to watch the queue: the line, what the agents say, what waits on you)
 
 Deliver the reply:
   cyc check-reply FILE [--session ID | --expanded]
@@ -193,6 +211,25 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
     result = (await import('../scripts/run-gate.mjs')).sessionReadiness({ root, session: options.session, since: options.since });
   } else if (command === 'packet') {
     result = (await import('../scripts/packet.mjs')).writePacket(root, { session: options.session, executionMode: options.mode, conversationId: options.conversation, responseFile: options.response, status: options.status, blocker: options.blocker, advisory: options.advisory, passed: options.passed ?? [], unmet: options.unmet ?? [], artifacts: options.artifact ?? [], reviewed: !!options.reviewed });
+  } else if (command === 'hub') {
+    // Stays running: the server keeps the process alive after its address is printed.
+    const stray = [...positionals.slice(1), ...Object.keys(options).filter(name => !['project', 'port'].includes(name)).map(name => `--${name}`)];
+    if (stray.length) throw new Error(`cyc hub takes only --project and --port, not ${stray.join(', ')}. It shows every queue; pick one on the page.`);
+    if (options.port !== undefined && !/^\d+$/.test(options.port)) throw new Error('--port is a whole number from 0 to 65535.');
+    const hub = await (await import('../scripts/hub.mjs')).startHub(root, { port: options.port === undefined ? undefined : Number(options.port) });
+    result = { ok: true, url: hub.url, project: hub.project, note: 'The hub is running on this machine only and changes nothing. Open the address in a browser. Press Ctrl+C to stop it.' };
+  } else if (command === 'queue') {
+    if (!['create', 'status', 'next', 'decide', 'post', 'board', 'wait', 'release'].includes(action)) throw new Error('Use queue create, status, next or decide; the board takes queue post, board, wait and release.');
+    const takes = { create: ['file', 'session'], status: ['queue', 'session'], next: ['queue', 'seat', 'session', 'wait-ms'], decide: ['file', 'queue', 'session'], post: ['file', 'queue', 'run', 'seat', 'session'], board: ['queue', 'unit', 'open', 'seat', 'session'], wait: ['queue', 'run', 'seat', 'wait-ms', 'session'], release: ['queue', 'seat', 'session'] }[action];
+    fileOnly(options, ['file', 'queue', 'project', 'verbose', 'run', 'seat', 'unit', 'open', 'session', 'wait-ms']);
+    const fromFile = ['create', 'decide', 'post'].includes(action);
+    if (fromFile !== !!options.file) throw new Error(fromFile ? `queue ${action} needs --file JSON.` : `queue ${action} takes no --file.`);
+    if (action === 'create' && options.queue) throw new Error('queue create assigns the queue ID; do not pass --queue.');
+    const extra = Object.keys(options).filter(key => !['project', 'verbose', ...takes].includes(key));
+    if (extra.length) throw new Error(`queue ${action} does not take ${extra.map(key => `--${key}`).join(', ')}.`);
+    result = queueCommand(root, action, action === 'create' ? readJSON(options.file)
+      : action === 'decide' ? { ...inputObject(options.file, ['version', 'unit', 'action', 'reason']), queue: options.queue }
+      : { queue: options.queue, ...(action === 'post' ? { message: readJSON(options.file) } : {}), ...Object.fromEntries([['run', options.run], ['seat', options.seat], ['unit', options.unit], ['session', options.session], ['waitMs', options['wait-ms']]].filter(([, value]) => value !== undefined)), ...(options.open ? { open: true } : {}) });
   } else if (command === 'playbooks') result = catalog;
   else if (command === 'route') {
     if (!options.goal) throw new Error('--goal is required.');
@@ -203,7 +240,7 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
         let input;
         if (options.file) {
           fileOnly(options, ['file', 'project', 'verbose']);
-          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan', 'evidenceVersion', 'requirements', 'reviewPolicy', 'executionMode', 'conversationId', 'proofCommands', 'contextRetention', 'taskContext', 'delegation']);
+          input = inputObject(options.file, ['goal', 'playbook', 'criteria', 'allowedPaths', 'session', 'scout', 'plan', 'evidenceVersion', 'requirements', 'reviewPolicy', 'executionMode', 'conversationId', 'proofCommands', 'contextRetention', 'taskContext', 'delegation', 'queue']);
           for (const key of ['goal', 'playbook', 'session', 'plan']) if (input[key] !== undefined && typeof input[key] !== 'string') throw new Error(`${key} must be a string.`);
           if (input.scout !== undefined && !object(input.scout)) throw new Error('scout must be the Scout assessment object (run start without it returns the template).');
           if (input.criteria !== undefined && (!Array.isArray(input.criteria) || !input.criteria.length || input.criteria.some(item => !object(item) || typeof item.id !== 'string' || typeof item.description !== 'string'))) throw new Error('criteria must be a nonempty array of {id, description} string records.');
@@ -263,6 +300,7 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
         if (!options.file) throw new Error('review-capture needs --file JSON with reviewer and optional scope.');
         result = captureReview(root, options.run, inputObject(options.file, ['reviewer', 'scope', 'contextPaths', 'contextEvidence'])); break;
       case 'review-record':
+        if (options['from-board']) { if (options.file) throw new Error('review-record --from-board takes no --file: the receipt is built from the queue board.'); result = recordBoardReview(root, options.run, options.session); break; }
         if (!options.file) throw new Error('review-record needs --file JSON with reviewId, evidence, identity and findings.');
         result = recordReview(root, options.run, inputObject(options.file, ['reviewId', 'evidence', 'identity', 'findings'])); break;
       case 'pause': case 'resume': case 'stop': result = controlRun(root, options.run, action); break;
@@ -270,6 +308,14 @@ Hook activation/trust must be checked in your host; doctor does not certify it.`
     }
   } else throw new Error(`Unknown command ${command}. Use cyc help.`);
   if (command === 'run' && !options.verbose) result = compact(action, result, root, options);
+  // A bound run's board entry comes first: agents act on the head of a result.
+  if (command === 'run' && result && typeof result === 'object' && !Array.isArray(result)) {
+    const id = options.run ?? result.runId;
+    // Reading commands leave the board's mark where it was.
+    const board = typeof id === 'string' ? boardOf(root, id, !['status', 'recover', 'list', 'review'].includes(action), options.session) : null;
+    if (board) result = { board: result.board?.hold && !board.hold ? { ...board, hold: result.board.hold } : board, ...Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'board')) };
+    if ((result.result ?? result).status === 'needs-answer') delete result.guidance;
+  }
   console.log(humanInstallOutput(command) ? formatInstall(result) : JSON.stringify(result, null, 2));
   if (result?.ok === false || result?.status === 'needs-context-sync' || ['halted', 'exhausted', 'blocked'].includes(result?.status) || result?.passed === false || result?.result?.passed === false || ['halted', 'exhausted', 'blocked'].includes(result?.result?.status)) process.exitCode = 1;
 } catch (error) {
@@ -350,12 +396,14 @@ function compact(action, result, root, options) {
   if (!result || typeof result !== 'object' || ['status', 'recover'].includes(action)) return result;
   const id = result.runId ?? result.id ?? options.run;
   const guidance = value => completionGuidance(value, { executionMode: (value.result ?? value).packet?.written === false ? readRun(root, id).execution?.mode : undefined });
-  if (result.operationId) return { ...result, guidance: guidance(result) };
+  // A run bound to a queue unit also says where the line stands. Advice only: it changes no result.
+  const lined = value => { let line = null; try { line = queueOf(root, readRun(root, id)); } catch { /* advice only */ } return line ? { ...value, queue: line } : value; };
+  if (result.operationId) return lined({ ...result, guidance: guidance(result) });
   if (['review-capture', 'review-record'].includes(action)) { const { files, ...receipt } = result; return receipt; }
   if (action === 'prove-red') return result;
   if (action === 'finish') {
     const display = result.failedAt === 'verify' && 'verificationStatus' in result ? { ...compact('verify', result, root, options), finished: false, failedAt: 'verify' } : result;
-    return { ...display, guidance: guidance(display) };
+    return lined({ ...display, guidance: guidance(display) });
   }
   if (action === 'verify') {
     const recovery = result.passed ? null : recoverRun(root, id);
@@ -376,5 +424,5 @@ function compact(action, result, root, options) {
   // Agents often read only the first lines (| head -40), so what they act on comes first and the
   // long fill-in template last.
   const lead = Object.fromEntries(['runId', 'status', 'stage', 'attempt', 'finishTemplate', 'verificationSource', 'verificationCommands', 'baseline', 'baselineFailures', 'testProof', 'finishWith', 'ledgerPath', 'feedback'].filter(key => key in rest).map(key => [key, rest[key]]));
-  return { ...lead, criteria: criteria.map(item => item.id), previous: previousHandoff ? { stage: previousHandoff.stage, status: previousHandoff.status, summary: previousHandoff.summary } : null, ...rest, ...(result.acceptedFailures ? { acceptedFailures: result.acceptedFailures } : {}), ...(['paused', 'blocked', 'halted', 'exhausted', 'stopped'].includes(next.status) ? { recovery: recoverRun(root, id) } : {}), assessmentRequired, ...(rest.finishTemplate ? {} : { assessmentTemplate }) };
+  return lined({ ...lead, criteria: criteria.map(item => item.id), previous: previousHandoff ? { stage: previousHandoff.stage, status: previousHandoff.status, summary: previousHandoff.summary } : null, ...rest, ...(result.acceptedFailures ? { acceptedFailures: result.acceptedFailures } : {}), ...(['paused', 'blocked', 'halted', 'exhausted', 'stopped'].includes(next.status) ? { recovery: recoverRun(root, id) } : {}), assessmentRequired, ...(rest.finishTemplate ? {} : { assessmentTemplate }) });
 }

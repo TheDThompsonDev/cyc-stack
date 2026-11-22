@@ -1,0 +1,45 @@
+# UI and UX practices worth borrowing from an apparel storefront
+
+The jeans department opens with six people wearing six different cuts. A shopper can point to the silhouette they want before they know its name. That choice of photograph does work all the way down the page. It introduces the vocabulary used in the filters, and the product page backs it up with model measurements and a size guide.
+
+I inspected the U.S. storefront, women’s jeans department, and a straight-leg product page on November 22, 2026, at 1,440 × 900 and 390 × 844 CSS pixels. Sizes, colors, and filter counts below are observations from those views. Interaction checks covered filtering, desktop promotion controls, and sizing help. Checkout and a full accessibility audit were outside the review.
+
+## Campaign art direction
+
+- **Give each typeface a job.** The storefront loads **Avenir Next Regular (400), Medium (500), and Demi (600)** for shopping controls and copy. **Knockout 74** sets offer lettering and uppercase merchandise labels. **Octangle** gives seasonal lines and the gift-guide heading a distinct voice. The product page loaded the Avenir Next faces alone. [Storefront][home] · [Product page][item]
+- **Spend the largest type on the invitation.** The desktop gift-guide title measured **90 px with 92 px line height**. The jeans department heading measured **18 px with 21.6 px line height**. The first draws someone into a campaign. The second confirms their location and leaves the first screen for comparing clothes. [Storefront][home] · [Jeans department][jeans]
+- **Tune spacing to the lettering.** An uppercase offer label used Knockout 74 at **21 px / 23 px** with **2 px** letter spacing. Body copy used Avenir Next at **16 px / 22.86 px** with **0.3 px** spacing. Short labels hold their graphic shape and longer text stays comfortable to read. [Storefront][home]
+- **Give the campaign its own palette.** The neutral shopping pages use **#FFFFFF** white and **#24272A** charcoal. The seasonal artwork uses **#182C52** navy, **#00312A** deep green, **#CDF279** lime, and **#F2EDE5** cream. Some of those colors reappear in a plaid border framing the hero, tying the offer to the photograph. [Storefront][home] · [Jeans department][jeans]
+- **Recompose type and photography together on a phone.** The line beneath the main offer used **46 px cream type** on desktop and **20 px deep-green type** on the phone. The phone layout places the dark lettering over a light area above the people in the picture. For a responsive hero, choose the crop, text position, and ink color together. [Storefront][home]
+- **Make the primary action distinguishable against a busy scene.** The desktop campaign links use solid lime pills with deep-green text, **50 px** height, and a **25 px** radius. The text and fill give approximately **11.3:1** contrast. The square edges of the photographs make the curved controls easier to pick out. [Storefront][home]
+- **Tell people where a campaign button goes.** The lead offer provides distinct routes into the women’s and men’s departments. The shopper makes that choice on the campaign itself and can anticipate the destination before clicking. [Storefront][home]
+- **Give a rotating promotion a working pause control.** The desktop strip has previous, next, and pause buttons. Activating Pause changed the control to Play, leaving a shopper time to read or open the offer. I verified this interaction on desktop. [Storefront][home]
+
+## Browsing and comparing clothes
+
+- **Photograph the difference a shopper is choosing.** The jeans department leads with full-length, front-facing looks at a similar scale and against similar backgrounds. The width at the knee, taper, and hem are easy to compare across the six cuts. [Jeans department][jeans]
+- **Translate specialist terms into fit guidance.** Each photo links to a named cut and adds a short explanation. The curvy cut addresses waistband gapping, while the mom cut describes the taper and where the hem falls. Even a shopper learning the terminology has a reason to choose. [Jeans department][jeans]
+- **Keep the garment large enough to compare on a phone.** Desktop shows six fit examples across. At 390 px, the horizontal strip shows two complete looks and a portion of the next, with an arrow cue. The hem of each pair is still visible. [Jeans department][jeans]
+- **Match the mobile controls to the available space.** Desktop places the category tree and filter groups alongside the merchandise. The phone offers separate category and filter/sort buttons. Opening the latter exposes the controls together and gives the full page width back to the clothes after applying. [Jeans department][jeans]
+- **Offer filters for what the garment feels like.** Rise, stretch level, wash, and fit sit alongside size. Someone who wants flexible, high-waisted denim can narrow the catalog using the qualities they care about. [Jeans filters][jeans]
+- **Let a size selection include length.** Opening Size revealed combinations such as short, regular, and long in the same numeric size. A shopper can restrict the results to a wearable combination before opening a product. [Jeans filters][jeans]
+- **Preview the consequence of a filter.** In the phone filter panel the Apply button showed **185 items** initially and **140 items** after I selected size 4 regular. Applying it produced a listing headed **140**. The count tells the shopper how much choice remains while they can still adjust it. [Jeans filters][jeans]
+- **Keep the applied choice visible and reversible.** Back on the mobile listing, size 4 regular appeared as a named control beside a clear-all button. On desktop, selecting the same size also added it to the page URL, making the narrowed view addressable. [Jeans filters][jeans]
+- **Let urgency narrow the merchandise.** The listing offers a store-pickup switch near the start of its shopping controls. Someone who needs jeans today can bring store availability into the decision early. [Jeans department][jeans]
+- **Give a discount both numbers and words.** One card showed **$44.97** alongside its original **$74.95**, a savings percentage on the photograph, and a deal label in **#BF0A10** red. A shopper can understand the offer without perceiving the red. These figures describe the reviewed card. [Product listing][jeans]
+
+## Choosing a particular pair
+
+- **Use an on-body view and an isolated garment view.** The desktop product gallery paired jeans worn by a model with the same pair laid flat. One shows drape, while the other exposes the cut and construction without the pose getting in the way. [Product gallery][item]
+- **Put scale information with the photograph.** The gallery identified the model as **5 ft 9 in (1.75 m)** wearing **size 2 Long**. The length designation helps a shopper interpret where the hem lands on the model. [Product gallery][item]
+- **Name the wash beside the color swatch.** The blue swatch on the example item had the visible label and accessible button name “Medium Indigo.” A shopper can identify or tell someone else which version they are considering. [Product page][item]
+- **Describe fabric behavior in everyday language.** Short attributes near the buying area explain that the jeans are rigid in front and stretchy in back. That tells someone how the garment might look and feel even if the fabric’s trade name is unfamiliar. [Product details][item]
+- **Pair exact dimensions with a description of the silhouette.** The fit section gives a **10⅝-inch rise** and a **20¼-inch leg opening**, then describes the straight cut and where the hem sits. Someone comparing against a favorite pair can use the numbers. Someone picturing an outfit can use the description. [Fit details][item]
+- **Answer sizing questions at the point of hesitation.** A sizing-help control sits beside size selection, with a second route in the fit details. It opens over the current product, preserving the shopper’s place. [Size guide][item]
+- **Teach someone how to obtain the measurements the chart needs.** The size guide has separate chart and measuring tabs. The U.S. chart maps letter and numeric sizes to waist and hip measurements in inches. The measuring tab explains where to put the tape for waist, hip, rise, and inseam. [Size guide][item]
+- **Return keyboard focus to the control that opened a dialog.** I opened sizing help with Enter, switched between its tabs, and closed it with the dialog’s close control. On desktop, focus returned to the original sizing-help button, so the shopper could continue from the same place. [Size guide][item]
+- **Explain what is needed to check local inventory.** The pickup area prompts the shopper to select a size before showing in-store availability. This makes clear that availability depends on the particular variant they would take home. [Product page][item]
+
+[home]: https://www.ae.com/us/en
+[jeans]: https://www.ae.com/us/en/c/women/bottoms/jeans/cat6430042
+[item]: https://www.ae.com/us/en/p/women/stovepipe-straight-leg-jeans/stovepipe-jeans/ae-strigid-high-waisted-stovepipe-jean/4435_5514_947

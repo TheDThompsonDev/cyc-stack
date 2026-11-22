@@ -1,51 +1,66 @@
 # Typography
 
-Type is the fastest way to leave the default page. Choose a pairing by the character the product needs, set the display size and tracking by the numbers below, and load the fonts so they actually render.
+The eight studied sites do not share a typeface or a size. Each chose a voice and held to it: one has no headline at all, one sets a light 40 px line, one sets 88 px at the heaviest weight. What they share is discipline. Each family has one job, interface text is small and steady, and the display size is far from the body size or absent.
 
-## Pairings
+Choose one voice below from the subject and write it in the [decision sheet](decision-sheet.md). An existing brand's type replaces all of this.
 
-All are free on Google Fonts and as `@fontsource` packages. Character notes say what the pairing does, not what it is "for"; choose against the decision sheet's premise.
+## Voices
 
-| Display | Text | Character | Fits |
-| --- | --- | --- | --- |
-| DM Serif Display | DM Sans | High-contrast serif with tight tracking; confident, editorial, warm when set on cream | Services that sell judgment: careers, finance, consulting, premium local trades |
-| Lora (regular and italic) | DM Sans | Calm book serif; the italic reads as a second, softer voice | Health, food, daily tools, anything that should feel taken care of |
-| Fraunces | Inter Tight or Work Sans | Soft "wonky" serif with optical sizes; cozy without being cute | Cafés, bakeries, craft products, small hospitality |
-| Playfair Display | Source Sans 3 | Classic high-contrast; luxury if restrained, costume if overused | Photography, weddings, galleries, hotels |
-| Cormorant Garamond (500 to 600) | Manrope | Delicate, long ascenders; needs size to work (72 px and up) | Fine dining, perfume, art, editorial covers |
-| Instrument Serif | Instrument Sans | Narrow, modern serif; tech with taste | Software with a point of view, studios, agencies |
-| Newsreader | Public Sans | Journal serif with real italics; long-form comfort | Blogs, documentation with voice, reports |
-| Libre Caslon Text | Karla | Bookish and even; quiet authority | Education, nonprofits, archives |
-| Space Grotesk | IBM Plex Sans + IBM Plex Mono | Geometric with quirks; engineering honesty | Catalogs, data tools, developer products |
-| Bricolage Grotesque (700 to 800) | Figtree | Friendly, slightly condensed, punchy at size | Local services, home repair, community events |
-| Archivo Black or Archivo Expanded | Archivo | Heavy industrial grotesque | Workshops, trades, sports, bold retail |
-| Syne (800) | Inter | Wide, poster-like, a little strange | Festivals, music, art events |
-| Bebas Neue | Barlow | Tall condensed caps; loud and cheap in a good way | Events, gyms, schedules, menus on walls |
-| Epilogue (variable) | Epilogue | One family, 100 to 900; wide headings, clean text | Dashboards and apps that want one voice |
+Sizes are what was measured at 1440 wide. Phone sizes follow each voice.
 
-Not for display: Inter, Roboto, Poppins, Montserrat, Open Sans, Lato, `system-ui`. They are tell 7 on the [generic list](generic-tells.md). Inter or a system stack is acceptable as the text face in a dense tool when the decision sheet says why.
+### Quiet: a short headline, small everything else
 
-One accent voice per page, at most: a Kalam or Caveat phrase, or the display face's italic, on the two or three words that carry the promise. On every heading it stops being an accent.
+The items carry the page, so the interface stays small and steady. A scene-led offer can use a short 44 to 64 px headline. A catalog can lead straight into a compact department heading and its items. Section and shelf headings 20 to 28 px at weight 600 to 700. Body and item titles 13 to 16 px. Secondary facts 12 px in gray. One family, two or three weights.
 
-## Numbers
+Fits a finder, a store, a dealer, a marketplace: anywhere the items carry the page once the opening has set the mood. A working surface may drop the headline entirely; nothing else should. Phone: headline 34 to 40 px, the rest the same.
 
-| Role | Desktop | Phone | Tracking | Line height |
-| --- | --- | --- | --- | --- |
-| Display (page opening) | 56 to 96 px, `clamp(2.75rem, 6vw, 6rem)` | 36 to 44 px | −0.02 em to −0.04 em | 0.95 to 1.1 |
-| Section heading | 32 to 44 px | 28 to 32 px | −0.01 em to −0.02 em | 1.1 to 1.2 |
-| Body, marketing | 17 to 19 px | 16 to 17 px | 0 | 1.5 to 1.65 |
-| Body, dense tool | 14 to 16 px | 14 to 15 px | 0 | 1.4 to 1.5 |
-| Eyebrow label | 11 to 13 px, uppercase | same | +0.08 em to +0.14 em | 1 |
-| Caption, meta | 12 to 13 px | same | 0 to +0.02 em | 1.3 |
+### Light: a calm, thin headline
 
-- Measure: body 55 to 72 characters; a display headline at most 12 words and about 20 characters wide per line, so it wraps on purpose.
-- Weight: serif display faces usually at 400 to 500; one heavy weight on the page, not three.
-- Oversized numerals: index numbers (01, 02), prices and the one real statistic set in the display face at display size. `font-variant-numeric: tabular-nums` on any column of numbers.
-- Hierarchy test: screenshot at 25% zoom. If display, heading, body and eyebrow are not distinguishable as four roles, the scale is too flat.
+Headline 40 px at weight 300, column headings 32 px at 300, sub-points 24 px at 300. Body 16 px at 400 with a 1.5 line height. Eyebrows 16 px at 600 in capitals with 0.5 px tracking. One family in three weights: 300, 400, 600.
+
+Fits money, health, insurance, anything where calm is the promise. Needs a family with a true light weight, such as Source Sans 3, Nunito Sans or Figtree. Phone: 32 px.
+
+### Editorial serif: a serif headline over a plain sans
+
+Headline 52 px in the hero and 60 to 70 px in later sections, in a display serif, line height about 1.0, tracking about −0.035 em. Body 17 px sans with a 1.7 line height. Small capital eyebrows with wide tracking. Optionally one phrase of the headline in a handwriting face, in the accent color, with a drawn underline.
+
+Fits a personal service, craft, food, heritage, anything sold on care and judgment. Three families at most and each has one job: the serif only for headlines, the sans for everything else, the handwriting only for the one phrase. Candidates: DM Serif Display, Fraunces, Instrument Serif or Newsreader, with DM Sans, Figtree or Instrument Sans; Kalam or Caveat for the handwritten phrase. Phone: 44 to 48 px. Set it on a white or dark canvas: on a warm tint it is the look builds without this method chose ([tell 40](generic-tells.md#the-unchosen-look)), and the judge fails it unless a brand you were given sets both.
+
+### Large grotesque: one big plain statement
+
+Headline 80 px at weight 500 with a line height of 1.0, centered, two lines. Section headings 54 px at 500. Body 18 px under the headline and 16 px elsewhere. Navigation 14 px. Weights stay in the middle: 400 to 500, never bold.
+
+Fits software and tools, where the product picture below the headline is the proof. Candidates: Inter, Geist, Schibsted Grotesk, Hanken Grotesk. Phone: 40 px.
+
+### Heavy: very large and very bold
+
+Headline 88 px at weight 800, tracking about −0.06 em, line height 0.95. Section headings 68 px, smaller ones 43 to 53 px. Body 18 to 20 px. A second, handwritten family at 36 to 48 px for short labels and photo captions that sound like a person talking.
+
+Fits a community, an event, a cause, a brand with energy. Needs a family with an 800 weight, such as Plus Jakarta Sans, Bricolage Grotesque, Outfit or Epilogue. Phone: 52 px.
+
+### Display on photographs: type as part of the picture
+
+Display capitals at 60 to 90 px set on full-bleed photographs, tracked out by about 2 px, for offers and prices. Interface text small: 12 to 14 px navigation and labels, 16 px body. A third, seasonal display face may carry one campaign.
+
+Fits fashion, retail campaigns, entertainment. The type and the photograph are designed together; check its contrast on the picture. Candidates for the display face: Anton, Oswald, Barlow Condensed, Bebas Neue. Phone: 30 to 50 px.
+
+## Rules that held across all of them
+
+- **Body text is 14 to 20 px**, most often 16 px. Navigation, labels and facts are 12 to 16 px.
+- **Choose the scale for the task.** A display headline can dominate an invitation. A department or workspace heading should leave room for the first useful comparison.
+- **Tight tracking on large type.** About −0.035 em at 50 px and −0.06 em near 90 px. Line height 0.95 to 1.05 above 48 px.
+- **Each family has one job.** Four of the eight sites use one family. The others use two or three and never mix their jobs.
+- **Weights are few.** Two or three per family.
+- **Numbers people compare** use `font-variant-numeric: tabular-nums` and sit in the same place on every item. Check it in the render: set “11111” and “88888” and compare their widths. A builder found that DM Sans ignored it.
+- **A price or a date may take display size** when it is the thing to read first.
+- Measure: body 55 to 72 characters. A display line wraps on purpose, at about 20 characters per line.
+- Hierarchy test: screenshot at 25 percent zoom. The lead, the items and the action should still be told apart.
+
+Rotate families between projects. Do not reach for the same one each time, and never choose a family because the page felt plain: choose the voice first, then a family that can carry it.
 
 ## Loading
 
 - Local-only sites: `npm i @fontsource/<name>` and import the weights used, or copy the woff2 files into `/fonts` with `@font-face { font-display: swap; }`. Do not link Google Fonts on a site that must work offline.
-- Networked sites: the Google Fonts `<link>` with `display=swap`, two families at most, only the weights used.
+- Networked sites: the Google Fonts `<link>` with `display=swap`, only the weights used. A site that opens from disk but loads its pictures from the network is a networked site.
 - Declare a fallback stack with `size-adjust` so the layout holds before the web font arrives, and render the page once with the font blocked to confirm nothing breaks.
-- Verify in the rendered page (`document.fonts.check` or the computed style) that the display face loaded. A pairing chosen in the decision sheet and silently replaced by Times is the worst outcome on this list.
+- Verify in the rendered page (`document.fonts.check` or the computed style) that the family loaded. Inputs, selects and buttons need `font: inherit`.

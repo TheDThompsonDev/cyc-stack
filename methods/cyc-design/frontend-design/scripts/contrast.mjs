@@ -18,7 +18,7 @@ function report(role, foreground, background, minimum) {
 
 const colors = process.argv.slice(2);
 if (![2, 8].includes(colors.length) || !colors.every(color => /^#[0-9a-f]{6}$/i.test(color))) {
-  console.error('Expected two opaque #RRGGBB colors or the eight palette colors in decision-sheet order.');
+  console.error('Expected two opaque #RRGGBB colors or the eight palette colors in the order given in references/color.md.');
   process.exitCode = 1;
 } else if (colors.length === 2) {
   report('normal text', ...colors, 4.5);
